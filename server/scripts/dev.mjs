@@ -1,5 +1,8 @@
 import { execSync, spawn } from 'node:child_process';
 
+process.env.NODE_ENV = 'development';
+process.env.COOKIE_SECURE = 'false';
+
 console.log('[dev] initial build...');
 execSync('node scripts/build.mjs', { stdio: 'inherit' });
 

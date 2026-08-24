@@ -214,9 +214,7 @@ export const useVacayStore = create<VacayState>((set, get) => ({
   loadYears: async () => {
     const data = await api.getYears()
     set({ years: data.years })
-    if (data.years.length > 0) {
-      set({ selectedYear: data.years[data.years.length - 1] })
-    }
+    set({ selectedYear: new Date().getFullYear() })
   },
 
   addYear: async (year: number) => {

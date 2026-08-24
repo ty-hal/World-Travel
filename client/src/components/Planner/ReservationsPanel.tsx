@@ -151,7 +151,7 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
   }
 
   return (
-    <div className="bg-surface-card" style={{
+    <div className={isTransportType ? 'bg-surface-card transport-reservation-card' : 'bg-surface-card'} data-status={r.status} style={{
       borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column',
       border: `1px solid ${confirmed ? 'rgba(22,163,74,0.25)' : 'rgba(217,119,6,0.25)'}`,
       transition: 'box-shadow 0.15s ease',

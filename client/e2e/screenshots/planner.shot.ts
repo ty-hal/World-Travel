@@ -45,3 +45,7 @@ test('bookings', async ({ page, shot }) => {
   await shot.page_('Bookings')
 })
 
+test('photo albums', async ({ page, shot }) => {
+  await openTab(page, 'Photos')
+  await shot.page_('PhotoAlbums')
+})

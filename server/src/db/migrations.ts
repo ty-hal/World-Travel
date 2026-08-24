@@ -3701,6 +3701,272 @@ function runMigrations(db: Database.Database): void {
       `);
       db.exec('CREATE INDEX IF NOT EXISTS idx_hidden_regions_user ON hidden_regions (user_id);');
     },
+
+    // One-way World-Travel migration: retain source IDs and approximate date
+    // precision so the imported atlas can become TREK's canonical data.
+    () => {
+      for (const statement of [
+        'ALTER TABLE trips ADD COLUMN source_id TEXT',
+        "ALTER TABLE trips ADD COLUMN date_precision TEXT NOT NULL DEFAULT 'day'",
+        'ALTER TABLE trips ADD COLUMN date_label TEXT',
+        'ALTER TABLE places ADD COLUMN source_id TEXT',
+      ]) {
+        try {
+          db.exec(statement);
+        } catch (err: any) {
+          if (!err.message?.includes('duplicate column name')) throw err;
+        }
+      }
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_trips_source_id ON trips(user_id, source_id) WHERE source_id IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_places_source_id ON places(trip_id, source_id) WHERE source_id IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS atlas_visits (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          source_id TEXT NOT NULL,
+          city TEXT,
+          country TEXT NOT NULL,
+          map_country TEXT,
+          continent TEXT,
+          map_state TEXT,
+          lat REAL,
+          lng REAL,
+          status TEXT NOT NULL DEFAULT 'visited',
+          date_start TEXT,
+          date_end TEXT,
+          date_precision TEXT,
+          date_label TEXT,
+          first_visited TEXT,
+          notes TEXT,
+          links_json TEXT NOT NULL DEFAULT '{}',
+          UNIQUE(user_id, source_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_atlas_visits_user ON atlas_visits(user_id);
+        CREATE INDEX IF NOT EXISTS idx_atlas_visits_country ON atlas_visits(user_id, map_country);
+        CREATE TABLE IF NOT EXISTS atlas_wonders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          source_id TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL,
+          country TEXT,
+          map_country TEXT,
+          region TEXT,
+          significance TEXT NOT NULL DEFAULT 'notable',
+          lat REAL,
+          lng REAL,
+          source_url TEXT,
+          image_urls_json TEXT NOT NULL DEFAULT '[]'
+        );
+        CREATE INDEX IF NOT EXISTS idx_atlas_wonders_country ON atlas_wonders(map_country);
+        CREATE TABLE IF NOT EXISTS trip_media (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          trip_id INTEGER REFERENCES trips(id) ON DELETE CASCADE,
+          source_id TEXT NOT NULL,
+          provider TEXT,
+          kind TEXT NOT NULL DEFAULT 'album',
+          title TEXT,
+          external_url TEXT,
+          cover_url TEXT,
+          caption TEXT,
+          image_urls_json TEXT NOT NULL DEFAULT '[]',
+          video_urls_json TEXT NOT NULL DEFAULT '[]',
+          geotags_json TEXT NOT NULL DEFAULT '[]',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(user_id, source_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_media_trip ON trip_media(trip_id);
+      `);
+    },
+    () => db.exec(`
+      CREATE TABLE IF NOT EXISTS trip_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'google-drive',
+        description TEXT,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_trip_links_trip_id ON trip_links(trip_id);
+    `),
+    // Rename the user's ambiguous Europe trip once; later edits remain untouched.
+    () => db.prepare("UPDATE trips SET title = 'France & Italy' WHERE title = 'Europe Summer 2018'").run(),
+    () => db.prepare("UPDATE trips SET title = 'England' WHERE title IN ('Europe Christmas 2018', 'England Christmas 2019')").run(),
+    () => db.prepare("UPDATE trips SET title = 'Spain & Netherlands' WHERE title = 'Europe Summer 2019'").run(),
+    () => db.prepare("UPDATE trips SET title = 'England' WHERE title = 'England Christmas 2018'").run(),
+    () => {
+      const insert = db.prepare(`
+        INSERT OR IGNORE INTO imported_flight_segments
+          (user_id, trip_id, source_id, label, origin_name, destination_name,
+           origin_lat, origin_lng, destination_lat, destination_lng)
+        SELECT t.user_id, t.id, ?, ?, ?, ?, ?, ?, ?, ?
+        FROM trips t WHERE t.title = ?
+      `);
+      const segments = [
+        ['france-italy-mia-cdg', 'Miami → Paris', 'Miami International Airport', 'Paris Charles de Gaulle Airport', 25.7959, -80.2870, 49.0097, 2.5479, 'France & Italy'],
+        ['france-italy-fco-mia', 'Rome → Miami', 'Rome Fiumicino Airport', 'Miami International Airport', 41.8003, 12.2389, 25.7959, -80.2870, 'France & Italy'],
+        ['spain-netherlands-mia-bcn', 'Miami → Barcelona', 'Miami International Airport', 'Barcelona–El Prat Airport', 25.7959, -80.2870, 41.2974, 2.0833, 'Spain & Netherlands'],
+        ['spain-netherlands-ams-mia', 'Amsterdam → Miami', 'Amsterdam Schiphol Airport', 'Miami International Airport', 52.3105, 4.7683, 25.7959, -80.2870, 'Spain & Netherlands'],
+        ['england-mia-lhr', 'Miami → London', 'Miami International Airport', 'London Heathrow Airport', 25.7959, -80.2870, 51.4700, -0.4543, 'England'],
+        ['england-lhr-mia', 'London → Miami', 'London Heathrow Airport', 'Miami International Airport', 51.4700, -0.4543, 25.7959, -80.2870, 'England'],
+      ] as const;
+      for (const segment of segments) insert.run(...segment);
+    },
+    () => {
+      const trip = db.prepare("SELECT id, user_id FROM trips WHERE title = 'Grand Canyon & Sedona' LIMIT 1").get() as
+        | { id: number; user_id: number }
+        | undefined;
+      if (!trip) return;
+
+      db.prepare("UPDATE trips SET start_date = '2026-04-24', end_date = '2026-04-28' WHERE id = ?").run(trip.id);
+
+      const day = db.prepare('SELECT id FROM days WHERE trip_id = ? AND day_number = ?');
+      const addDay = db.prepare('INSERT OR IGNORE INTO days (trip_id, day_number, date, title) VALUES (?, ?, ?, ?)');
+      const dates = ['2026-04-24', '2026-04-25', '2026-04-26', '2026-04-27', '2026-04-28'];
+      dates.forEach((date, i) => {
+        addDay.run(trip.id, i + 1, date, ['Sedona', 'Grand Canyon South Rim', 'Grand Canyon to Page', 'Page to Phoenix', 'Phoenix departure'][i]);
+      });
+
+      const category = db.prepare('SELECT id FROM categories WHERE name = ? LIMIT 1');
+      const place = db.prepare(`
+        INSERT OR IGNORE INTO places
+          (trip_id, name, description, category_id, price, currency, place_time, end_time,
+           duration_minutes, notes, transport_mode, source_id)
+        VALUES (?, ?, ?, ?, ?, 'USD', ?, ?, ?, ?, ?, ?)
+      `);
+      const updatePlace = db.prepare(`
+        UPDATE places SET description = ?, category_id = ?, price = ?, currency = 'USD',
+          place_time = ?, end_time = ?, duration_minutes = ?, notes = ?, transport_mode = ?
+        WHERE trip_id = ? AND source_id = ?
+      `);
+      const assignment = db.prepare('INSERT OR IGNORE INTO day_assignments (day_id, place_id, order_index, notes) VALUES (?, ?, ?, ?)');
+      const accommodation = db.prepare(`
+        INSERT OR IGNORE INTO day_accommodations
+          (trip_id, place_id, start_day_id, end_day_id, notes)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+
+      type Item = [string, string, string, string, string | null, number | null, string | null, string, string, boolean?];
+      const items: Item[][] = [
+        [
+          ['Flight ORD → PHX', '4-hour flight; arrive 9:55 AM.', 'Transport', '08:00', '09:55', null, 'ORD → PHX.', 'air', 'gc-d1-flight-in'],
+          ['Pick up SUV at PHX', 'Rental pickup; 11:00 AM slot. Coffee and bagels.', 'Transport', '10:00', '11:00', 60, '$10 coffee and bagels.', 'driving', 'gc-d1-suv'],
+          ['Drive PHX → Oak Creek Canyon', 'Via Interstate-17; approximately 15 miles and 20 minutes.', 'Transport', '11:00', '11:15', 15, 'Road transfer.', 'driving', 'gc-d1-drive-oak'],
+          ['Oak Creek Canyon + Red Rock pass area', 'Drive through Oak Creek Canyon and make a quick Red Rock pass-area stop.', 'Nature', '11:15', '13:00', 105, 'Red Rock Pass: $5/day; no other fee noted.', 'driving', 'gc-d1-oak-creek'],
+          ['Dreamcatcher Inn of Sedona', 'Check in; 2-queen room.', 'Hotel', '13:00', '15:00', 120, '$280; refundable before April 22 at 3 PM.', 'walking', 'gc-d1-dreamcatcher', true],
+          ['Lunch on the go', 'Lunch during hotel check-in window.', 'Restaurant', '13:00', '15:00', 120, '$15.', 'walking', 'gc-d1-lunch'],
+          ['Cathedral Rock Trail', '1 mile round trip; about 1 hour plus 30 minutes at the summit.', 'Nature', '15:00', '16:30', 90, 'No fee; Red Rock Pass applies.', 'walking', 'gc-d1-cathedral'],
+          ['Rest at hotel', 'Downtime at Dreamcatcher Inn.', 'Hotel', '16:30', '17:30', 60, null, 'walking', 'gc-d1-rest'],
+          ['Mariposa Latin-Inspired Grill', 'Dinner.', 'Restaurant', '17:30', '19:00', 90, '$30.', 'walking', 'gc-d1-mariposa'],
+          ['Airport Mesa sunset', 'Sunset; 1/2-mile loop, about 30 minutes.', 'Nature', '19:00', '20:00', 60, 'No fee; Red Rock Pass applies.', 'driving', 'gc-d1-airport-mesa'],
+        ],
+        [
+          ['Wildflower Bread Co.', 'Breakfast.', 'Bar/Cafe', '07:00', '08:00', 60, '$12.', 'walking', 'gc-d2-breakfast'],
+          ["Devil's Bridge Trail", '4 miles round trip; approximately 2 hours.', 'Nature', '08:00', '10:00', 120, 'Red Rock Pass.', 'walking', 'gc-d2-devils-bridge'],
+          ['Drive Sedona → Grand Canyon South Rim', 'Approximately 110 miles; about 2 hours.', 'Transport', '10:00', '11:00', 60, 'Road transfer.', 'driving', 'gc-d2-drive-gc'],
+          ['Grand Canyon entrance station', 'Enter the park and pay the vehicle fee.', 'Attraction', '11:00', '12:00', 60, '$35 per car for 7 days.', 'driving', 'gc-d2-entrance'],
+          ['Canyon Village deli or Arizona Room', 'Lunch.', 'Restaurant', '12:00', '13:00', 60, '$15.', 'walking', 'gc-d2-lunch'],
+          ['Mather Point and Yavapai Point', 'Two viewpoints; about 10 minutes at each.', 'Attraction', '13:00', '14:00', 60, 'Free parking.', 'driving', 'gc-d2-viewpoints'],
+          ['Bright Angel Trail to 1.5-mile resthouse', '3 miles round trip; approximately 3 hours; 1,500 feet down/up.', 'Nature', '14:00', '17:00', 180, 'Hike plan.', 'walking', 'gc-d2-bright-angel'],
+          ['Lookout Studio and trailhead stroll', 'Free stroll.', 'Attraction', '17:00', '18:00', 60, 'Free.', 'walking', 'gc-d2-lookout'],
+          ['Plow Café', 'Dinner.', 'Restaurant', '18:00', '19:30', 90, '$25.', 'walking', 'gc-d2-plow'],
+          ['Yavapai Lodge', 'Overnight lodging.', 'Hotel', '19:30', null, null, '$260; nonrefundable.', 'walking', 'gc-d2-yavapai', true],
+        ],
+        [
+          ['Ooh Aah Point sunrise', '1 mile round trip; about 30 minutes.', 'Nature', '06:00', '06:45', 45, 'Free.', 'walking', 'gc-d3-ooh-aah'],
+          ['Village Café', 'Breakfast.', 'Bar/Cafe', '07:00', '08:00', 60, '$12.', 'walking', 'gc-d3-breakfast'],
+          ['Desert View Drive', 'Eastbound 25-mile loop: Moran Point, Lipan Point, Navajo Point, and Desert View Watchtower.', 'Nature', '08:00', '11:00', 180, 'Desert View Watchtower is a 1/2-mile loop; about 30 minutes.', 'driving', 'gc-d3-desert-view'],
+          ['Grand Canyon Village lunch', 'Return to the village for lunch.', 'Restaurant', '11:00', '12:00', 60, '$15.', 'driving', 'gc-d3-lunch'],
+          ['South Kaibab Trail to Cedar Ridge', '3 miles round trip; approximately 2 hours.', 'Nature', '12:00', '15:00', 180, 'Hike plan.', 'walking', 'gc-d3-cedar-ridge'],
+          ['Relax, gift shop, and afternoon snack', 'Downtime and snack.', 'Shopping', '15:00', '16:30', 90, '$10.', 'walking', 'gc-d3-snack'],
+          ['Drive Grand Canyon South Rim → Page', 'Approximately 140 miles; about 2 hours 45 minutes.', 'Transport', '16:30', '19:15', 165, 'Road transfer.', 'driving', 'gc-d3-drive-page'],
+          ["Big John's BBQ or Fiesta Mexicana", 'Dinner in Page.', 'Restaurant', '19:15', '20:30', 75, '$20; restaurant choice undecided.', 'driving', 'gc-d3-page-dinner'],
+          ['Red Rock Motel Airbnb', 'Overnight lodging in Page.', 'Hotel', '20:30', null, null, '$110; nonrefundable.', 'walking', 'gc-d3-page-lodging', true],
+        ],
+        [
+          ['Ranch House Grille or Airbnb breakfast', 'Breakfast.', 'Bar/Cafe', '07:15', '08:00', 45, '$12; location undecided.', 'walking', 'gc-d4-breakfast'],
+          ['Drive to Horseshoe Bend', 'Approximately 6 miles; 15 minutes.', 'Transport', '08:00', '08:15', 15, 'Road transfer.', 'driving', 'gc-d4-drive-horseshoe'],
+          ['Horseshoe Bend', '1.5-mile loop; approximately 1 hour.', 'Nature', '08:15', '09:15', 60, '$10 parking.', 'walking', 'gc-d4-horseshoe'],
+          ['Drive to Via Ferrata Antelope base', 'Approximately 6 miles; 15 minutes.', 'Transport', '09:15', '09:30', 15, 'Road transfer.', 'driving', 'gc-d4-drive-via-ferrata'],
+          ['Via Ferrata Antelope Canyon tour', 'Guided 2-hour tour.', 'Activity', '10:00', '12:00', 120, '$160 per person.', 'walking', 'gc-d4-via-ferrata'],
+          ['Lunch in Page', 'Lunch.', 'Restaurant', '12:00', '13:00', 60, '$15.', 'driving', 'gc-d4-lunch'],
+          ['Drive Page → Phoenix', 'Approximately 140 miles; about 2 hours 45 minutes.', 'Transport', '13:00', '15:00', 120, 'Road transfer; itinerary notes arrival/check-in later at 6 PM.', 'driving', 'gc-d4-drive-phx'],
+          ['Biltmore/downtown Phoenix check-in and dinner', 'Check in and dinner; Pizzeria Bianco or Barrio Café.', 'Restaurant', '18:00', '19:30', 90, '$20; restaurant choice undecided.', 'driving', 'gc-d4-phx-dinner'],
+          ['1923 North 25th Place Airbnb', 'Overnight lodging in Phoenix.', 'Hotel', '19:30', null, null, '$63.', 'walking', 'gc-d4-phx-lodging', true],
+        ],
+        [
+          ["Matt's Big Breakfast or hotel café", 'Breakfast.', 'Bar/Cafe', '07:00', '08:00', 60, '$12; location undecided.', 'walking', 'gc-d5-breakfast'],
+          ['Papago Park: Hole-in-the-Rock', '1/2-mile round trip.', 'Nature', '08:00', '09:30', 90, 'Free.', 'walking', 'gc-d5-papago'],
+          ['Drive to Desert Botanical Garden', 'Approximately 10 minutes.', 'Transport', '09:30', '10:00', 30, 'Road transfer.', 'driving', 'gc-d5-drive-garden'],
+          ['Desert Botanical Garden', 'Visit for approximately 1 hour.', 'Attraction', '10:00', '11:00', 60, '$30 per car.', 'walking', 'gc-d5-garden'],
+          ['Return rental at PHX', 'Return the rental car by 11:00 AM.', 'Transport', '11:00', null, null, null, 'driving', 'gc-d5-rental-return'],
+          ['Relax at PHX airport', 'Airport downtime before the return flight.', 'Other', '11:00', '18:05', 425, null, 'walking', 'gc-d5-airport'],
+          ['Flight PHX → MDW', 'Depart 6:05 PM; arrive 11:20 PM.', 'Transport', '18:05', '23:20', null, 'Return flight.', 'air', 'gc-d5-flight-out'],
+        ],
+      ];
+
+      items.forEach((dayItems, dayIndex) => {
+          const dayId = (day.get(trip.id, dayIndex + 1) as { id: number }).id;
+          dayItems.forEach((item, orderIndex) => {
+            const [name, description, categoryName, start, end, duration, notes, mode, sourceId, isAccommodation] = item;
+            const categoryId = (category.get(categoryName) as { id: number } | undefined)?.id ?? null;
+            const existing = db.prepare('SELECT id FROM places WHERE trip_id = ? AND source_id = ?').get(trip.id, sourceId) as { id: number } | undefined;
+            const placeId = existing?.id ?? Number(place.run(trip.id, name, description, categoryId, null, start, end, duration, notes, mode, sourceId).lastInsertRowid);
+            if (existing) updatePlace.run(description, categoryId, null, start, end, duration, notes, mode, trip.id, sourceId);
+            assignment.run(dayId, placeId, orderIndex, notes);
+            if (isAccommodation) accommodation.run(trip.id, placeId, dayId, dayId, notes);
+          });
+      });
+    },
+    () => {
+      const insert = db.prepare(`
+        INSERT OR IGNORE INTO imported_flight_segments
+          (user_id, trip_id, source_id, label, origin_name, destination_name,
+           origin_lat, origin_lng, destination_lat, destination_lng)
+        SELECT t.user_id, t.id, ?, ?, ?, ?, ?, ?, ?, ?
+        FROM trips t WHERE t.title = ?
+      `);
+      insert.run('grand-canyon-ord-phx', 'Chicago → Phoenix', 'Chicago O’Hare International Airport', 'Phoenix Sky Harbor International Airport', 41.9742, -87.9073, 33.4342, -112.0116, 'Grand Canyon & Sedona');
+      insert.run('grand-canyon-phx-mdw', 'Phoenix → Chicago', 'Phoenix Sky Harbor International Airport', 'Chicago Midway International Airport', 33.4342, -112.0116, 41.7868, -87.7522, 'Grand Canyon & Sedona');
+    },
+    () => {
+      const trip = db.prepare("SELECT id FROM trips WHERE title = 'Grand Canyon & Sedona' LIMIT 1").get() as { id: number } | undefined;
+      if (!trip) return;
+      const update = db.prepare('UPDATE places SET lat = ?, lng = ? WHERE trip_id = ? AND source_id = ?');
+      const points: [string, number, number][] = [
+        ['gc-d1-flight-in', 33.4342, -112.0116],
+        ['gc-d1-oak-creek', 34.9500, -111.7400],
+        ['gc-d1-dreamcatcher', 34.8697, -111.7610],
+        ['gc-d1-cathedral', 34.8253, -111.7880],
+        ['gc-d1-mariposa', 34.8626, -111.7960],
+        ['gc-d1-airport-mesa', 34.8619, -111.7880],
+        ['gc-d2-breakfast', 34.8692, -111.7616],
+        ['gc-d2-devils-bridge', 34.9025, -111.8130],
+        ['gc-d2-entrance', 35.9780, -112.1260],
+        ['gc-d2-viewpoints', 36.0580, -112.1320],
+        ['gc-d2-bright-angel', 36.0570, -112.1430],
+        ['gc-d2-lookout', 36.0570, -112.1440],
+        ['gc-d2-plow', 36.0555, -112.1430],
+        ['gc-d2-yavapai', 36.0415, -112.1210],
+        ['gc-d3-ooh-aah', 36.0545, -112.0830],
+        ['gc-d3-desert-view', 36.0410, -111.8260],
+        ['gc-d3-cedar-ridge', 36.0470, -112.0830],
+        ['gc-d3-drive-page', 36.9140, -111.4600],
+        ['gc-d3-page-dinner', 36.9140, -111.4600],
+        ['gc-d3-page-lodging', 36.9140, -111.4600],
+        ['gc-d4-horseshoe', 36.8790, -111.5100],
+        ['gc-d4-via-ferrata', 37.0200, -111.1700],
+        ['gc-d4-lunch', 36.9140, -111.4600],
+        ['gc-d4-phx-dinner', 33.5100, -112.0300],
+        ['gc-d4-phx-lodging', 33.4700, -112.0300],
+        ['gc-d5-papago', 33.4500, -111.9500],
+        ['gc-d5-garden', 33.4628, -111.9480],
+        ['gc-d5-rental-return', 33.4342, -112.0116],
+        ['gc-d5-flight-out', 41.7868, -87.7522],
+      ];
+      points.forEach(([sourceId, lat, lng]) => update.run(lat, lng, trip.id, sourceId));
+    },
   ];
 
   if (currentVersion < migrations.length) {

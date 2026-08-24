@@ -21,6 +21,7 @@ export const TRIP_SELECT = `
   SELECT t.*,
     (SELECT COUNT(*) FROM days d WHERE d.trip_id = t.id) as day_count,
     (SELECT COUNT(*) FROM places p WHERE p.trip_id = t.id) as place_count,
+    (SELECT p.image_url FROM places p WHERE p.trip_id = t.id AND p.image_url IS NOT NULL ORDER BY p.id LIMIT 1) as trip_preview_image,
     CASE WHEN t.user_id = :userId THEN 1 ELSE 0 END as is_owner,
     u.username as owner_username,
     (SELECT COUNT(*) FROM trip_members tm WHERE tm.trip_id = t.id) as shared_count

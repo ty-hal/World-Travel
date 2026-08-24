@@ -13,6 +13,8 @@ import {
   createBucketItem,
   updateBucketItem,
   deleteBucketItem,
+  getImportedAtlasData,
+  getAtlasWonders,
 } from '../../services/atlasService';
 
 type CreateBucketData = Parameters<typeof createBucketItem>[1];
@@ -76,5 +78,13 @@ export class AtlasService {
 
   deleteBucketItem(userId: number, itemId: string): boolean {
     return deleteBucketItem(userId, itemId);
+  }
+
+  importedData(userId: number) {
+    return getImportedAtlasData(userId);
+  }
+
+  wonders(userId: number) {
+    return getAtlasWonders(userId);
   }
 }

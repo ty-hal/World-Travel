@@ -61,5 +61,5 @@ export const TAG_STYLES: Record<string, { bg: string; fg: string; darkBg: string
 export function tagColors(tag: string, dark: boolean) {
   const known = TAG_STYLES[tag.toLowerCase()]
   if (known) return { bg: dark ? known.darkBg : known.bg, fg: dark ? known.darkFg : known.fg }
-  return { bg: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', fg: dark ? '#a1a1aa' : '#374151' }
+  return { bg: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', fg: dark ? '#b8b8c2' : '#374151' }
 }

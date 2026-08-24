@@ -11,7 +11,7 @@ import type { Trip } from '../../types'
 // endpoints (it already carries the computed day_count/place_count/is_owner/
 // owner_username/shared_count fields). Kept as a named alias so the existing
 // imports stay stable.
-export type DashboardTrip = Trip
+export type DashboardTrip = Trip & { trip_preview_image?: string | null }
 
 export interface Member { id: number; username: string; avatar_url?: string | null }
 export interface Place {

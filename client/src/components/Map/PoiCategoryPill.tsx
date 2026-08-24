@@ -14,9 +14,7 @@ interface Props {
   onSearchArea?: () => void
 }
 
-// Frosted, icon-only segmented control that floats over the map. Active segments
-// fill with the category colour (matching their markers); the label shows in a
-// custom tooltip on hover so the pill stays compact and never needs to scroll.
+// Nearby-map discovery control, separate from the planned-place category filter.
 export default function PoiCategoryPill({ active, onToggle, loadingKeys, errorKeys, moved, onSearchArea }: Props) {
   const { t } = useTranslation()
   const anyError = !!errorKeys && Array.from(active).some(k => errorKeys.has(k))
@@ -30,7 +28,8 @@ export default function PoiCategoryPill({ active, onToggle, loadingKeys, errorKe
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: 4, borderRadius: 999, pointerEvents: 'auto', ...frosted }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 999, pointerEvents: 'auto', ...frosted }} aria-label="Explore nearby places">
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Explore nearby</span>
         {POI_CATEGORIES.map(cat => {
           const on = active.has(cat.key)
           const loading = loadingKeys?.has(cat.key)

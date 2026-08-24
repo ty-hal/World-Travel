@@ -22,33 +22,37 @@ export function PackingList(S: PackingState) {
           <p style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', margin: 0 }}>{t('packing.emptyFiltered')}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {Object.entries(gruppiert).map(([kat, katItems]) => (
-            <KategorieGruppe
-              key={kat}
-              kategorie={kat}
-              items={katItems}
-              tripId={tripId}
-              allCategories={allCategories}
-              onRename={handleRenameCategory}
-              onDeleteAll={handleDeleteCategory}
-              onDeleteItem={handleDeleteItem}
-              onAddItem={handleAddItemToCategory}
-              assignees={categoryAssignees[kat] || []}
-              tripMembers={tripMembers}
-              onSetAssignees={handleSetAssignees}
-              bagTrackingEnabled={bagTrackingEnabled}
-              bags={bags}
-              onCreateBag={handleCreateBagByName}
-              canEdit={canEdit}
-              allItems={items}
-              onReorder={(orderedIds) => reorderPackingItems(tripId, orderedIds)}
-              currentUserId={currentUserId}
-              onSetSharing={handleSetSharing}
-              onClone={handleCloneItem}
-              onJoin={handleJoinItem}
-              onLeave={handleLeaveItem}
-            />
+        <div className="packing-category-grid grid grid-cols-1 md:grid-cols-2 gap-2">
+          {[0, 1].map(column => (
+            <div className="packing-category-column" key={column}>
+              {Object.entries(gruppiert).filter((_, index) => index % 2 === column).map(([kat, katItems]) => (
+                <KategorieGruppe
+                  key={kat}
+                  kategorie={kat}
+                  items={katItems}
+                  tripId={tripId}
+                  allCategories={allCategories}
+                  onRename={handleRenameCategory}
+                  onDeleteAll={handleDeleteCategory}
+                  onDeleteItem={handleDeleteItem}
+                  onAddItem={handleAddItemToCategory}
+                  assignees={categoryAssignees[kat] || []}
+                  tripMembers={tripMembers}
+                  onSetAssignees={handleSetAssignees}
+                  bagTrackingEnabled={bagTrackingEnabled}
+                  bags={bags}
+                  onCreateBag={handleCreateBagByName}
+                  canEdit={canEdit}
+                  allItems={items}
+                  onReorder={(orderedIds) => reorderPackingItems(tripId, orderedIds)}
+                  currentUserId={currentUserId}
+                  onSetSharing={handleSetSharing}
+                  onClone={handleCloneItem}
+                  onJoin={handleJoinItem}
+                  onLeave={handleLeaveItem}
+                />
+              ))}
+            </div>
           ))}
         </div>
       )}

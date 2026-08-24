@@ -1537,6 +1537,44 @@ export function listBucketList(userId: number) {
   return db.prepare('SELECT * FROM bucket_list WHERE user_id = ? ORDER BY created_at DESC').all(userId);
 }
 
+function parseJson(value: unknown, fallback: unknown) {
+  try { return value ? JSON.parse(String(value)) : fallback; } catch { return fallback; }
+}
+
+/** Imported World-Travel atlas data exposed to the native Atlas UI. */
+export function getImportedAtlasData(userId: number) {
+  const visits = db.prepare('SELECT * FROM atlas_visits WHERE user_id = ? ORDER BY country, city').all(userId)
+    .map((row: any) => ({ ...row, links: parseJson(row.links_json, {}) }));
+  const wonders = db.prepare('SELECT * FROM atlas_wonders ORDER BY significance, country, label').all()
+    .map((row: any) => ({ ...row, image_urls: parseJson(row.image_urls_json, []) }));
+  const media = db.prepare('SELECT * FROM trip_media WHERE user_id = ? ORDER BY sort_order, title').all(userId)
+    .map((row: any) => ({
+      ...row,
+      image_urls: parseJson(row.image_urls_json, []),
+      video_urls: parseJson(row.video_urls_json, []),
+      geotags: parseJson(row.geotags_json, []),
+    }));
+  return { visits, wonders, media };
+}
+
+export function getAtlasWonders(userId: number) {
+  return db.prepare(`
+    SELECT w.*,
+      EXISTS (
+        SELECT 1 FROM places p
+        JOIN trips t ON t.id = p.trip_id
+        WHERE (t.user_id = ? OR EXISTS (
+          SELECT 1 FROM trip_members tm WHERE tm.trip_id = t.id AND tm.user_id = ?
+        ))
+          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          AND ABS(p.lat - w.lat) < 0.02 AND ABS(p.lng - w.lng) < 0.02
+      ) AS visited
+    FROM atlas_wonders w
+    ORDER BY significance, country, label
+  `).all(userId, userId)
+    .map((row: any) => ({ ...row, image_urls: parseJson(row.image_urls_json, []) }));
+}
+
 export function createBucketItem(
   userId: number,
   data: {

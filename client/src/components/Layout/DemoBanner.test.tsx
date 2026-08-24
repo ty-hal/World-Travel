@@ -80,7 +80,7 @@ describe('DemoBanner', () => {
   // FE-COMP-DEMOBANNER-010
   it('shows addon cards', () => {
     render(<DemoBanner />);
-    expect(screen.getByText('Vacay')).toBeInTheDocument();
+    expect(screen.getByText('Calendar')).toBeInTheDocument();
     expect(screen.getByText('Atlas')).toBeInTheDocument();
   });
 

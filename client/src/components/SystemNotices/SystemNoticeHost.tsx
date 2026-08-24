@@ -33,7 +33,6 @@ export function SystemNoticeHost() {
 
   if (!loaded) return null;
 
-  // desktopOnly notices (e.g. the thank-you/support modal) are hidden on mobile.
   const visible = isMobile ? notices.filter(n => !n.desktopOnly) : notices;
 
   const modals  = visible.filter(n => n.display === 'modal');

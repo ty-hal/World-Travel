@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react'
-import { useSettingsStore } from '../store/settingsStore'
 import en from '@trek/shared/i18n/en'
 import type { SupportedLanguageCode } from '@trek/shared'
 import {
@@ -14,32 +13,8 @@ import type { TranslationStrings } from '@trek/shared/i18n'
 
 export { SUPPORTED_LANGUAGES }
 
-// One explicit dynamic import per locale — Vite code-splits a separate chunk per locale.
-// Only the active locale is fetched; en is always available synchronously as the fallback.
 const localeLoaders: Record<SupportedLanguageCode, () => Promise<{ default: TranslationStrings }>> = {
   en:      () => Promise.resolve({ default: en }),
-  de:      () => import('@trek/shared/i18n/de'),
-  es:      () => import('@trek/shared/i18n/es'),
-  fr:      () => import('@trek/shared/i18n/fr'),
-  hu:      () => import('@trek/shared/i18n/hu'),
-  it:      () => import('@trek/shared/i18n/it'),
-  tr:      () => import('@trek/shared/i18n/tr'),
-  ru:      () => import('@trek/shared/i18n/ru'),
-  zh:      () => import('@trek/shared/i18n/zh'),
-  'zh-TW': () => import('@trek/shared/i18n/zh-TW'),
-  nl:      () => import('@trek/shared/i18n/nl'),
-  id:      () => import('@trek/shared/i18n/id'),
-  ar:      () => import('@trek/shared/i18n/ar'),
-  br:      () => import('@trek/shared/i18n/br'),
-  cs:      () => import('@trek/shared/i18n/cs'),
-  pl:      () => import('@trek/shared/i18n/pl'),
-  ja:      () => import('@trek/shared/i18n/ja'),
-  ko:      () => import('@trek/shared/i18n/ko'),
-  uk:      () => import('@trek/shared/i18n/uk'),
-  gr:      () => import('@trek/shared/i18n/gr'),
-  sv:      () => import('@trek/shared/i18n/sv'),
-  vi:      () => import('@trek/shared/i18n/vi'),
-  ca:      () => import('@trek/shared/i18n/ca'),
 }
 
 // Re-export pure helpers that live in shared so downstream consumers can import them
@@ -50,25 +25,7 @@ export { getLocaleForLanguage, getIntlLanguage, isRtlLanguage }
 // Returns null if no supported language matches.
 export function detectBrowserLanguage(): string | null {
   if (typeof navigator === 'undefined') return null
-  const browserLangs = navigator.languages?.length
-    ? navigator.languages
-    : navigator.language ? [navigator.language] : []
-  const supported = SUPPORTED_LANGUAGES.map(l => l.value)
-
-  for (const lang of browserLangs) {
-    const exactMatch = supported.find(s => s.toLowerCase() === lang.toLowerCase())
-    if (exactMatch) return exactMatch
-
-    // pt-BR has no exact match (our code is 'br'), so map it explicitly.
-    // pt-PT and bare 'pt' are NOT mapped — they fall through to null.
-    if (lang.toLowerCase() === 'pt-br') return 'br'
-
-    const prefix = lang.split('-')[0]?.toLowerCase()
-    const prefixMatch = supported.find(s => s.toLowerCase() === prefix)
-    if (prefixMatch) return prefixMatch
-  }
-
-  return null
+  return 'en'
 }
 
 interface TranslationContextValue {
@@ -105,7 +62,7 @@ interface TranslationProviderProps {
 }
 
 export function TranslationProvider({ children }: TranslationProviderProps) {
-  const language = useSettingsStore((s) => s.settings.language) || 'en'
+  const language = 'en'
   const [strings, setStrings] = useState<TranslationStrings>(en)
 
   useEffect(() => {

@@ -467,7 +467,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Śledź wydatki i planuj budżet podróży',
   'admin.addons.catalog.documents.name': 'Dokumenty',
   'admin.addons.catalog.documents.description': 'Przechowuj i zarządzaj dokumentami podróżnymi',
-  'admin.addons.catalog.vacay.name': 'Urlopy',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Osobisty planer urlopu z widokiem kalendarza',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': 'Mapa świata z odwiedzonymi krajami i statystykami podróży',

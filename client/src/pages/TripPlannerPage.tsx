@@ -26,6 +26,7 @@ import PackingListPanel from '../components/Packing/PackingListPanel'
 import ApplyTemplateButton from '../components/Packing/ApplyTemplateButton'
 import TodoListPanel from '../components/Todo/TodoListPanel'
 import FileManager from '../components/Files/FileManager'
+import TripPhotoAlbums from '../components/Files/TripPhotoAlbums'
 import CostsPanel, { ExpenseModal, type ExpensePrefill } from '../components/Budget/CostsPanel'
 import type { BookingExpenseRequest } from '../components/Planner/BookingCostsSection.types'
 import type { BudgetItem } from '../types'
@@ -208,12 +209,12 @@ export default function TripPlannerPage(): React.ReactElement | null {
     isMobile, isTouch,
     expandedDayIds, setExpandedDayIds, mapPlaces,
     route, routeSegments, routeInfo, setRoute, setRouteInfo, updateRouteForDay,
-    handleSelectDay, handlePlaceClick, handleMarkerClick, handleMapClick, handleMapContextMenu, openAddPlaceFromPoi,
+    handleSelectDay, handlePlaceClick, handleMarkerClick, handleMapClick, handleMapContextMenu, openPoiInGoogleMaps,
     handleSavePlace, openPlaceEditor, handleDeletePlace, confirmDeletePlace, confirmDeletePlaces, confirmChangeCategory,
     handleAssignToDay, handleRemoveAssignment, handleReorder, handleReorderDays, handleAddDay, handleUpdateDayTitle,
     handleSaveReservation, handleSaveTransport, handleDeleteReservation,
     selectedPlace, dayOrderMap, dayPlaces,
-    mapTileUrl, fontStyle, splashDone,
+    mapTileUrl, fontStyle,
   } = useTripPlanner()
 
   const poi = usePoiExplore()
@@ -235,7 +236,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
     else if (req.prefill) setBookingExpense({ editing: null, prefill: req.prefill })
   }
 
-  if (isLoading || !splashDone) {
+  if (isLoading) {
     return (
       <div className="bg-surface" style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -263,7 +264,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
           {trip?.title || 'TREK'}
         </div>
         <div className="text-content-faint" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 500, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 32, animation: 'fadeInUp 0.5s ease-out 0.1s both' }}>
-          {t('trip.loadingPhotos')}
+          {t('common.loading')}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {[0, 1, 2].map(i => (
@@ -339,7 +340,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
                 if (r) setMapTransportDetail(r)
               }}
               pois={poi.pois}
-              onPoiClick={openAddPlaceFromPoi}
+              onPoiClick={openPoiInGoogleMaps}
               onViewportChange={poi.onViewportChange}
               onMapReady={setGlMap}
             />
@@ -728,6 +729,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
             />
           </div>
         )}
+
+        {activeTab === 'photos' && <TripPhotoAlbums tripId={tripId} />}
 
         {activeTab === 'collab' && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 'var(--bottom-nav-h)', overflow: 'hidden' }}>

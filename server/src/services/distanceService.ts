@@ -14,7 +14,7 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 
 /**
  * Total flight distance a user has covered, summed across every non-cancelled
- * flight reservation in their trips. Each flight stores its waypoints in
+ * flight reservation or imported flight segment in their trips. Each flight stores its waypoints in
  * reservation_endpoints (from → stops → to, ordered by sequence); we add up the
  * legs between consecutive points so multi-stop flights count correctly.
  */
@@ -39,5 +39,13 @@ export function getFlightDistanceKm(userId: number): number {
     }
     prev = { id: point.reservation_id, lat: point.lat, lng: point.lng };
   }
+  const imported = db.prepare(`
+    SELECT origin_lat, origin_lng, destination_lat, destination_lng
+    FROM imported_flight_segments s
+    JOIN trips t ON t.id = s.trip_id
+    LEFT JOIN trip_members tm ON tm.trip_id = t.id AND tm.user_id = ?
+    WHERE s.user_id = ? OR tm.user_id IS NOT NULL
+  `).all(userId, userId) as { origin_lat: number; origin_lng: number; destination_lat: number; destination_lng: number }[];
+  for (const segment of imported) total += haversineKm(segment.origin_lat, segment.origin_lng, segment.destination_lat, segment.destination_lng);
   return Math.round(total);
 }

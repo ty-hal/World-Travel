@@ -1,13 +1,14 @@
 import { Fragment } from 'react'
-import { Upload, FileText, Star } from 'lucide-react'
+import { Upload, FileText, Star, Link2, Trash2 } from 'lucide-react'
 import type { FileManagerState } from './useFileManager'
 import { FileRow } from './FileManagerRow'
 import { usePluginViewContributions, PluginCardFooter } from '../Plugins/PluginContributions'
+import { GoogleLinkExternalIcon, GoogleLinkIcon } from './GoogleLinkModal'
 
 export function FilesView(S: FileManagerState) {
   const {
     can, trip, getRootProps, getInputProps, isDragActive, uploading, t, allowedFileTypes,
-    files, filterType, setFilterType, filteredFiles,
+    files, filterType, setFilterType, filteredFiles, links, setShowLinkModal, can: canDo, deleteLink,
   } = S
   const contribFor = usePluginViewContributions('files', S.tripId)
   return (
@@ -62,6 +63,23 @@ export function FilesView(S: FileManagerState) {
           {filteredFiles.length === 1 ? t('files.countSingular') : t('files.count', { count: filteredFiles.length })}
         </span>
       </div>
+
+      <section style={{ padding: '16px 28px 0' }} className="max-md:!px-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-content">Google links</h3>
+          {canDo('file_upload', trip) && <button onClick={() => setShowLinkModal(true)} className="inline-flex items-center gap-1 text-xs text-content-muted"><Link2 size={13} /> Add link</button>}
+        </div>
+        {links.length > 0 && <div className="flex flex-col gap-2">
+          {links.map(link => <div key={link.id} className="flex items-center gap-3 rounded-xl border border-edge bg-surface-card px-3 py-2">
+              <span className="text-content-muted"><GoogleLinkIcon provider={link.provider} /></span>
+              <div className="min-w-0 flex-1">
+                <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-medium text-content hover:underline truncate">{link.title} <GoogleLinkExternalIcon /></a>
+                {link.description && <p className="text-xs text-content-faint truncate">{link.description}</p>}
+              </div>
+              {canDo('file_delete', trip) && <button onClick={() => deleteLink(link.id)} aria-label={`Remove ${link.title}`} className="p-1 text-content-faint hover:text-red-500"><Trash2 size={15} /></button>}
+            </div>)}
+        </div>}
+      </section>
 
       {/* File list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 28px 16px' }} className="max-md:!px-4">

@@ -298,6 +298,7 @@ export const authApi = {
   resetPassword: (data: ResetPasswordRequest) => apiClient.post('/auth/reset-password', data).then(r => r.data as { success?: true; mfa_required?: true }),
   deleteOwnAccount: () => apiClient.delete('/auth/me').then(r => r.data),
   demoLogin: () => apiClient.post('/auth/demo-login').then(r => r.data),
+  devLogin: () => apiClient.post('/auth/dev-login').then(r => r.data),
   mcpTokens: {
     list: () => apiClient.get('/auth/mcp-tokens').then(r => r.data),
     create: (name: string) => apiClient.post('/auth/mcp-tokens', { name } satisfies McpTokenCreateRequest).then(r => r.data),
@@ -602,6 +603,8 @@ export const adminApi = {
 
 export const addonsApi = {
   enabled: () => apiClient.get('/addons').then(r => r.data),
+  atlasImported: () => apiClient.get('/addons/atlas/imported').then(r => r.data),
+  atlasWonders: () => apiClient.get('/addons/atlas/wonders').then(r => r.data as { wonders: Array<Record<string, unknown>> }),
 }
 
 /** A host-rendered column/action a plugin contributes into a native planner view
@@ -842,6 +845,9 @@ export const budgetApi = {
 
 export const filesApi = {
   list: (tripId: number | string, trash?: boolean) => apiClient.get(`/trips/${tripId}/files`, { params: trash ? { trash: 'true' } : {} }).then(r => r.data),
+  listLinks: (tripId: number | string) => apiClient.get(`/trips/${tripId}/files/links`).then(r => r.data),
+  createLink: (tripId: number | string, data: { title: string; url: string; description?: string }) => apiClient.post(`/trips/${tripId}/files/links`, data).then(r => r.data),
+  deleteLink: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/files/links/${id}`).then(r => r.data),
   upload: (tripId: number | string, formData: FormData, opts?: UploadOptions) => postMultipart(`/trips/${tripId}/files`, formData, opts),
   update: (tripId: number | string, id: number, data: FileUpdateRequest) => apiClient.put(`/trips/${tripId}/files/${id}`, data).then(r => r.data),
   delete: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/files/${id}`).then(r => r.data),

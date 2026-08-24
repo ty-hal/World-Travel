@@ -450,7 +450,7 @@ describe('JourneyPublicPage', () => {
   });
 
   // FE-PAGE-PUBLICJOURNEY-016
-  it('FE-PAGE-PUBLICJOURNEY-016: language picker opens and switches language', async () => {
+  it('FE-PAGE-PUBLICJOURNEY-016: language picker only offers English', async () => {
     const user = userEvent.setup();
     setupSuccess();
     render(<JourneyPublicPage />);
@@ -465,19 +465,10 @@ describe('JourneyPublicPage', () => {
     // Open the language picker
     await user.click(langButton);
 
-    // Language options should appear
+    // English is the only supported option.
     await waitFor(() => {
-      expect(screen.getByText('Deutsch')).toBeInTheDocument();
-      expect(screen.getByText('Español')).toBeInTheDocument();
-      expect(screen.getByText('Français')).toBeInTheDocument();
+      expect(screen.getAllByText('English').length).toBeGreaterThan(1);
     });
-
-    // Click Deutsch to switch language
-    await user.click(screen.getByText('Deutsch'));
-
-    // The picker should close and settings store should be updated
-    const settings = useSettingsStore.getState().settings;
-    expect(settings.language).toBe('de');
   });
 
   // FE-PAGE-PUBLICJOURNEY-017

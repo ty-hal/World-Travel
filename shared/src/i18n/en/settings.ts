@@ -90,7 +90,7 @@ const settings: TranslationStrings = {
   'settings.notifyBookingChange': 'Booking changes',
   'settings.notifyTripReminder': 'Trip reminders',
   'settings.notifyTodoDue': 'Todo due soon',
-  'settings.notifyVacayInvite': 'Vacay fusion invitations',
+  'settings.notifyVacayInvite': 'Calendar fusion invitations',
   'settings.notifyPhotosShared': 'Shared photos (Immich)',
   'settings.notifyCollabMessage': 'Chat messages (Collab)',
   'settings.notifyPackingTagged': 'Packing list: assignments',

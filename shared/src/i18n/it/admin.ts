@@ -470,7 +470,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Tieni traccia delle spese e pianifica il budget del tuo viaggio',
   'admin.addons.catalog.documents.name': 'Documenti',
   'admin.addons.catalog.documents.description': 'Archivia e gestisci i documenti di viaggio',
-  'admin.addons.catalog.vacay.name': 'Ferie',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Pianificatore personale delle ferie con vista calendario',
   'admin.addons.catalog.atlas.name': 'Atlante',
   'admin.addons.catalog.atlas.description': 'Mappa del mondo con paesi visitati e statistiche di viaggio',

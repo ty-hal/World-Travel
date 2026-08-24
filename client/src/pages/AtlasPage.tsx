@@ -3,7 +3,7 @@ import { useTranslation } from '../i18n'
 import Navbar from '../components/Layout/Navbar'
 import apiClient from '../api/client'
 import CustomSelect from '../components/shared/CustomSelect'
-import { Globe, MapPin, Briefcase, Calendar, Flag, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Search } from 'lucide-react'
+import { Globe, MapPin, Briefcase, Calendar, Flag, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Search, Landmark } from 'lucide-react'
 import type { TranslationFn } from '../types'
 import { A2_TO_A3, countryCodeToFlag, type AtlasCountry, type AtlasStats, type AtlasData, type CountryDetail } from './atlas/atlasModel'
 import { continentForCountry } from '@trek/shared'
@@ -77,7 +77,8 @@ export default function AtlasPage(): React.ReactElement {
     atlas_country_open, set_atlas_country_open, atlas_country_options,
     confirmAction, setConfirmAction, executeConfirmAction,
     bucketMonth, setBucketMonth, bucketYear, setBucketYear,
-    bucketList, setBucketList, bucketTab, setBucketTab,
+    bucketList, setBucketList, bucketTab, setBucketTab, wonders,
+    focusWonder,
     showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm,
     handleAddBucketItem, handleDeleteBucketItem, handleBucketPoiSearch, handleSelectBucketPoi,
     bucketSearchResults, setBucketSearchResults,
@@ -105,7 +106,7 @@ export default function AtlasPage(): React.ReactElement {
       <Navbar />
       <div style={{ position: 'fixed', top: 'var(--nav-h)', left: 0, right: 0, bottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {/* Map */}
-        <div ref={mapRef} style={{ position: 'absolute', inset: 0, zIndex: 1, background: dark ? '#1a1a2e' : '#f0f0f0' }} />
+        <div ref={mapRef} style={{ position: 'absolute', inset: 0, zIndex: 1, background: dark ? '#0b1220' : '#f0f0f0' }} />
 
         {/* Region tooltip (custom, always on top, ref-controlled to avoid re-renders) */}
         <div ref={regionTooltipRef} style={{
@@ -182,7 +183,7 @@ export default function AtlasPage(): React.ReactElement {
             data={data} stats={stats} countries={countries} selectedCountry={selectedCountry}
             countryDetail={countryDetail} resolveName={resolveName}
             onCountryClick={loadCountryDetail} onTripClick={(id) => navigate(`/trips/${id}`)} onUnmarkCountry={handleUnmarkCountry}
-            bucketList={bucketList} bucketTab={bucketTab} setBucketTab={setBucketTab}
+            bucketList={bucketList} bucketTab={bucketTab} setBucketTab={setBucketTab} wonders={wonders} onWonderClick={focusWonder}
             showBucketAdd={showBucketAdd} setShowBucketAdd={setShowBucketAdd}
             bucketForm={bucketForm} setBucketForm={setBucketForm}
             onAddBucket={handleAddBucketItem} onDeleteBucket={handleDeleteBucketItem}
@@ -461,8 +462,10 @@ interface SidebarContentProps {
   onTripClick: (id: number) => void
   onUnmarkCountry?: (code: string) => void
   bucketList: any[]
-  bucketTab: 'stats' | 'bucket'
-  setBucketTab: (tab: 'stats' | 'bucket') => void
+  bucketTab: 'stats' | 'bucket' | 'wonders'
+  setBucketTab: (tab: 'stats' | 'bucket' | 'wonders') => void
+  wonders: any[]
+  onWonderClick: (wonder: any) => void
   showBucketAdd: boolean
   setShowBucketAdd: (v: boolean) => void
   bucketForm: { name: string; notes: string; lat: string; lng: string; target_date: string }
@@ -484,10 +487,13 @@ interface SidebarContentProps {
   dark: boolean
 }
 
-function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, setBucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
+function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, wonders, onWonderClick, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, setBucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
   const { language } = useTranslation()
   const statsContentRef = useRef<HTMLDivElement>(null)
   const [statsWidth, setStatsWidth] = useState<number | undefined>(undefined)
+  const [wonderSearch, setWonderSearch] = useState('')
+  const [wonderFilter, setWonderFilter] = useState<'all' | 'visited' | 'unvisited'>('all')
+  const [selectedWonderId, setSelectedWonderId] = useState<string | null>(null)
   useEffect(() => {
     const el = statsContentRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
@@ -510,7 +516,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
   // Tab switcher
   const tabBar = (
     <div style={{ display: 'flex', gap: 4, padding: '12px 16px 0', marginBottom: 4 }}>
-      {[{ id: 'stats', label: t('atlas.statsTab'), icon: Globe }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }].map(tab => (
+      {[{ id: 'stats', label: t('atlas.statsTab'), icon: Globe }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }, { id: 'wonders', label: 'Wonders', icon: Landmark }].map(tab => (
         <button key={tab.id} onClick={() => setBucketTab(tab.id as any)}
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
@@ -526,7 +532,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
     </div>
   )
 
-  if (countries.length === 0 && !lastTrip && bucketTab !== 'bucket') {
+  if (countries.length === 0 && !lastTrip && wonders.length === 0 && bucketTab === 'stats') {
     return (
       <>
         {tabBar}
@@ -655,12 +661,46 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
     </>
   )
 
+  const wondersContent = (
+    <div style={{ padding: '12px 16px 16px', minWidth: 760, maxWidth: 860 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <Search size={13} style={{ color: tf, flexShrink: 0 }} />
+        <input
+          value={wonderSearch}
+          onChange={e => setWonderSearch(e.target.value)}
+          placeholder="Search wonders"
+          aria-label="Search archaeological wonders"
+          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: tp, font: 'inherit', fontSize: 12 }}
+        />
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          {(['all', 'visited', 'unvisited'] as const).map(filter => (
+            <button key={filter} onClick={() => setWonderFilter(filter)} style={{ border: 'none', borderRadius: 999, padding: '4px 8px', background: wonderFilter === filter ? bg(0.12) : 'transparent', color: wonderFilter === filter ? tp : tf, font: 'inherit', fontSize: 10, cursor: 'pointer' }}>
+              {filter === 'all' ? 'All' : filter === 'visited' ? 'Visited' : 'Not visited'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ color: tf, fontSize: 10, marginBottom: 5 }}>
+        {wonders.filter(w => `${w.label} ${w.country} ${w.region}`.toLowerCase().includes(wonderSearch.toLowerCase()) && (wonderFilter === 'all' || Boolean(w.visited) === (wonderFilter === 'visited'))).length} / {wonders.length}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 18, maxHeight: 280, overflowY: 'auto', paddingRight: 4 }}>
+        {wonders.filter(w => `${w.label} ${w.country} ${w.region}`.toLowerCase().includes(wonderSearch.toLowerCase()) && (wonderFilter === 'all' || Boolean(w.visited) === (wonderFilter === 'visited'))).map(wonder => (
+          <button key={String(wonder.source_id)} onClick={() => { setSelectedWonderId(String(wonder.source_id)); onWonderClick(wonder) }} aria-label={`Show ${wonder.label} on map`} style={{ display: 'flex', gap: 9, alignItems: 'center', width: '100%', color: tp, fontSize: 12, padding: '7px 0', border: 'none', borderBottom: `1px solid ${bg(0.06)}`, background: selectedWonderId === String(wonder.source_id) ? bg(0.08) : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+            <Landmark size={15} style={{ color: wonder.visited ? '#22c55e' : accent, flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}><div style={{ fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wonder.label}</div><div style={{ color: tf, fontSize: 10 }}>{wonder.country}{wonder.region ? ` · ${wonder.region}` : ''}</div></div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   return (
     <>
     {tabBar}
-    {/* Both tabs always rendered so the wider one sets the panel width */}
+    {/* Keep Stats and Bucket mounted for shared sizing; collapse the inactive
+        Wonders layer so its 300px scroll area cannot inflate this panel. */}
     <div style={{ display: 'grid' }}>
-    <div style={bucketTab === 'bucket' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
+    <div style={bucketTab === 'stats' ? { gridArea: '1/1' } : { visibility: 'hidden' as const, gridArea: '1/1', maxHeight: 0, overflow: 'hidden' }}>
     <div ref={statsContentRef} className="flex items-stretch justify-center">
 
       {/* ═══ SECTION 1: Numbers ═══ */}
@@ -763,8 +803,11 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
       )}
     </div>
     </div>
-    <div style={bucketTab === 'stats' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
+    <div style={bucketTab === 'bucket' ? { gridArea: '1/1' } : { visibility: 'hidden' as const, gridArea: '1/1' }}>
       {bucketContent}
+    </div>
+    <div style={bucketTab === 'wonders' ? { gridArea: '1/1' } : { visibility: 'hidden' as const, gridArea: '1/1', maxHeight: 0, overflow: 'hidden' }}>
+      {wondersContent}
     </div>
     </div>
     </>

@@ -475,7 +475,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Kiadások nyomon követése és az utazási költségvetés tervezése',
   'admin.addons.catalog.documents.name': 'Dokumentumok',
   'admin.addons.catalog.documents.description': 'Úti dokumentumok tárolása és kezelése',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Személyes szabadságtervező naptárnézettel',
   'admin.addons.catalog.atlas.name': 'Atlasz',
   'admin.addons.catalog.atlas.description': 'Világtérkép meglátogatott országokkal és utazási statisztikákkal',

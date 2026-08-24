@@ -525,7 +525,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Håll koll på utgifterna och planera din resebudget',
   'admin.addons.catalog.documents.name': 'Dokument',
   'admin.addons.catalog.documents.description': 'Spara och hantera resedokument',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Personlig semesterplanerare med kalendervy',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': 'Världskarta med besökta länder och resestatistik',

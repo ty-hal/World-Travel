@@ -46,6 +46,16 @@ export class AtlasController {
     return this.atlas.visitedRegions(user.id);
   }
 
+  @Get('imported')
+  imported(@CurrentUser() user: User) {
+    return this.atlas.importedData(user.id);
+  }
+
+  @Get('wonders')
+  wonders(@CurrentUser() user: User) {
+    return { wonders: this.atlas.wonders(user.id) };
+  }
+
   @Get('regions/geo')
   async regionGeo(
     @Query('countries') countries: string | undefined,

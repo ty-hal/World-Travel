@@ -217,6 +217,17 @@ export interface TripFile {
   url?: string;
 }
 
+export interface TripLink {
+  id: number;
+  trip_id: number;
+  title: string;
+  url: string;
+  provider: 'google-drive' | 'google-docs' | 'google-sheets';
+  description?: string | null;
+  created_by?: number | null;
+  created_at?: string;
+}
+
 export interface TripMember {
   id: number;
   trip_id: number;

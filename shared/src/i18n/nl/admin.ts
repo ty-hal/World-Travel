@@ -474,7 +474,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Houd uitgaven bij en plan je reisbudget',
   'admin.addons.catalog.documents.name': 'Documenten',
   'admin.addons.catalog.documents.description': 'Bewaar en beheer reisdocumenten',
-  'admin.addons.catalog.vacay.name': 'Vakantie',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Persoonlijke vakantieplanner met kalenderweergave',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': 'Wereldkaart met bezochte landen en reisstatistieken',

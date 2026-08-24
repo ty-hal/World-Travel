@@ -25,7 +25,7 @@ const en: NotificationLocale = {
       body: `"${p.todo}" in "${p.trip}" is due on ${p.due}.`,
     }),
     vacay_invite: (p) => ({
-      title: 'Vacay Fusion Invite',
+      title: 'Calendar Fusion Invite',
       body: `${p.actor} invited you to fuse vacation plans. Open TREK to accept or decline.`,
     }),
     collection_invite: (p) => ({

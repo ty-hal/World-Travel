@@ -58,7 +58,7 @@ const texts: Record<string, DemoTexts> = {
     ],
     addonsTitle: 'Modulare Addons (in der Vollversion deaktivierbar)',
     addons: [
-      ['Vacay', 'Urlaubsplaner mit Kalender, Feiertagen & Fusion'],
+      ['Calendar', 'Urlaubsplaner mit Kalender, Feiertagen & Fusion'],
       ['Atlas', 'Weltkarte mit besuchten Laendern & Reisestatistiken'],
       ['Packliste', 'Checklisten pro Reise'],
       ['Budget', 'Kostenplanung mit Splitting'],
@@ -91,7 +91,7 @@ const texts: Record<string, DemoTexts> = {
     ],
     addonsTitle: 'Modular Addons (can be deactivated in full version)',
     addons: [
-      ['Vacay', 'Vacation planner with calendar, holidays & user fusion'],
+      ['Calendar', 'Vacation planner with calendar, holidays & user fusion'],
       ['Atlas', 'World map with visited countries & travel stats'],
       ['Packing', 'Checklists per trip'],
       ['Budget', 'Expense tracking with splitting'],
@@ -157,7 +157,7 @@ const texts: Record<string, DemoTexts> = {
     ],
     addonsTitle: '模块化附加组件（完整版本可禁用）',
     addons: [
-      ['Vacay', '带日历、节假日和用户融合的假期规划器'],
+      ['Calendar', '带日历、节假日和用户融合的假期规划器'],
       ['Atlas', '带已访问国家和旅行统计的世界地图'],
       ['Packing', '按旅行管理清单'],
       ['Budget', '支持分摊的费用追踪'],
@@ -189,7 +189,7 @@ const texts: Record<string, DemoTexts> = {
     ],
     addonsTitle: '模組化附加元件（完整版本可停用）',
     addons: [
-      ['Vacay', '具備日曆、假日與使用者融合的假期規劃器'],
+      ['Calendar', '具備日曆、假日與使用者融合的假期規劃器'],
       ['Atlas', '顯示已造訪國家與旅行統計的世界地圖'],
       ['Packing', '依行程管理的檢查清單'],
       ['Budget', '支援分攤的費用追蹤'],
@@ -221,7 +221,7 @@ const texts: Record<string, DemoTexts> = {
     ],
     addonsTitle: 'إضافات مرنة (يمكن تعطيلها في النسخة الكاملة)',
     addons: [
-      ['Vacay', 'مخطط إجازات مع تقويم وعطل ودمج مستخدمين'],
+      ['Calendar', 'مخطط إجازات مع تقويم وعطل ودمج مستخدمين'],
       ['Atlas', 'خريطة عالمية مع الدول التي تمت زيارتها وإحصاءات السفر'],
       ['Packing', 'قوائم تجهيز لكل رحلة'],
       ['Budget', 'تتبع المصروفات مع التقسيم'],
@@ -254,7 +254,7 @@ const texts: Record<string, DemoTexts> = {
     ],
     addonsTitle: 'Addon Modular (dapat dinonaktifkan di versi lengkap)',
     addons: [
-      ['Vacay', 'Perencana liburan dengan kalender, hari libur & penggabungan pengguna'],
+      ['Calendar', 'Perencana liburan dengan kalender, hari libur & penggabungan pengguna'],
       ['Atlas', 'Peta dunia dengan negara yang dikunjungi & statistik perjalanan'],
       ['Pengepakan', 'Daftar periksa per perjalanan'],
       ['Anggaran', 'Pelacakan pengeluaran dengan pemisahan tagihan'],

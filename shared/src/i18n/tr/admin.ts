@@ -514,7 +514,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Harcamaları takip edin ve seyahat bütçenizi planlayın',
   'admin.addons.catalog.documents.name': 'Belgeler',
   'admin.addons.catalog.documents.description': 'Seyahat belgelerini saklayın ve yönetin',
-  'admin.addons.catalog.vacay.name': 'Tatil',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Takvim görünümüne sahip kişisel tatil planlayıcısı',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': 'Ziyaret edilen ülkeleri ve seyahat istatistiklerini içeren dünya haritası',

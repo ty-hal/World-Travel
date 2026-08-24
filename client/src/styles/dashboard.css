@@ -64,8 +64,8 @@
   --ink: oklch(0.96 0 0);
   --ink-2: oklch(0.78 0 0);
   --ink-3: oklch(0.6 0 0);
-  --line: oklch(0.32 0 0);
-  --line-2: oklch(0.38 0 0);
+  --line: oklch(0.42 0 0);
+  --line-2: oklch(0.5 0 0);
   /* Dark: same theme-driven accent (inherited --accent + mapped aliases). */
   --accent-ink: var(--accent-on, var(--accent));
   --accent-soft: var(--accent-subtle, color-mix(in oklch, var(--accent) 22%, transparent));
@@ -79,7 +79,7 @@
 
   /* liquid-glass surface tokens — dark */
   --glass-bg: linear-gradient(135deg, oklch(0.31 0 0 / .58) 0%, oklch(0.25 0 0 / .42) 100%);
-  --glass-border: oklch(1 0 0 / .1);
+  --glass-border: oklch(1 0 0 / .18);
   --glass-shadow: 0 1px 2px oklch(0 0 0 / .3), 0 12px 32px -14px oklch(0 0 0 / .55);
   --glass-shadow-hover: 0 2px 6px oklch(0 0 0 / .4), 0 26px 56px -20px oklch(0 0 0 / .72);
   --glass-highlight: inset 0 1px 0 oklch(1 0 0 / .09);
@@ -169,7 +169,8 @@
 /* ----------------- hero trip ----------------- */
 .trek-dash .hero-trip {
   position: relative; border-radius: var(--r-2xl); overflow: hidden; cursor: pointer;
-  height: 520px; box-shadow: var(--sh-lg); margin-bottom: 56px; isolation: isolate;
+  height: 520px; border: 1px solid oklch(1 0 0 / .16);
+  box-shadow: var(--sh-lg); margin-bottom: 56px; isolation: isolate;
   transition: transform .35s cubic-bezier(0.23,1,0.32,1), box-shadow .35s cubic-bezier(0.23,1,0.32,1);
 }
 .trek-dash .hero-trip:hover { transform: translateY(-4px); box-shadow: var(--sh-xl, 0 24px 60px oklch(0 0 0 / .28)); }
@@ -177,6 +178,12 @@
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; z-index: 0; transition: transform 12s ease-out;
 }
+.trek-dash .hero-trip .cover-collage {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px;
+  position: absolute; inset: 0; z-index: 0; transition: transform 12s ease-out;
+}
+.trek-dash .hero-trip .cover-collage img { width: 100%; height: 100%; object-fit: cover; object-position: center 100%; }
+.trek-dash .hero-trip:hover .cover-collage { transform: scale(1.04); }
 .trek-dash .hero-trip:hover img.bg { transform: scale(1.04); }
 .trek-dash .hero-trip .scrim {
   position: absolute; inset: 0; z-index: 1;
@@ -258,10 +265,14 @@
 }
 .dark .trek-dash .hero-pass-inner {
   background: linear-gradient(135deg, oklch(0.28 0 0 / .8) 0%, oklch(0.25 0 0 / .85) 50%, oklch(0.23 0 0 / .8) 100%);
-  border: 1px solid oklch(1 0 0 / .1);
+  border: 1px solid oklch(1 0 0 / .22);
   box-shadow:
     0 2px 8px -2px oklch(0 0 0 / .3), 0 8px 24px -6px oklch(0 0 0 / .4),
     0 20px 60px -16px oklch(0 0 0 / .6), inset 0 1px 1px 0 oklch(1 0 0 / .08);
+}
+.dark .trek-dash .hero-pass {
+  padding: 1px;
+  background: linear-gradient(180deg, oklch(1 0 0 / .24), oklch(1 0 0 / .1));
 }
 .trek-dash .hero-pass-inner::before {
   content: ""; position: absolute; inset: 0; border-radius: 24px; padding: 1px;
@@ -292,7 +303,7 @@
   background-size: 1px 5px;
 }
 .dark .trek-dash .pass-cell + .pass-cell::before {
-  background-image: linear-gradient(to bottom, oklch(0.5 0.01 70) 50%, transparent 50%);
+  background-image: linear-gradient(to bottom, oklch(0.72 0.01 70) 50%, transparent 50%);
 }
 .trek-dash .pass-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--ink-3); font-weight: 500; }
 .trek-dash .pass-value { font-size: 32px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); line-height: 1; display: flex; align-items: baseline; gap: 6px; }
@@ -424,6 +435,8 @@
 }
 .dark .trek-dash .trip-card:hover { border-color: oklch(1 0 0 / .2); }
 .trek-dash .trip-cover { position: relative; aspect-ratio: 4 / 3; overflow: hidden; }
+.trek-dash .trip-cover-image.cover-collage { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; }
+.trek-dash .trip-cover-image.cover-collage img { object-position: center 100%; }
 .trek-dash .trip-cover img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
 .trek-dash .trip-card:hover .trip-cover img { transform: scale(1.04); }
 .trek-dash .trip-cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, oklch(0 0 0 / 0) 40%, oklch(0 0 0 / .55) 100%); }
@@ -431,11 +444,12 @@
   position: absolute; top: 16px; left: 16px; z-index: 1;
   display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px 6px 9px;
   border-radius: 999px; font-size: 11.5px; font-weight: 500; letter-spacing: 0.02em;
-  background: oklch(1 0 0 / .18); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  border: 1px solid oklch(1 0 0 / .22); color: #fff; text-transform: uppercase;
+  background: rgba(15, 23, 42, .72); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, .28); color: #fff; text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
 }
 .trek-dash .trip-status .indicator { width: 6px; height: 6px; border-radius: 50%; background: oklch(0.84 0.16 145); }
-.trek-dash .trip-status.completed .indicator { background: oklch(0.75 0.02 220); }
+.trek-dash .trip-status.completed .indicator { background: #4ade80; }
 .trek-dash .trip-status.upcoming .indicator { background: oklch(0.84 0.18 85); }
 .trek-dash .trip-status.idea .indicator { background: oklch(0.78 0.14 280); }
 .trek-dash .trip-actions { position: absolute; top: 14px; right: 14px; z-index: 1; display: flex; gap: 6px; opacity: 0; transition: opacity .2s; }

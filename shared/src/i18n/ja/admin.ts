@@ -483,7 +483,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': '支出の管理と予算計画',
   'admin.addons.catalog.documents.name': 'ドキュメント',
   'admin.addons.catalog.documents.description': '旅行書類の保存・管理',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'カレンダー表示の個人休暇プランナー',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': '訪問国と旅行統計の世界地図',

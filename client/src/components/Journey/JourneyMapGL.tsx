@@ -150,7 +150,7 @@ function ensureJourneyPopupStyle() {
       gap: 7px;
       margin-top: 3px;
       font-size: 11.5px;
-      color: #71717A;
+              color: var(--text-faint);
       line-height: 1.35;
       white-space: nowrap;
     }
@@ -401,7 +401,7 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
             type: 'line',
             source: 'journey-route',
             paint: {
-              'line-color': darkRef.current ? '#71717A' : '#A1A1AA',
+              'line-color': darkRef.current ? '#9a9aa5' : '#A1A1AA',
               'line-width': 1.5,
               'line-opacity': 0.5,
               'line-dasharray': [2, 3],

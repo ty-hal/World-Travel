@@ -218,7 +218,7 @@ function seedTripStore(overrides: { id?: number; tripName?: string; withMocks?: 
 function renderPlannerPage(tripId: number | string) {
   return render(
     <Routes>
-      <Route path="/trips/:id" element={<TripPlannerPage />} />
+      <Route path="/trips/:id/:tab?" element={<TripPlannerPage />} />
     </Routes>,
     { initialEntries: [`/trips/${tripId}`] },
   );
@@ -587,7 +587,7 @@ describe('TripPlannerPage', () => {
 
       render(
         <Routes>
-          <Route path="/trips/:id" element={<TripPlannerPage />} />
+          <Route path="/trips/:id/:tab?" element={<TripPlannerPage />} />
           <Route path="/dashboard" element={<div data-testid="dashboard-page" />} />
         </Routes>,
         { initialEntries: ['/trips/999'] },

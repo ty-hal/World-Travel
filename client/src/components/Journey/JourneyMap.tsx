@@ -202,7 +202,7 @@ const JourneyMap = forwardRef<JourneyMapHandle, Props>(function JourneyMap(
     if (!fullScreen && items.length > 1) {
       const routeCoords = items.map(i => [i.lat, i.lng] as L.LatLngTuple)
       L.polyline(routeCoords, {
-        color: dark ? '#71717A' : '#A1A1AA',
+        color: dark ? 'var(--text-faint)' : '#A1A1AA',
         weight: 1.5,
         opacity: 0.5,
         dashArray: '4 6',

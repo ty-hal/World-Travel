@@ -109,14 +109,22 @@ function RootRedirect() {
   return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />
 }
 
+function DevLoginRedirect() {
+  const { isAuthenticated, error } = useAuthStore()
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sm text-slate-500">{error || 'Signing in to local development account…'}</div>
+}
+
 export default function App() {
-  const { loadUser, isAuthenticated, demoMode, setDemoMode, setDevMode, setIsPrerelease, setAppVersion, setHasMapsKey, setServerTimezone, setAppRequireMfa, setTripRemindersEnabled, setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled } = useAuthStore()
+  const { loadUser, devLogin, isAuthenticated, demoMode, setDemoMode, setDevMode, setIsPrerelease, setAppVersion, setHasMapsKey, setServerTimezone, setAppRequireMfa, setTripRemindersEnabled, setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled } = useAuthStore()
   const { loadSettings } = useSettingsStore()
   const { loadAddons } = useAddonStore()
   const { loadPlugins } = usePluginStore()
 
   useEffect(() => {
-    if (!location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/') && !location.pathname.startsWith('/login')) {
+    if (import.meta.env.DEV && !location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/')) {
+      devLogin().catch(() => loadUser())
+    } else if (!location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/') && !location.pathname.startsWith('/login')) {
       // If the persist snapshot already has an authenticated user, validate
       // silently so the PWA shell renders immediately without a spinner.
       const alreadyAuthenticated = useAuthStore.getState().isAuthenticated
@@ -214,10 +222,10 @@ export default function App() {
       <OfflineBanner />
       <Routes>
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={import.meta.env.DEV ? <DevLoginRedirect /> : <LoginPage />} />
         <Route path="/shared/:token" element={<SharedTripPage />} />
         <Route path="/public/journey/:token" element={<JourneyPublicPage />} />
-        <Route path="/register" element={<LoginPage />} />
+        <Route path="/register" element={import.meta.env.DEV ? <DevLoginRedirect /> : <LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* OAuth 2.1 consent page — intentionally outside ProtectedRoute */}
@@ -258,6 +266,14 @@ export default function App() {
         />
         <Route
           path="/trips/:id"
+          element={
+            <ProtectedRoute>
+              <TripPlannerPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/trips/:id/:tab"
           element={
             <ProtectedRoute>
               <TripPlannerPage />

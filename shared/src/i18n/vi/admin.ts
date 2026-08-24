@@ -467,7 +467,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Theo dõi chi phí và lập kế hoạch ngân sách chuyến đi của bạn',
   'admin.addons.catalog.documents.name': 'Tài liệu',
   'admin.addons.catalog.documents.description': 'Lưu trữ và quản lý tài liệu du lịch',
-  'admin.addons.catalog.vacay.name': 'Kỳ nghỉ',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Kế hoạch kỳ nghỉ cá nhân với chế độ xem lịch',
   'admin.addons.catalog.atlas.name': 'Bản đồ',
   'admin.addons.catalog.atlas.description': 'Bản đồ thế giới với các quốc gia đã ghé thăm và số liệu thống kê du lịch',

@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+.atlas-dark-tiles {
+  filter: brightness(0.82) contrast(1.35) saturate(0.85);
+}
+
 html { height: 100%; overflow: hidden; background-color: var(--bg-primary); }
 body { height: 100%; overflow: auto; overscroll-behavior: none; -webkit-overflow-scrolling: touch; }
 
@@ -268,16 +272,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: none;
 }
 
-/* Theme crossfade — beim Dark/Light switch, Hauptflächen + Text faden ihre Farben.
-   Sparingly: nur background-color und color bekommen eine Transition. */
+/* Theme switch — disable every visual transition during a dark/light change so
+   the entire application changes scheme in one paint. */
 html.trek-theme-transitioning,
 html.trek-theme-transitioning body,
 html.trek-theme-transitioning *:not(img):not(video):not(canvas):not([class*="trek-skeleton"]):not(.leaflet-layer) {
-  transition:
-    background-color 320ms cubic-bezier(0.23, 1, 0.32, 1),
-    color 320ms cubic-bezier(0.23, 1, 0.32, 1),
-    border-color 320ms cubic-bezier(0.23, 1, 0.32, 1),
-    fill 320ms cubic-bezier(0.23, 1, 0.32, 1) !important;
+  transition: none !important;
 }
 
 /* Touch-Geräte: iOS-Tap-Highlight weg (wir haben eigenes Press-Feedback) */
@@ -583,8 +583,8 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
   --bg-selected: rgba(255,255,255,0.1);
   --text-primary: #f4f4f5;
   --text-secondary: #d4d4d8;
-  --text-muted: #a1a1aa;
-  --text-faint: #71717a;
+  --text-muted: #b8b8c2;
+  --text-faint: #9a9aa5;
   --border-primary: #27272a;
   --border-secondary: #1c1c21;
   --border-faint: rgba(255,255,255,0.07);
@@ -624,7 +624,7 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
   --journal-accent: #818CF8;
   --journal-text: #FAFAFA;
   --journal-muted: #A1A1AA;
-  --journal-faint: #52525B;
+  --journal-faint: #9a9aa5;
   --mood-amazing: #f28a6e;
   --mood-good: #f5b84d;
   --mood-neutral: #9a9a94;
@@ -776,6 +776,45 @@ html.dark[data-no-transparency] {
   --border-faint: #27272a;
   --sidebar-bg: #131316;
   --tooltip-bg: #131316;
+}
+html.dark .transport-reservation-card {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 12px rgba(0, 0, 0, 0.22) !important;
+}
+html.dark .transport-reservation-card[data-status="confirmed"] > :first-child {
+  background: rgba(22, 163, 74, 0.13) !important;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.14);
+}
+html.dark .transport-reservation-card[data-status="pending"] > :first-child {
+  background: rgba(217, 119, 6, 0.13) !important;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.14);
+}
+html.dark .transport-reservation-card .bg-surface-tertiary {
+  background: rgba(255, 255, 255, 0.055) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.costs-total-card {
+  --costs-total-ink: var(--text-primary);
+  --costs-total-muted: var(--text-muted);
+  --costs-total-icon-bg: var(--bg-secondary);
+  --costs-total-button-bg: var(--bg-secondary);
+  --costs-total-button-border: var(--border-primary);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+}
+html.dark .costs-total-card {
+  --costs-total-ink: #fff;
+  --costs-total-muted: rgba(255, 255, 255, 0.6);
+  --costs-total-icon-bg: rgba(255, 255, 255, 0.12);
+  --costs-total-button-bg: rgba(255, 255, 255, 0.14);
+  --costs-total-button-border: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg, #1f2937, #111827);
+  color: #fff;
+  border-color: transparent;
+}
+@media (max-width: 767px) {
+  .packing-category-column { display: contents; }
 }
 html[data-no-transparency] .trek-dash {
   --glass-bg: var(--surface, var(--bg-card));
@@ -1003,9 +1042,9 @@ img[alt="TREK"] {
 .dark .bg-gray-100 { background-color: #1c1c21 !important; }
 .dark .text-slate-900, .dark .text-gray-900, .dark .text-slate-800 { color: #f4f4f5 !important; }
 .dark .text-slate-700, .dark .text-gray-700 { color: #d4d4d8 !important; }
-.dark .text-slate-600, .dark .text-gray-600 { color: #a1a1aa !important; }
-.dark .text-slate-500, .dark .text-gray-500 { color: #a1a1aa !important; }
-.dark .text-slate-400, .dark .text-gray-400 { color: #71717a !important; }
+.dark .text-slate-600, .dark .text-gray-600 { color: var(--text-muted) !important; }
+.dark .text-slate-500, .dark .text-gray-500 { color: var(--text-muted) !important; }
+.dark .text-slate-400, .dark .text-gray-400 { color: var(--text-faint) !important; }
 .dark .border-slate-200, .dark .border-gray-200, .dark .border-slate-300 { border-color: #27272a !important; }
 .dark .border-gray-100, .dark .border-slate-100 { border-color: #1c1c21 !important; }
 .dark .hover\:bg-slate-50:hover, .dark .hover\:bg-gray-50:hover { background-color: #1c1c21 !important; }
@@ -1019,7 +1058,7 @@ img[alt="TREK"] {
   color: #f4f4f5;
   border-color: #27272a;
 }
-.dark input::placeholder, .dark textarea::placeholder { color: #71717a; }
+.dark input::placeholder, .dark textarea::placeholder { color: var(--text-faint); }
 .dark .bg-emerald-50 { background-color: rgba(16,185,129,0.15) !important; }
 .dark .bg-red-50 { background-color: rgba(239,68,68,0.15) !important; }
 

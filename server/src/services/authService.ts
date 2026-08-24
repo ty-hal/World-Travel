@@ -363,6 +363,21 @@ export function demoLogin(): { error?: string; status?: number; token?: string; 
   return { token, user: { ...safe, avatar_url: avatarUrl(user) } };
 }
 
+export function devLogin(): { error?: string; status?: number; token?: string; user?: Record<string, unknown> } {
+  if (process.env.NODE_ENV === 'production') return { error: 'Not found', status: 404 };
+  const email = process.env.TREK_DEV_USER_EMAIL || 'local.user@trek.test';
+  const user = db.prepare(`
+    SELECT * FROM users
+    WHERE COALESCE(is_guest, 0) = 0
+      AND (email = ? OR username = 'localuser')
+    ORDER BY CASE WHEN email = ? THEN 0 WHEN username = 'localuser' THEN 1 ELSE 2 END, id
+    LIMIT 1
+  `).get(email, email) as User | undefined;
+  if (!user) return { error: 'No development user found', status: 500 };
+  const token = generateToken(user);
+  return { token, user: { ...stripUserForClient(user), avatar_url: avatarUrl(user) } };
+}
+
 export function validateInviteToken(token: string): { error?: string; status?: number; valid?: boolean; max_uses?: number; used_count?: number; expires_at?: string } {
   const invite = db.prepare('SELECT * FROM invite_tokens WHERE token = ?').get(token) as any;
   if (!invite) return { error: 'Invalid invite link', status: 404 };

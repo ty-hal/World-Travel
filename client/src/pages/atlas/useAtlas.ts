@@ -36,6 +36,8 @@ export function useAtlas() {
   const dark = dm === true || dm === 'dark' || (dm === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<L.Map | null>(null)
+  const atlasTileLayerRef = useRef<L.TileLayer | null>(null)
+  const atlasPreloadTileLayerRef = useRef<L.TileLayer | null>(null)
   const geoLayerRef = useRef<L.GeoJSON | null>(null)
   const glareRef = useRef<HTMLDivElement>(null)
   const borderGlareRef = useRef<HTMLDivElement>(null)
@@ -91,8 +93,12 @@ export function useAtlas() {
   const [bucketSearching, setBucketSearching] = useState(false)
   const [bucketPoiMonth, setBucketPoiMonth] = useState(0)
   const [bucketPoiYear, setBucketPoiYear] = useState(0)
-  const [bucketTab, setBucketTab] = useState<'stats' | 'bucket'>('stats')
+  const [bucketTab, setBucketTab] = useState<'stats' | 'bucket' | 'wonders'>('stats')
+  const [wonders, setWonders] = useState<any[]>([])
   const bucketMarkersRef = useRef<any>(null)
+  const wonderMarkersRef = useRef<any>(null)
+  const wonderMarkerByIdRef = useRef<Record<string, L.Marker>>({})
+  const activeWonderMarkerRef = useRef<L.Marker | null>(null)
 
   const [atlas_country_search, set_atlas_country_search] = useState('')
   const [atlas_country_results, set_atlas_country_results] = useState<{ code: string; label: string }[]>([])
@@ -128,9 +134,11 @@ export function useAtlas() {
     Promise.all([
       apiClient.get('/addons/atlas/stats'),
       apiClient.get('/addons/atlas/bucket-list'),
-    ]).then(([statsRes, bucketRes]) => {
+      apiClient.get('/addons/atlas/wonders'),
+    ]).then(([statsRes, bucketRes, wondersRes]) => {
       setData(statsRes.data)
       setBucketList(bucketRes.data.items || [])
+      setWonders(wondersRes.data.wonders || [])
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -227,7 +235,7 @@ export function useAtlas() {
       ? 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
       : 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
 
-    L.tileLayer(tileUrl, {
+    const tileLayer = L.tileLayer(tileUrl, {
       maxZoom: 10,
       keepBuffer: 25,
       updateWhenZooming: true,
@@ -236,10 +244,12 @@ export function useAtlas() {
       zoomOffset: 0,
       crossOrigin: true,
       referrerPolicy: 'strict-origin-when-cross-origin',
+      className: dark ? 'atlas-dark-tiles' : undefined,
     } as any).addTo(map)
+    atlasTileLayerRef.current = tileLayer
 
     // Preload adjacent zoom level tiles
-    L.tileLayer(tileUrl, {
+    const preloadTileLayer = L.tileLayer(tileUrl, {
       maxZoom: 10,
       keepBuffer: 10,
       opacity: 0,
@@ -247,6 +257,7 @@ export function useAtlas() {
       crossOrigin: true,
       referrerPolicy: 'strict-origin-when-cross-origin',
     }).addTo(map)
+    atlasPreloadTileLayerRef.current = preloadTileLayer
 
     // Custom pane for region layer — above overlay (z-index 400)
     map.createPane('regionPane')
@@ -284,8 +295,24 @@ export function useAtlas() {
       if (map.getZoom() >= 6) loadRegionsForViewportRef.current()
     })
 
-    return () => { map.remove(); mapInstance.current = null }
-  }, [dark, loading])
+    return () => {
+      map.remove()
+      mapInstance.current = null
+      atlasTileLayerRef.current = null
+      atlasPreloadTileLayerRef.current = null
+    }
+  }, [loading])
+
+  // Theme changes should not tear down the Atlas map or reload its controls.
+  useEffect(() => {
+    const tileUrl = dark
+      ? 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
+    atlasTileLayerRef.current?.setUrl(tileUrl)
+    atlasPreloadTileLayerRef.current?.setUrl(tileUrl)
+    const container = atlasTileLayerRef.current?.getContainer()
+    container?.classList.toggle('atlas-dark-tiles', dark)
+  }, [dark])
 
   // Render GeoJSON countries
   useEffect(() => {
@@ -321,9 +348,9 @@ export function useAtlas() {
         const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
         const visited = visitedA3.has(a3)
         return {
-          fillColor: visited ? colorForCode(a3) : (dark ? '#1e1e2e' : '#e2e8f0'),
-          fillOpacity: visited ? 0.7 : 0.3,
-          color: dark ? '#333' : '#cbd5e1',
+          fillColor: visited ? colorForCode(a3) : (dark ? '#475569' : '#e2e8f0'),
+          fillOpacity: visited ? 0.7 : (dark ? 0.65 : 0.3),
+          color: dark ? '#94a3b8' : '#cbd5e1',
           weight: 0.5,
         }
       },
@@ -519,9 +546,9 @@ export function useAtlas() {
           color: dark ? '#888' : '#64748b',
           weight: 1.2,
         } : {
-          fillColor: dark ? '#ffffff' : '#000000',
-          fillOpacity: 0.03,
-          color: dark ? '#555' : '#94a3b8',
+          fillColor: dark ? '#94a3b8' : '#000000',
+          fillOpacity: dark ? 0.2 : 0.03,
+          color: dark ? '#94a3b8' : '#94a3b8',
           weight: 1,
         }
       },
@@ -741,6 +768,41 @@ export function useAtlas() {
     bucketMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
   }, [bucketList])
 
+  // Render archaeological wonders as a lightweight map index. The list remains
+  // useful for exact names; the map supplies the spatial overview.
+  useEffect(() => {
+    if (!mapInstance.current) return
+    if (wonderMarkersRef.current) mapInstance.current.removeLayer(wonderMarkersRef.current)
+    wonderMarkerByIdRef.current = {}
+    activeWonderMarkerRef.current = null
+    if (bucketTab !== 'wonders') return
+    const markers = wonders.filter(w => Number.isFinite(w.lat) && Number.isFinite(w.lng)).map(w => {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${w.visited ? '#22c55e' : '#818cf8'};border:2px solid white;box-shadow:0 2px 7px rgba(0,0,0,.35)"><span style="display:block;width:5px;height:5px;margin:4.5px;background:white;border-radius:50%"></span></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 18],
+      })
+      const marker = L.marker([w.lat, w.lng], { icon }).bindTooltip(`${w.label}${w.country ? ` · ${w.country}` : ''}`, {
+        className: 'atlas-tooltip', direction: 'top', offset: [0, -16],
+      })
+      wonderMarkerByIdRef.current[String(w.source_id)] = marker
+      return marker
+    })
+    wonderMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
+  }, [bucketTab, wonders])
+
+  const focusWonder = (wonder: any): void => {
+    const map = mapInstance.current
+    const marker = wonderMarkerByIdRef.current[String(wonder.source_id)]
+    if (!map || !marker || !Number.isFinite(wonder.lat) || !Number.isFinite(wonder.lng)) return
+    if (activeWonderMarkerRef.current && activeWonderMarkerRef.current !== marker) activeWonderMarkerRef.current.closeTooltip()
+    map.setView([wonder.lat, wonder.lng], Math.max(map.getZoom(), 5), { animate: true })
+    marker.openTooltip()
+    marker.setZIndexOffset(1000)
+    activeWonderMarkerRef.current = marker
+  }
+
   const loadCountryDetail = async (code: string): Promise<void> => {
     setSelectedCountry(code)
     try {
@@ -758,6 +820,7 @@ export function useAtlas() {
     mapRef, regionTooltipRef, panelRef, glareRef, borderGlareRef,
     handlePanelMouseMove, handlePanelMouseLeave,
     data, setData, stats, countries, selectedCountry, countryDetail,
+    geoData,
     loadCountryDetail, handleUnmarkCountry, select_country_from_search,
     visitedRegions, setVisitedRegions,
     atlas_country_search, set_atlas_country_search,
@@ -766,6 +829,7 @@ export function useAtlas() {
     confirmAction, setConfirmAction, executeConfirmAction,
     bucketMonth, setBucketMonth, bucketYear, setBucketYear,
     bucketList, setBucketList, bucketTab, setBucketTab,
+    wonders, focusWonder,
     showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm,
     handleAddBucketItem, handleDeleteBucketItem, handleBucketPoiSearch, handleSelectBucketPoi,
     bucketSearchResults, setBucketSearchResults,

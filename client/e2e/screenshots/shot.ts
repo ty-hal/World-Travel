@@ -1,5 +1,5 @@
 import { test as base, expect, type Page, type Locator } from '@playwright/test'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -65,6 +65,7 @@ export class Shot {
    */
   async page_(name: string): Promise<void> {
     await this.settle()
+    await this.captureMarkup(name)
     await this.page.screenshot({ path: path.join(OUT_DIR, `${name}.png`) })
   }
 
@@ -72,7 +73,24 @@ export class Shot {
   async element(name: string, target: Locator): Promise<void> {
     await this.settle()
     await expect(target).toBeVisible()
+    await this.captureMarkup(name, target)
     await target.screenshot({ path: path.join(OUT_DIR, `${name}.png`) })
+  }
+
+  private async captureMarkup(name: string, target?: Locator): Promise<void> {
+    const artifact = await (target || this.page.locator('html')).evaluate((node) => {
+      const stylesheets = Array.from(document.styleSheets).flatMap(sheet => {
+        try { return Array.from(sheet.cssRules).map(rule => rule.cssText) } catch { return [] }
+      })
+      const element = node instanceof HTMLElement ? node : document.documentElement
+      return {
+        html: element.outerHTML,
+        css: stylesheets.join('\n'),
+        computed: Object.fromEntries(['display', 'position', 'width', 'height', 'color', 'backgroundColor', 'fontFamily', 'fontSize'].map(key => [key, getComputedStyle(element).getPropertyValue(key)])),
+      }
+    })
+    writeFileSync(path.join(OUT_DIR, `${name}.html`), artifact.html)
+    writeFileSync(path.join(OUT_DIR, `${name}.css.json`), JSON.stringify({ css: artifact.css, computed: artifact.computed }, null, 2))
   }
 
   /**
