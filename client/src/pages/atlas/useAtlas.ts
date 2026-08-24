@@ -218,8 +218,8 @@ export function useAtlas() {
 
     const map = L.map(mapRef.current, {
       center: [25, 0],
-      zoom: 3,
-      minZoom: 3,
+      zoom: 2,
+      minZoom: 2,
       maxZoom: 10,
       zoomControl: false,
       attributionControl: false,

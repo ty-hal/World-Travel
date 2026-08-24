@@ -382,6 +382,8 @@ export const tripsApi = {
   deleteGuest: (id: number | string, userId: number) => apiClient.delete(`/trips/${id}/guests/${userId}`).then(r => r.data),
   copy: (id: number | string, data?: TripCopyRequest) => apiClient.post(`/trips/${id}/copy`, data || {}).then(r => r.data),
   bundle: (id: number | string) => apiClient.get(`/trips/${id}/bundle`).then(r => r.data),
+  history: (id: number | string, limit = 100) => apiClient.get(`/trips/${id}/history`, { params: { limit } }).then(r => r.data),
+  recordHistory: (id: number | string, data: { action: string; entityType: string; entityId?: number | string; before?: unknown; after?: unknown }) => apiClient.post(`/trips/${id}/history`, data).then(r => r.data),
 }
 
 export const daysApi = {

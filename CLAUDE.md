@@ -17,3 +17,13 @@ git diff --stat HEAD...upstream/main
 ```
 
 Do not silently pull, merge, rebase, or overwrite local work.
+
+## Product constraint: free data sources only
+
+- New TREK features must use free, open-data, self-hosted, or already-available local APIs.
+- Do not add a provider that requires payment, a paid tier, a monthly minimum, or a credit card merely to keep a feature working.
+- A provider's free tier is acceptable only when the feature remains useful after its published free quota and the quota/terms are documented.
+- Never implement a paid-provider fallback that silently incurs charges.
+- If no dependable free source exists, drop the feature from the implementation plan and record why.
+- Cache public API results, respect attribution and rate limits, and keep provider selection replaceable.
+- Preserve `unknown`/approximate values instead of manufacturing data when a free source lacks coverage.

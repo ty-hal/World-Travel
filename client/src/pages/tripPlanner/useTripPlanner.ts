@@ -5,7 +5,7 @@ import { useCanDo } from '../../store/permissionsStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getCached, fetchPhoto } from '../../services/photoService'
 import { useToast } from '../../components/shared/Toast'
-import { Map, Ticket, PackageCheck, Wallet, FolderOpen, Images, Users, Train } from 'lucide-react'
+import { Map, Ticket, PackageCheck, Wallet, FolderOpen, Images, Users, Train, History } from 'lucide-react'
 import { resolvePluginIcon } from '../../components/shared/PluginIcon'
 import { useTranslation, translateApiError } from '../../i18n'
 import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, healthApi, airtrailApi, mapsApi, placesApi } from '../../api/client'
@@ -55,10 +55,10 @@ export function useTripPlanner() {
   const tabRouteAliases: Record<string, string> = {
     plan: 'plan', transports: 'transports', book: 'buchungen', bookings: 'buchungen', buchungen: 'buchungen',
     lists: 'listen', listen: 'listen', costs: 'finanzplan', finanzplan: 'finanzplan', files: 'dateien', dateien: 'dateien',
-    photos: 'photos', collab: 'collab',
+    photos: 'photos', collab: 'collab', history: 'history',
   }
   const routeForTab: Record<string, string> = {
-    plan: 'plan', transports: 'transports', buchungen: 'book', listen: 'lists', finanzplan: 'costs', dateien: 'files', photos: 'photos', collab: 'collab',
+    plan: 'plan', transports: 'transports', buchungen: 'book', listen: 'lists', finanzplan: 'costs', dateien: 'files', photos: 'photos', collab: 'collab', history: 'history',
   }
   // trip-page plugins mount as tabs inside this trip planner (tripId-scoped).
   const allPlugins = usePluginStore(s => s.plugins)
@@ -139,6 +139,7 @@ export function useTripPlanner() {
     ...(enabledAddons.budget ? [{ id: 'finanzplan', label: t('trip.tabs.budget'), icon: Wallet }] : []),
     ...(enabledAddons.documents ? [{ id: 'dateien', label: t('trip.tabs.files'), icon: FolderOpen }] : []),
     { id: 'photos', label: 'Photos', icon: Images },
+    { id: 'history', label: 'History', icon: History },
     ...(enabledAddons.collab ? [{ id: 'collab', label: t('admin.addons.catalog.collab.name'), icon: Users }] : []),
   ].filter(tab => tab.id === 'plan' || !replacedTabs.has(tab.id))
   // Positioned plugin tabs splice in ascending order so two positions stay stable;

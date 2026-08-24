@@ -17,7 +17,9 @@ export interface Member { id: number; username: string; avatar_url?: string | nu
 export interface Place {
   id: number; name: string; image_url: string | null; lat: number | null; lng: number | null
   google_place_id: string | null; osm_id: string | null
+  category_name?: string | null
   category_color?: string | null; category_icon?: string | null
+  category?: { name?: string | null; color?: string | null; icon?: string | null } | null
 }
 export interface HeroBundle { members: Member[]; places: Place[] }
 export interface TravelStats { totalTrips?: number; totalDays?: number; totalPlaces?: number; totalDistanceKm?: number; countries?: string[] }

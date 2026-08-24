@@ -39,5 +39,6 @@ export interface Poi {
   phone: string | null
   opening_hours: string | null
   cuisine: string | null
+  business_status: 'open' | 'closed' | 'unknown'
   source: 'openstreetmap'
 }

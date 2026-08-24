@@ -34,9 +34,9 @@ import { normalizeAppearance } from '@trek/shared'
 import '../styles/dashboard.css'
 
 const DEFAULT_TRIP_COVERS: Record<string, string[]> = {
-  'Mexico City Christmas 2026': ['https://cdn.mos.cms.futurecdn.net/6Txsk2q5k3Hxho7cVhdrbV-1000-80.jpg'],
+  'Mexico City': ['https://cdn.mos.cms.futurecdn.net/6Txsk2q5k3Hxho7cVhdrbV-1000-80.jpg'],
   'Peru & Easter Island': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQjaYcjzofmBOHv9ZHeYgLz8KGTIu_SRiIuPOKqFQSwpw&s=10'],
-  'Middle East Fall 2026': [
+  'Middle East': [
     'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvRPhYGDAkE97AhDIfIP3ZEv0_l7gZFQhsbysxcChmfA&s=10',
     'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRkdVxqKELmEDWiDYCS1lg3KpxD1l9MWAkn71bFAbDIqA&s=10',
   ],
@@ -291,16 +291,6 @@ export default function DashboardPage(): React.ReactElement {
         </main>
       </div>
 
-      <button
-        className="fab-new-trip"
-        onClick={() => { setEditingTrip(null); setShowForm(true) }}
-        aria-label={t('dashboard.newTrip')}
-        title={t('dashboard.newTrip')}
-      >
-        <Plus size={22} strokeWidth={2.4} />
-        <span className="fab-label">{t('dashboard.newTrip')}</span>
-      </button>
-
       {showForm && (
         <TripFormModal
           isOpen={showForm}
@@ -429,7 +419,7 @@ function BoardingPassHero({ trip, bundle, locale, href, onOpen, onEdit, onCopy, 
         <div className="places-preview">
           {places.slice(0, 3).map(p => (
             <div key={p.id} className="place-av">
-              <PlaceAvatar place={p} size={mobile ? 24 : 32} category={{ color: p.category_color ?? undefined, icon: p.category_icon ?? undefined }} />
+              <PlaceAvatar place={p} size={mobile ? 24 : 32} category={{ name: p.category_name ?? p.category?.name ?? p.category_icon ?? p.category?.icon ?? undefined, color: p.category_color ?? p.category?.color ?? undefined, icon: p.category_icon ?? p.category?.icon ?? undefined }} />
             </div>
           ))}
           {places.length === 0 && <div className="place-more"><MapPin size={15} /></div>}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTripStore } from '../store/tripStore'
@@ -35,7 +35,7 @@ import PluginFrame from '../components/Plugins/PluginFrame'
 import TripWarningsBanner from '../components/Planner/TripWarningsBanner'
 import Navbar from '../components/Layout/Navbar'
 import { useToast } from '../components/shared/Toast'
-import { Map, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Ticket, PackageCheck, Wallet, FolderOpen, Users, Train } from 'lucide-react'
+import { Map, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Ticket, PackageCheck, Wallet, FolderOpen, Users, Train, History } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, mapsApi } from '../api/client'
 import { accommodationRepo } from '../repo/accommodationRepo'
@@ -51,6 +51,60 @@ import { ListTodo, Upload, Plus, Trash2, FolderPlus } from 'lucide-react'
 import { useTripPlanner } from './tripPlanner/useTripPlanner'
 import { usePoiExplore } from '../components/Map/usePoiExplore'
 import PoiCategoryPill from '../components/Map/PoiCategoryPill'
+
+interface TripChangeEvent {
+  id: number
+  action: string
+  entity_type: string
+  entity_id: number | null
+  before_json: string | null
+  after_json: string | null
+  created_at: string
+}
+
+function historyActionLabel(action: string): string {
+  if (action === 'Optimize day') return 'Optimized day itinerary'
+  if (action === 'Revert optimization') return 'Reverted day optimization'
+  return action.replace(/[_-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
+
+function historyEntityLabel(entityType: string): string {
+  const labels: Record<string, string> = {
+    day_assignments: 'Day itinerary',
+    place: 'Place',
+    reservation: 'Booking',
+    budget: 'Expense',
+  }
+  return labels[entityType] || entityType.replace(/[_-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
+
+function TripHistoryPanel({ events, loading, onRevert }: { events: TripChangeEvent[]; loading: boolean; onRevert: (event: TripChangeEvent) => void }): React.ReactElement {
+  return (
+    <div className="bg-surface" style={{ height: '100%', overflow: 'auto', padding: 28 }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <h2 className="text-content" style={{ margin: 0, fontSize: 22 }}>Trip history</h2>
+        <p className="text-content-muted" style={{ margin: '6px 0 20px', fontSize: 13 }}>Planning changes are saved here so itinerary edits can be reviewed or reverted.</p>
+        {loading && <p className="text-content-muted">Loading history…</p>}
+        {!loading && events.length === 0 && <p className="text-content-muted">No changes recorded yet.</p>}
+        <div style={{ display: 'grid', gap: 8 }}>
+          {events.map(event => {
+            const canRevert = event.action === 'Optimize day' && event.before_json && event.entity_id
+            return (
+              <div key={event.id} className="bg-surface-card border border-edge" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 12 }}>
+                <History size={15} className="text-content-muted" />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="text-content" style={{ fontWeight: 600, fontSize: 13 }}>{historyActionLabel(event.action)}</div>
+                  <div className="text-content-muted" style={{ fontSize: 11 }}>{new Date(event.created_at).toLocaleString()} · {historyEntityLabel(event.entity_type)}</div>
+                </div>
+                {canRevert && <button className="border border-edge bg-surface-secondary text-content" style={{ borderRadius: 8, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }} onClick={() => onRevert(event)}>Revert</button>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function ListsContainer({ tripId, packingItems, todoItems }: { tripId: number; packingItems: PackingItem[]; todoItems: TodoItem[] }) {
   const [subTab, setSubTab] = useState<'packing' | 'todo'>(() => {
@@ -217,6 +271,40 @@ export default function TripPlannerPage(): React.ReactElement | null {
     mapTileUrl, fontStyle,
   } = useTripPlanner()
 
+  const [historyEvents, setHistoryEvents] = useState<TripChangeEvent[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  useEffect(() => {
+    if (activeTab !== 'history' || !Number.isFinite(tripId)) return
+    setHistoryLoading(true)
+    tripsApi.history(tripId)
+      .then(data => setHistoryEvents((data as { events?: TripChangeEvent[] }).events || []))
+      .catch(() => setHistoryEvents([]))
+      .finally(() => setHistoryLoading(false))
+  }, [activeTab, tripId])
+  const revertHistoryEvent = async (event: TripChangeEvent) => {
+    if (!event.entity_id || !event.before_json) return
+    let orderedIds: unknown
+    let afterIds: unknown = null
+    try {
+      orderedIds = JSON.parse(event.before_json)
+      afterIds = JSON.parse(event.after_json || 'null')
+    } catch {
+      return
+    }
+    if (!Array.isArray(orderedIds) || !orderedIds.every(id => Number.isInteger(id))) return
+    try {
+      await assignmentsApi.reorder(tripId, event.entity_id, orderedIds as number[])
+      await tripActions.loadTrip(tripId)
+      await tripsApi.recordHistory(tripId, {
+        action: 'Revert optimization', entityType: event.entity_type, entityId: event.entity_id,
+        before: afterIds, after: orderedIds,
+      })
+      setHistoryEvents(events => events.filter(item => item.id !== event.id))
+    } catch {
+      toast.error('Could not revert this change')
+    }
+  }
+
   const poi = usePoiExplore()
   const [glMap, setGlMap] = useState<CompassMap | null>(null)
   const poiPillEnabled = useSettingsStore(s => s.settings.map_poi_pill_enabled) !== false
@@ -309,6 +397,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
         {/* Plugin validation/warning contributions (#1429) — navbar chips for
             plugins with a tab here, floating bottom overlay for the rest. */}
         <TripWarningsBanner tripId={tripId} onOpenPluginTab={(pid) => handleTabChange(`plugin:${pid}`)} />
+
+        {activeTab === 'history' && <TripHistoryPanel events={historyEvents} loading={historyLoading} onRevert={revertHistoryEvent} />}
 
         {activeTab === 'plan' && (
           <div style={{ position: 'absolute', inset: 0 }}>

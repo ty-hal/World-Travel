@@ -128,7 +128,6 @@ export function fetchPhoto(
         const photoUrl = data.photoUrl || null
         if (!photoUrl) {
           const entry: PhotoEntry = { photoUrl: null, thumbDataUrl: null }
-          cache.set(cacheKey, entry)
           callback?.(entry)
           notify(cacheKey, entry)
           return
@@ -149,7 +148,6 @@ export function fetchPhoto(
       })
       .catch(() => {
         const entry: PhotoEntry = { photoUrl: null, thumbDataUrl: null }
-        cache.set(cacheKey, entry)
         callback?.(entry)
         notify(cacheKey, entry)
       })

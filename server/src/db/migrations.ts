@@ -3967,6 +3967,21 @@ function runMigrations(db: Database.Database): void {
       ];
       points.forEach(([sourceId, lat, lng]) => update.run(lat, lng, trip.id, sourceId));
     },
+    () => db.exec(`
+      CREATE TABLE IF NOT EXISTS trip_change_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        before_json TEXT,
+        after_json TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_trip_change_events_trip_created
+        ON trip_change_events(trip_id, created_at DESC);
+    `),
   ];
 
   if (currentVersion < migrations.length) {
