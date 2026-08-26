@@ -3,7 +3,9 @@ import { useTranslation } from '../i18n'
 import Navbar from '../components/Layout/Navbar'
 import apiClient from '../api/client'
 import CustomSelect from '../components/shared/CustomSelect'
-import { Globe, MapPin, Briefcase, Calendar, Flag, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Search, Landmark } from 'lucide-react'
+import { MapPin, Briefcase, Calendar, Flag, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Landmark } from 'lucide-react'
+import AnimatedGlobeIcon from '../components/shared/AnimatedGlobeIcon'
+import AnimatedSearchIcon from '../components/shared/AnimatedSearchIcon'
 import type { TranslationFn } from '../types'
 import { A2_TO_A3, countryCodeToFlag, type AtlasCountry, type AtlasStats, type AtlasData, type CountryDetail } from './atlas/atlasModel'
 import { continentForCountry } from '@trek/shared'
@@ -516,7 +518,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
   // Tab switcher
   const tabBar = (
     <div style={{ display: 'flex', gap: 4, padding: '12px 16px 0', marginBottom: 4 }}>
-      {[{ id: 'stats', label: t('atlas.statsTab'), icon: Globe }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }, { id: 'wonders', label: 'Wonders', icon: Landmark }].map(tab => (
+      {[{ id: 'stats', label: t('atlas.statsTab'), icon: AnimatedGlobeIcon }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }, { id: 'wonders', label: 'Wonders', icon: Landmark }].map(tab => (
         <button key={tab.id} onClick={() => setBucketTab(tab.id as any)}
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
@@ -537,7 +539,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
       <>
         {tabBar}
         <div className="p-8 text-center">
-          <Globe size={28} className="mx-auto mb-2" style={{ color: tf, opacity: 0.4 }} />
+          <AnimatedGlobeIcon size={28} animate="always" className="mx-auto mb-2" style={{ color: tf, opacity: 0.4 }} />
           <p className="text-sm font-medium" style={{ color: tm }}>{t('atlas.noData')}</p>
           <p className="text-xs mt-1" style={{ color: tf }}>{t('atlas.noDataHint')}</p>
         </div>
@@ -597,7 +599,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
               <button onClick={onSearchBucket} disabled={bucketSearching}
                 className="bg-accent text-accent-text"
                 style={{ padding: '6px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <Search size={12} />
+                <AnimatedSearchIcon size={12} />
               </button>
             )}
             {bucketForm.name && (
@@ -664,7 +666,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
   const wondersContent = (
     <div style={{ padding: '12px 16px 16px', minWidth: 760, maxWidth: 860 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <Search size={13} style={{ color: tf, flexShrink: 0 }} />
+        <AnimatedSearchIcon size={13} style={{ color: tf, flexShrink: 0 }} />
         <input
           value={wonderSearch}
           onChange={e => setWonderSearch(e.target.value)}

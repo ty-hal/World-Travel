@@ -1,5 +1,6 @@
 import React from 'react'
-import { Settings, SlidersHorizontal, Paintbrush, Map, Bell, Plug, CloudOff, User, Info, Blocks } from 'lucide-react'
+import { SlidersHorizontal, Paintbrush, Map, Bell, Plug, CloudOff, User, Info, Blocks } from 'lucide-react'
+import AnimatedSettingsIcon from '../components/shared/AnimatedSettingsIcon'
 import { useTranslation } from '../i18n'
 import PageShell from '../components/Layout/PageShell'
 import PageSidebar, { type PageSidebarTab } from '../components/Layout/PageSidebar'
@@ -45,7 +46,7 @@ export default function SettingsPage(): React.ReactElement {
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-surface-tertiary">
-              <Settings className="w-5 h-5 text-content-secondary" />
+              <AnimatedSettingsIcon size={20} className="w-5 h-5 text-content-secondary" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-content">{t('settings.title')}</h1>

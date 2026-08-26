@@ -136,8 +136,8 @@ export default function BackgroundTasksWidget() {
                   className="bg-accent text-accent-text"
                   style={{ marginTop: 4, border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
-                  <AnimatedCalendarDaysIcon size={14} />{' '}
-                  {t('common.import')}
+                  <AnimatedCalendarDaysIcon size={14} animate="always" />{' '}
+                    {t('common.import')}
                 </button>
               ) : (
                 <div style={{ fontSize: 'calc(11px * var(--fs-scale-caption, 1))', color: 'var(--text-faint)', marginTop: 1 }}>

@@ -3,18 +3,24 @@ import { useAddonStore } from '../../store/addonStore'
 import { usePluginStore } from '../../store/pluginStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
-import { LayoutGrid, CalendarDays, Globe, Compass, Bookmark, Plus } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { LayoutGrid, Plus } from 'lucide-react'
+import type { ComponentType, SVGProps } from 'react'
 import { resolvePluginIcon } from '../shared/PluginIcon'
+import AnimatedCalendarDaysIcon from '../shared/AnimatedCalendarDaysIcon'
+import AnimatedGlobeIcon from '../shared/AnimatedGlobeIcon'
+import AnimatedCompassIcon from '../shared/AnimatedCompassIcon'
+import AnimatedBookmarkIcon from '../shared/AnimatedBookmarkIcon'
 
-const ADDON_NAV: Record<string, { icon: LucideIcon; labelKey: string }> = {
-  vacay:       { icon: CalendarDays, labelKey: 'admin.addons.catalog.vacay.name' },
-  atlas:       { icon: Globe,        labelKey: 'admin.addons.catalog.atlas.name' },
-  journey:     { icon: Compass,      labelKey: 'admin.addons.catalog.journey.name' },
-  collections: { icon: Bookmark,     labelKey: 'admin.addons.catalog.collections.name' },
+type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number }>
+
+const ADDON_NAV: Record<string, { icon: NavIcon; labelKey: string }> = {
+  vacay:       { icon: AnimatedCalendarDaysIcon, labelKey: 'admin.addons.catalog.vacay.name' },
+  atlas:       { icon: AnimatedGlobeIcon,        labelKey: 'admin.addons.catalog.atlas.name' },
+  journey:     { icon: AnimatedCompassIcon,      labelKey: 'admin.addons.catalog.journey.name' },
+  collections: { icon: AnimatedBookmarkIcon,     labelKey: 'admin.addons.catalog.collections.name' },
 }
 
-interface NavItem { to: string; label: string; icon: LucideIcon }
+interface NavItem { to: string; label: string; icon: NavIcon }
 
 // The centre "+" means something different per context: inside a trip it adds a
 // place, on the journey list it starts a journey, inside a journey it adds an

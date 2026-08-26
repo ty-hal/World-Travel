@@ -6,12 +6,27 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useAddonStore } from '../../store/addonStore'
 import { usePluginStore } from '../../store/pluginStore'
 import { useTranslation } from '../../i18n'
-import { Plane, LogOut, Settings, ChevronDown, Shield, ArrowLeft, Users, Moon, Sun, Monitor, CalendarDays, Briefcase, Globe, Compass, BookOpen, Bookmark } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { LogOut, ChevronDown, Shield, ArrowLeft, Users, Briefcase, BookOpen } from 'lucide-react'
+import type { ComponentType, SVGProps } from 'react'
 import InAppNotificationBell from './InAppNotificationBell.tsx'
 import { resolvePluginIcon } from '../shared/PluginIcon'
+import AnimatedCalendarDaysIcon from '../shared/AnimatedCalendarDaysIcon'
+import AnimatedGlobeIcon from '../shared/AnimatedGlobeIcon'
+import AnimatedCompassIcon from '../shared/AnimatedCompassIcon'
+import AnimatedBookmarkIcon from '../shared/AnimatedBookmarkIcon'
+import AnimatedSettingsIcon from '../shared/AnimatedSettingsIcon'
+import AnimatedSunIcon from '../shared/AnimatedSunIcon'
+import AnimatedMoonIcon from '../shared/AnimatedMoonIcon'
 
-const ADDON_ICONS: Record<string, LucideIcon> = { CalendarDays, Briefcase, Globe, Compass, Bookmark }
+type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number; className?: string }>
+
+const ADDON_ICONS: Record<string, NavIcon> = {
+  CalendarDays: AnimatedCalendarDaysIcon,
+  Briefcase,
+  Globe: AnimatedGlobeIcon,
+  Compass: AnimatedCompassIcon,
+  Bookmark: AnimatedBookmarkIcon,
+}
 
 interface NavbarProps {
   tripTitle?: string
@@ -150,7 +165,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
           }}
         >
           {[{ id: '__trips', path: '/dashboard', label: t('nav.myTrips'), Icon: Briefcase },
-            ...globalAddons.map(a => ({ id: a.id, path: `/${a.id}`, label: getAddonName(a), Icon: ADDON_ICONS[a.icon] || CalendarDays })),
+            ...globalAddons.map(a => ({ id: a.id, path: `/${a.id}`, label: getAddonName(a), Icon: ADDON_ICONS[a.icon] || AnimatedCalendarDaysIcon })),
             ...pagePlugins.map(p => ({ id: `plugin:${p.id}`, path: `/plugins/${p.id}`, label: p.name, Icon: resolvePluginIcon(p.icon) }))
           ].map(tab => {
             const isActive = location.pathname === tab.path
@@ -217,9 +232,9 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
         className="p-2 rounded-lg transition-colors flex-shrink-0 hidden sm:flex relative w-8 h-8 items-center justify-center text-content-muted"
         onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-        <Sun className="w-4 h-4 absolute transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
+        <AnimatedSunIcon size={16} className="w-4 h-4 absolute transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
           style={{ opacity: dark ? 1 : 0, transform: dark ? 'rotate(0deg) scale(1)' : 'rotate(-90deg) scale(0.6)' }} />
-        <Moon className="w-4 h-4 absolute transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
+        <AnimatedMoonIcon size={16} className="w-4 h-4 absolute transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
           style={{ opacity: dark ? 0 : 1, transform: dark ? 'rotate(90deg) scale(0.6)' : 'rotate(0deg) scale(1)' }} />
       </button>
 
@@ -267,7 +282,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
                     className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-content-secondary"
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <Settings className="w-4 h-4" />
+                    <AnimatedSettingsIcon size={16} className="w-4 h-4" />
                     {t('nav.settings')}
                   </Link>
 

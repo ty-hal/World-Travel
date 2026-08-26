@@ -5,7 +5,10 @@ import { useCanDo } from '../../store/permissionsStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getCached, fetchPhoto } from '../../services/photoService'
 import { useToast } from '../../components/shared/Toast'
-import { Map, Ticket, PackageCheck, Wallet, FolderOpen, Images, Users, Train, History } from 'lucide-react'
+import { Map, PackageCheck, Images, Users, Train, History } from 'lucide-react'
+import AnimatedTicketIcon from '../../components/shared/AnimatedTicketIcon'
+import AnimatedWalletIcon from '../../components/shared/AnimatedWalletIcon'
+import AnimatedFolderOpenIcon from '../../components/shared/AnimatedFolderOpenIcon'
 import { resolvePluginIcon } from '../../components/shared/PluginIcon'
 import { useTranslation, translateApiError } from '../../i18n'
 import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, healthApi, airtrailApi, mapsApi, placesApi } from '../../api/client'
@@ -134,10 +137,10 @@ export function useTripPlanner() {
   const TRIP_TABS = [
     { id: 'plan', label: t('trip.tabs.plan'), icon: Map },
     { id: 'transports', label: t('trip.tabs.transports'), icon: Train },
-    { id: 'buchungen', label: t('trip.tabs.reservations'), shortLabel: t('trip.tabs.reservationsShort'), icon: Ticket },
+    { id: 'buchungen', label: t('trip.tabs.reservations'), shortLabel: t('trip.tabs.reservationsShort'), icon: AnimatedTicketIcon },
     ...(enabledAddons.packing ? [{ id: 'listen', label: t('trip.tabs.lists'), shortLabel: t('trip.tabs.listsShort'), icon: PackageCheck }] : []),
-    ...(enabledAddons.budget ? [{ id: 'finanzplan', label: t('trip.tabs.budget'), icon: Wallet }] : []),
-    ...(enabledAddons.documents ? [{ id: 'dateien', label: t('trip.tabs.files'), icon: FolderOpen }] : []),
+    ...(enabledAddons.budget ? [{ id: 'finanzplan', label: t('trip.tabs.budget'), icon: AnimatedWalletIcon }] : []),
+    ...(enabledAddons.documents ? [{ id: 'dateien', label: t('trip.tabs.files'), icon: AnimatedFolderOpenIcon }] : []),
     { id: 'photos', label: 'Photos', icon: Images },
     { id: 'history', label: 'History', icon: History },
     ...(enabledAddons.collab ? [{ id: 'collab', label: t('admin.addons.catalog.collab.name'), icon: Users }] : []),

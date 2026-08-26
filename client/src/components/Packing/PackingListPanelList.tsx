@@ -1,4 +1,4 @@
-import { Luggage } from 'lucide-react'
+import AnimatedLuggageIcon from '../shared/AnimatedLuggageIcon'
 import type { PackingState } from './usePackingListPanel'
 import { KategorieGruppe } from './PackingListPanelCategoryGroup'
 
@@ -13,7 +13,7 @@ export function PackingList(S: PackingState) {
     <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0 16px' }}>
       {items.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <Luggage size={40} style={{ color: 'var(--text-faint)', display: 'block', margin: '0 auto 10px' }} />
+          <AnimatedLuggageIcon size={40} animate="always" style={{ color: 'var(--text-faint)', display: 'block', margin: '0 auto 10px' }} />
           <p style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' }}>{t('packing.emptyTitle')}</p>
           <p style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', color: 'var(--text-faint)', margin: 0 }}>{t('packing.emptyHint')}</p>
         </div>

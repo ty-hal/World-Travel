@@ -214,7 +214,7 @@ describe('Navbar', () => {
       addons: [{ id: 'vacay', name: 'Vacay', icon: 'CalendarDays', type: 'global', enabled: true }],
     });
     render(<Navbar />);
-    expect(screen.getByRole('link', { name: /vacay/i })).toBeInTheDocument();
+    expect(document.querySelector('a[href="/vacay"]')).toBeInTheDocument();
   });
 
   it('FE-COMP-NAVBAR-025: global addon links hidden when in trip view (tripTitle set)', () => {
@@ -222,7 +222,7 @@ describe('Navbar', () => {
       addons: [{ id: 'vacay', name: 'Vacay', icon: 'CalendarDays', type: 'global', enabled: true }],
     });
     render(<Navbar tripTitle="Japan 2025" />);
-    expect(screen.queryByRole('link', { name: /vacay/i })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/vacay"]')).not.toBeInTheDocument();
   });
 
   it('FE-COMP-NAVBAR-026: notification bell visible when tripId provided', () => {

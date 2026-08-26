@@ -15,9 +15,12 @@ import {
 } from './dashboard/dashboardModel'
 import {
   Plus, Edit2, Trash2, Archive, Copy, ArrowRight, MapPin,
-  Plane, Hotel, Utensils, Clock, RefreshCw, ArrowRightLeft, Calendar,
-  LayoutGrid, List, Ticket, X, CalendarPlus,
+  Hotel, Utensils, Clock, ArrowRightLeft, Calendar,
+  LayoutGrid, List, X, CalendarPlus,
 } from 'lucide-react'
+import AnimatedAirplaneIcon from '../components/shared/AnimatedAirplaneIcon'
+import AnimatedTicketIcon from '../components/shared/AnimatedTicketIcon'
+import AnimatedRefreshCwIcon from '../components/shared/AnimatedRefreshCwIcon'
 import { IcsSubscribeModal } from '../components/Planner/IcsSubscribeModal'
 import CollectionsWidget from '../components/Dashboard/CollectionsWidget'
 import PluginWidgets from '../components/Plugins/PluginWidgets'
@@ -123,7 +126,7 @@ function initials(name: string | null | undefined): string {
 }
 
 const RES_ICON: Record<string, React.ReactElement> = {
-  flight: <Plane size={16} />, hotel: <Hotel size={16} />, restaurant: <Utensils size={16} />,
+  flight: <AnimatedAirplaneIcon size={16} animate="always" />, hotel: <Hotel size={16} />, restaurant: <Utensils size={16} />,
 }
 const RES_TYPE_CLASS: Record<string, string> = { flight: 'flight', hotel: 'hotel', restaurant: 'food' }
 
@@ -191,7 +194,7 @@ export default function DashboardPage(): React.ReactElement {
               <div className="dash-error" role="alert">
                 <span className="dash-error-txt">{t('dashboard.loadErrorBanner')}</span>
                 <button className="dash-error-retry" onClick={retryLoad}>
-                  <RefreshCw size={15} />
+                  <AnimatedRefreshCwIcon size={15} />
                   {t('dashboard.retry')}
                 </button>
               </div>
@@ -688,8 +691,8 @@ function CurrencyTool(): React.ReactElement {
   return (
     <div className="tool">
       <div className="tool-head">
-        <div className="tool-title"><RefreshCw size={14} /> {t('dashboard.currency')}</div>
-        <button className="tool-action" aria-label={t('dashboard.aria.refreshRates')} onClick={fetchRate}><RefreshCw size={14} /></button>
+        <div className="tool-title"><AnimatedRefreshCwIcon size={14} /> {t('dashboard.currency')}</div>
+        <button className="tool-action" aria-label={t('dashboard.aria.refreshRates')} onClick={fetchRate}><AnimatedRefreshCwIcon size={14} /></button>
       </div>
       <div className="fx-input">
         <div className="fx-field">
@@ -847,7 +850,7 @@ function UpcomingTool({ items, locale, onOpen }: {
                     {r.location || r.place_name || r.trip_title}
                   </div>
                 </div>
-                <div className={`upc-type ${typeClass}`}>{RES_ICON[r.type] || <Ticket size={16} />}</div>
+                <div className={`upc-type ${typeClass}`}>{RES_ICON[r.type] || <AnimatedTicketIcon size={16} />}</div>
               </div>
             )
           })}

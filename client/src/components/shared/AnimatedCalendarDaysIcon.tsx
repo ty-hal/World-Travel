@@ -1,19 +1,30 @@
 import type { SVGProps } from 'react'
+import type { AnimatedIconMotion } from './animatedIconTypes'
+
+export type AnimatedCalendarDaysIconProps = SVGProps<SVGSVGElement> & {
+  size?: number
+  animate?: AnimatedIconMotion
+}
 
 // Adapted from pqoqubbw/icons (MIT):
 // https://github.com/pqoqubbw/icons/blob/main/icons/calendar-days.tsx
-export default function AnimatedCalendarDaysIcon({ size = 16, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+export default function AnimatedCalendarDaysIcon({
+  size = 16,
+  animate = 'hover',
+  className,
+  ...props
+}: AnimatedCalendarDaysIconProps) {
   return (
     <svg
       {...props}
       aria-hidden="true"
-      className={`trek-animated-calendar ${props.className ?? ''}`.trim()}
+      className={`trek-animated-calendar trek-icon-motion trek-icon-motion--${animate}${className ? ` ${className}` : ''}`}
       fill="none"
       height={size}
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="2"
+      strokeWidth={props.strokeWidth ?? 2}
       viewBox="0 0 24 24"
       width={size}
       xmlns="http://www.w3.org/2000/svg"

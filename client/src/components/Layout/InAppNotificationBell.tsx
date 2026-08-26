@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import ReactDOM from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Trash2, CheckCheck } from 'lucide-react'
+import { Trash2, CheckCheck } from 'lucide-react'
+import AnimatedBellIcon from '../shared/AnimatedBellIcon'
 import { useTranslation } from '../../i18n'
 import { useInAppNotificationStore } from '../../store/inAppNotificationStore.ts'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -49,7 +50,7 @@ export default function InAppNotificationBell(): React.ReactElement {
         onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
-        <Bell className="w-4 h-4" />
+        <AnimatedBellIcon size={16} className="w-4 h-4" />
         {unreadCount > 0 && (
           <span
             className="absolute -top-0.5 -right-0.5 flex items-center justify-center rounded-full text-white font-bold"
@@ -130,7 +131,7 @@ export default function InAppNotificationBell(): React.ReactElement {
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center gap-2">
-                  <Bell className="w-8 h-8 text-content-faint" />
+                  <AnimatedBellIcon size={32} animate="always" className="w-8 h-8 text-content-faint" />
                   <p className="text-sm font-medium text-content-muted">{t('notifications.empty')}</p>
                   <p className="text-xs text-content-faint">{t('notifications.emptyDescription')}</p>
                 </div>

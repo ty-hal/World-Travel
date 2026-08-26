@@ -1,5 +1,6 @@
 import React from 'react'
-import { Search, X, ChevronRight } from 'lucide-react'
+import { X, ChevronRight } from 'lucide-react'
+import AnimatedSearchIcon from '../../components/shared/AnimatedSearchIcon'
 import type { TranslationFn } from '../../types'
 
 type CountryOption = { code: string; label: string }
@@ -41,7 +42,7 @@ export default function AtlasCountrySearch({
           WebkitBackdropFilter: 'blur(18px) saturate(180%)',
           boxShadow: dark ? '0 8px 26px rgba(0,0,0,0.25)' : '0 8px 26px rgba(0,0,0,0.10)',
         }}>
-          <Search size={16} className="text-content-faint" style={{ flexShrink: 0 }} />
+          <AnimatedSearchIcon size={16} className="text-content-faint" style={{ flexShrink: 0 }} />
           <input
             value={search}
             onChange={(e) => {

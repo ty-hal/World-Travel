@@ -1013,44 +1013,288 @@ img[alt="TREK"] {
   transition: all 0.2s ease;
 }
 
-/* Vendored animated travel icon: motion is reserved for active imports. */
-.trek-animated-airplane__body {
+/* Vendored animated icons (Lucide paths + pqoqubbw/icons-inspired CSS motion, MIT).
+   `.trek-icon-motion--always` loops; `.trek-icon-motion--hover` plays on self/ancestor hover. */
+.trek-icon-motion [class*="trek-animated-"] {
   transform-box: fill-box;
   transform-origin: center;
-  animation: trek-airplane-lift 900ms ease-in-out infinite;
-}
-
-.trek-animated-airplane__trail {
-  opacity: 0;
-  stroke-width: 1;
-  animation: trek-airplane-trail 700ms ease-out infinite;
-}
-
-.trek-animated-calendar__days {
-  transform-origin: center;
-  animation: trek-calendar-days 1200ms ease-in-out infinite;
-}
-
-@keyframes trek-calendar-days {
-  0%, 100% { opacity: 0.45; transform: translateY(0); }
-  50% { opacity: 1; transform: translateY(-1px); }
 }
 
 @keyframes trek-airplane-lift {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(3px, -3px) scale(0.8); }
 }
-
 @keyframes trek-airplane-trail {
   0% { opacity: 0; transform: translate(3px, -3px); }
   35%, 75% { opacity: 1; transform: translate(0, 0); }
   100% { opacity: 0; transform: translate(-3px, 3px); }
 }
+@keyframes trek-calendar-days {
+  0%, 100% { opacity: 0.45; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-1px); }
+}
+@keyframes trek-globe-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes trek-globe-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes trek-earth-draw {
+  0% { stroke-dashoffset: 40; opacity: 0.35; }
+  50% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0.85; }
+}
+@keyframes trek-compass-spin {
+  0%, 100% { transform: rotate(-12deg); }
+  50% { transform: rotate(18deg); }
+}
+@keyframes trek-map-pin-bounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-3px); }
+  70% { transform: translateY(-1px); }
+}
+@keyframes trek-map-pin-plus {
+  0%, 100% { opacity: 0.45; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@keyframes trek-route-dash {
+  0% { stroke-dashoffset: 24; opacity: 0.4; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes trek-route-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+@keyframes trek-ticket-tear {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-2px); }
+}
+@keyframes trek-bookmark-squash {
+  0%, 100% { transform: scale(1, 1); }
+  30% { transform: scale(0.92, 1.18); }
+  55% { transform: scale(1.08, 0.9); }
+  75% { transform: scale(0.98, 1.04); }
+}
+@keyframes trek-wallet-tilt {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  40% { transform: translateY(-2px) rotate(-4deg); }
+}
+@keyframes trek-bell-ring {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-10deg); }
+  40% { transform: rotate(10deg); }
+  60% { transform: rotate(-6deg); }
+  80% { transform: rotate(4deg); }
+}
+@keyframes trek-ship-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1.5px) rotate(-2deg); }
+}
+@keyframes trek-ship-wave {
+  0%, 100% { opacity: 0.45; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(1.5px); }
+}
+@keyframes trek-train-draw {
+  0% { stroke-dasharray: 1 28; stroke-dashoffset: 28; opacity: 0.3; }
+  100% { stroke-dasharray: 28 0; stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes trek-search-nudge {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  40% { transform: translate(1.5px, -1.5px) rotate(8deg); }
+}
+@keyframes trek-settings-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(90deg); }
+}
+@keyframes trek-sun-ray {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+@keyframes trek-sun-core {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes trek-moon-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  75% { transform: rotate(6deg); }
+}
+@keyframes trek-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes trek-folder-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-6deg); }
+  55% { transform: rotate(4deg); }
+}
+@keyframes trek-luggage-bounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-2px); }
+  70% { transform: translateY(-0.5px); }
+}
+
+/* Always-on loops */
+.trek-icon-motion--always .trek-animated-airplane__body { animation: trek-airplane-lift 900ms ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-airplane__trail { opacity: 0; stroke-width: 1; animation: trek-airplane-trail 700ms ease-out infinite; }
+.trek-icon-motion--always .trek-animated-calendar__days { animation: trek-calendar-days 1200ms ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-globe__meridian { transform-origin: 12px 12px; animation: trek-globe-spin 6s linear infinite; }
+.trek-icon-motion--always .trek-animated-globe__equator { animation: trek-globe-pulse 1.6s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-earth__land { stroke-dasharray: 40; animation: trek-earth-draw 2.4s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-compass__needle { transform-origin: 12px 12px; animation: trek-compass-spin 1.8s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-map-pin__body,
+.trek-icon-motion--always .trek-animated-map-pin__dot { animation: trek-map-pin-bounce 1.1s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-map-pin__plus { transform-origin: 19px 18px; animation: trek-map-pin-plus 1.1s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-route__path { stroke-dasharray: 24; animation: trek-route-dash 1.4s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-route__a,
+.trek-icon-motion--always .trek-animated-route__b { animation: trek-route-pulse 1.4s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-ticket__left,
+.trek-icon-motion--always .trek-animated-ticket__perf { animation: trek-ticket-tear 1.2s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-bookmark__body { animation: trek-bookmark-squash 1.4s ease-out infinite; }
+.trek-icon-motion--always .trek-animated-wallet__body,
+.trek-icon-motion--always .trek-animated-wallet__clasp { animation: trek-wallet-tilt 1.5s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-bell__body,
+.trek-icon-motion--always .trek-animated-bell__clapper { transform-origin: 12px 4px; animation: trek-bell-ring 1.6s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-ship__hull { animation: trek-ship-bob 1.8s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-ship__wave { animation: trek-ship-wave 1.8s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-train-track__tie { animation: trek-train-draw 1.2s ease-out infinite; }
+.trek-icon-motion--always .trek-animated-search__lens,
+.trek-icon-motion--always .trek-animated-search__handle { animation: trek-search-nudge 1.2s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-settings__gear { transform-origin: 12px 12px; animation: trek-settings-spin 1.2s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-sun__core { animation: trek-sun-core 1.4s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-sun__ray { animation: trek-sun-ray 1.4s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-moon__body { animation: trek-moon-wobble 1.6s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-refresh__body { transform-origin: 12px 12px; animation: trek-refresh-spin 1s linear infinite; }
+.trek-icon-motion--always .trek-animated-folder__body { animation: trek-folder-wiggle 1.2s ease-in-out infinite; }
+.trek-icon-motion--always .trek-animated-luggage__body,
+.trek-icon-motion--always .trek-animated-luggage__wheel { animation: trek-luggage-bounce 1.3s ease-in-out infinite; }
+
+/* Hover / focus-within on self or interactive ancestors */
+@media (hover: hover) {
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-airplane__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-airplane__body {
+    animation: trek-airplane-lift 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-airplane__trail,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-airplane__trail {
+    opacity: 0; stroke-width: 1; animation: trek-airplane-trail 700ms ease-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-calendar__days,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-calendar__days {
+    animation: trek-calendar-days 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-globe__meridian,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-globe__meridian {
+    transform-origin: 12px 12px; animation: trek-globe-spin 1.8s linear 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-globe__equator,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-globe__equator {
+    animation: trek-globe-pulse 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-earth__land,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-earth__land {
+    stroke-dasharray: 40; animation: trek-earth-draw 1.2s ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-compass__needle,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-compass__needle {
+    transform-origin: 12px 12px; animation: trek-compass-spin 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-map-pin__body,
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-map-pin__dot,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-map-pin__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-map-pin__dot {
+    animation: trek-map-pin-bounce 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-map-pin__plus,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-map-pin__plus {
+    transform-origin: 19px 18px; animation: trek-map-pin-plus 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-route__path,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-route__path {
+    stroke-dasharray: 24; animation: trek-route-dash 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-route__a,
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-route__b,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-route__a,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-route__b {
+    animation: trek-route-pulse 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-ticket__left,
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-ticket__perf,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-ticket__left,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-ticket__perf {
+    animation: trek-ticket-tear 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-bookmark__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-bookmark__body {
+    animation: trek-bookmark-squash 600ms ease-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-wallet__body,
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-wallet__clasp,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-wallet__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-wallet__clasp {
+    animation: trek-wallet-tilt 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-bell__body,
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-bell__clapper,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-bell__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-bell__clapper {
+    transform-origin: 12px 4px; animation: trek-bell-ring 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-ship__hull,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-ship__hull {
+    animation: trek-ship-bob 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-ship__wave,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-ship__wave {
+    animation: trek-ship-wave 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-train-track__tie,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-train-track__tie {
+    animation: trek-train-draw 800ms ease-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-search__lens,
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-search__handle,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-search__lens,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-search__handle {
+    animation: trek-search-nudge 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-settings__gear,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-settings__gear {
+    transform-origin: 12px 12px; animation: trek-settings-spin 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-sun__core,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-sun__core {
+    animation: trek-sun-core 800ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-sun__ray,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-sun__ray {
+    animation: trek-sun-ray 800ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-moon__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-moon__body {
+    animation: trek-moon-wobble 900ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-refresh__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-refresh__body {
+    transform-origin: 12px 12px; animation: trek-refresh-spin 700ms linear 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-folder__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-folder__body {
+    animation: trek-folder-wiggle 700ms ease-in-out 1;
+  }
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-luggage__body,
+  .trek-icon-motion--hover:is(:hover, :focus-visible) .trek-animated-luggage__wheel,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-luggage__body,
+  :is(a, button, [role="button"], label):is(:hover, :focus-visible) .trek-icon-motion--hover .trek-animated-luggage__wheel {
+    animation: trek-luggage-bounce 800ms ease-in-out 1;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .trek-animated-airplane__body,
-  .trek-animated-airplane__trail,
-  .trek-animated-calendar__days { animation: none; }
+  .trek-icon-motion [class*="trek-animated-"] { animation: none !important; }
 }
 
 

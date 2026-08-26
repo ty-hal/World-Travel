@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Plane, Train, Car, Ship, Bus, Sailboat, Bike, CarTaxiFront, Route, TramFront, Paperclip, FileText, X, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react'
+import { Car, Bus, Sailboat, Bike, CarTaxiFront, TramFront, Paperclip, FileText, X, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react'
+import AnimatedAirplaneIcon from '../shared/AnimatedAirplaneIcon'
+import AnimatedShipIcon from '../shared/AnimatedShipIcon'
+import AnimatedTrainTrackIcon from '../shared/AnimatedTrainTrackIcon'
+import AnimatedRouteIcon from '../shared/AnimatedRouteIcon'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import CustomTimePicker from '../shared/CustomTimePicker'
@@ -107,15 +111,15 @@ function emptyStationWaypoint(dayId: string | number = ''): StationWaypointForm 
 }
 
 const TYPE_OPTIONS = [
-  { value: 'flight',          labelKey: 'reservations.type.flight',          Icon: Plane },
-  { value: 'train',           labelKey: 'reservations.type.train',           Icon: Train },
+  { value: 'flight',          labelKey: 'reservations.type.flight',          Icon: AnimatedAirplaneIcon },
+  { value: 'train',           labelKey: 'reservations.type.train',           Icon: AnimatedTrainTrackIcon },
   { value: 'bus',             labelKey: 'reservations.type.bus',             Icon: Bus },
   { value: 'car',             labelKey: 'reservations.type.car',             Icon: Car },
   { value: 'taxi',            labelKey: 'reservations.type.taxi',            Icon: CarTaxiFront },
   { value: 'bicycle',         labelKey: 'reservations.type.bicycle',         Icon: Bike },
-  { value: 'cruise',          labelKey: 'reservations.type.cruise',          Icon: Ship },
+  { value: 'cruise',          labelKey: 'reservations.type.cruise',          Icon: AnimatedShipIcon },
   { value: 'ferry',           labelKey: 'reservations.type.ferry',           Icon: Sailboat },
-  { value: 'transport_other', labelKey: 'reservations.type.transport_other', Icon: Route },
+  { value: 'transport_other', labelKey: 'reservations.type.transport_other', Icon: AnimatedRouteIcon },
 ]
 
 const defaultForm = {

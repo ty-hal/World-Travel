@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Paintbrush, Eye, LayoutDashboard, Sun, Moon, Monitor, RotateCcw } from 'lucide-react'
+import { Paintbrush, Eye, LayoutDashboard, Monitor, RotateCcw } from 'lucide-react'
+import AnimatedSunIcon from '../shared/AnimatedSunIcon'
+import AnimatedMoonIcon from '../shared/AnimatedMoonIcon'
 import { useTranslation } from '../../i18n'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useToast } from '../shared/Toast'
@@ -144,8 +146,8 @@ export default function AppearanceSettingsTab(): React.ReactElement {
           </label>
           <div className="flex gap-3" style={{ flexWrap: 'wrap' }}>
             {[
-              { value: 'light', label: tr('settings.light', 'Light'), icon: Sun },
-              { value: 'dark', label: tr('settings.dark', 'Dark'), icon: Moon },
+              { value: 'light', label: tr('settings.light', 'Light'), icon: AnimatedSunIcon },
+              { value: 'dark', label: tr('settings.dark', 'Dark'), icon: AnimatedMoonIcon },
               { value: 'auto', label: tr('settings.auto', 'Auto'), icon: Monitor },
             ].map((opt) => {
               const cur = settings.dark_mode

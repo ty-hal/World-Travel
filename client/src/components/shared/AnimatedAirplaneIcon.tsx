@@ -1,4 +1,10 @@
-import type { SVGProps } from 'react';
+import type { SVGProps } from 'react'
+import type { AnimatedIconMotion } from './animatedIconTypes'
+
+export type AnimatedAirplaneIconProps = SVGProps<SVGSVGElement> & {
+  size?: number
+  animate?: AnimatedIconMotion
+}
 
 // Adapted from pqoqubbw/icons (MIT):
 // https://github.com/pqoqubbw/icons/blob/main/icons/airplane.tsx
@@ -6,20 +12,25 @@ const SPEED_LINES = [
   { x1: 5, y1: 15, x2: 1, y2: 19, delay: '0s' },
   { x1: 7, y1: 17, x2: 3, y2: 21, delay: '0.1s' },
   { x1: 9, y1: 19, x2: 5, y2: 23, delay: '0.2s' },
-];
+]
 
-export default function AnimatedAirplaneIcon({ size = 18, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+export default function AnimatedAirplaneIcon({
+  size = 18,
+  animate = 'always',
+  className,
+  ...props
+}: AnimatedAirplaneIconProps) {
   return (
     <svg
       {...props}
       aria-hidden="true"
-      className={`trek-animated-airplane ${props.className ?? ''}`.trim()}
+      className={`trek-animated-airplane trek-icon-motion trek-icon-motion--${animate}${className ? ` ${className}` : ''}`}
       fill="none"
       height={size}
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="2"
+      strokeWidth={props.strokeWidth ?? 2}
       viewBox="0 0 24 24"
       width={size}
       xmlns="http://www.w3.org/2000/svg"
@@ -40,5 +51,5 @@ export default function AnimatedAirplaneIcon({ size = 18, ...props }: SVGProps<S
         />
       ))}
     </svg>
-  );
+  )
 }

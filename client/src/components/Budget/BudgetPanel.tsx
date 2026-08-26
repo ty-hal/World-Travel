@@ -1,4 +1,5 @@
-import { Plus, Calculator, Download } from 'lucide-react'
+import { Plus, Download } from 'lucide-react'
+import AnimatedWalletIcon from '../shared/AnimatedWalletIcon'
 import CustomSelect from '../shared/CustomSelect'
 import { currenciesWith, SYMBOLS } from './BudgetPanel.constants'
 import { useBudgetPanel } from './useBudgetPanel'
@@ -36,7 +37,7 @@ export default function BudgetPanel({ tripId, tripMembers = [] }: BudgetPanelPro
     return (
       <div style={{ padding: 24, maxWidth: 600, margin: '60px auto', textAlign: 'center' }}>
         <div style={{ width: 64, height: 64, borderRadius: 16, background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-          <Calculator size={28} color="#6b7280" />
+          <AnimatedWalletIcon size={28} animate="always" color="#6b7280" />
         </div>
         <h2 style={{ fontSize: 'calc(20px * var(--fs-scale-title, 1))', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px' }}>{t('budget.emptyTitle')}</h2>
         <p style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', color: 'var(--text-muted)', margin: '0 0 24px', lineHeight: 1.5 }}>{t('budget.emptyText')}</p>

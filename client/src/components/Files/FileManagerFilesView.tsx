@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
-import { Upload, FileText, Star, Link2, Trash2 } from 'lucide-react'
+import { Upload, Star, Link2, Trash2 } from 'lucide-react'
+import AnimatedFolderOpenIcon from '../shared/AnimatedFolderOpenIcon'
 import type { FileManagerState } from './useFileManager'
 import { FileRow } from './FileManagerRow'
 import { usePluginViewContributions, PluginCardFooter } from '../Plugins/PluginContributions'
@@ -85,7 +86,7 @@ export function FilesView(S: FileManagerState) {
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 28px 16px' }} className="max-md:!px-4">
         {filteredFiles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-faint)' }}>
-            <FileText size={40} style={{ color: 'var(--text-faint)', display: 'block', margin: '0 auto 12px' }} />
+            <AnimatedFolderOpenIcon size={40} animate="always" style={{ color: 'var(--text-faint)', display: 'block', margin: '0 auto 12px' }} />
             <p style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' }}>{t('files.empty')}</p>
             <p style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', color: 'var(--text-faint)', margin: 0 }}>{t('files.emptyHint')}</p>
           </div>

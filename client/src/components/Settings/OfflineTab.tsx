@@ -8,7 +8,8 @@
  *   - Cache stats + clear.
  */
 import React, { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Trash2, Database, CloudOff, Download, Check, GitMerge, Map as MapIcon } from 'lucide-react'
+import { Trash2, Database, CloudOff, Download, Check, GitMerge, Map as MapIcon } from 'lucide-react'
+import AnimatedRefreshCwIcon from '../shared/AnimatedRefreshCwIcon'
 import Section from './Section'
 import ToggleSwitch from './ToggleSwitch'
 import { offlineDb, clearAll, clearTripData } from '../../db/offlineDb'
@@ -209,7 +210,7 @@ export default function OfflineTab(): React.ReactElement {
                 style={btnStyle(preparing || offline)}
               >
                 {preparing
-                  ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                  ? <AnimatedRefreshCwIcon size={14} animate="always" />
                   : <Download size={14} />}
                 {preparing ? t('settings.offline.prepare.running') : t('settings.offline.prepare.button')}
               </button>
@@ -219,7 +220,7 @@ export default function OfflineTab(): React.ReactElement {
                 className="border border-edge bg-surface-secondary text-content"
                 style={btnStyle(syncing || offline)}
               >
-                <RefreshCw size={14} style={syncing ? { animation: 'spin 1s linear infinite' } : {}} />
+                <AnimatedRefreshCwIcon size={14} animate={syncing ? 'always' : 'hover'} />
                 {syncing ? t('settings.offline.resyncing') : t('settings.offline.resync')}
               </button>
             </div>
