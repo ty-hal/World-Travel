@@ -1013,6 +1013,46 @@ img[alt="TREK"] {
   transition: all 0.2s ease;
 }
 
+/* Vendored animated travel icon: motion is reserved for active imports. */
+.trek-animated-airplane__body {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: trek-airplane-lift 900ms ease-in-out infinite;
+}
+
+.trek-animated-airplane__trail {
+  opacity: 0;
+  stroke-width: 1;
+  animation: trek-airplane-trail 700ms ease-out infinite;
+}
+
+.trek-animated-calendar__days {
+  transform-origin: center;
+  animation: trek-calendar-days 1200ms ease-in-out infinite;
+}
+
+@keyframes trek-calendar-days {
+  0%, 100% { opacity: 0.45; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-1px); }
+}
+
+@keyframes trek-airplane-lift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(3px, -3px) scale(0.8); }
+}
+
+@keyframes trek-airplane-trail {
+  0% { opacity: 0; transform: translate(3px, -3px); }
+  35%, 75% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(-3px, 3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trek-animated-airplane__body,
+  .trek-animated-airplane__trail,
+  .trek-animated-calendar__days { animation: none; }
+}
+
 
 
 /* Tagesliste */

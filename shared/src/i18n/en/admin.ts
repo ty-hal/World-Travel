@@ -598,7 +598,8 @@ const admin: TranslationStrings = {
   'admin.update.confirmTitle': 'Install Update?',
   'admin.update.confirmText':
     'TREK will be updated from {current} to {version}. The server will restart automatically afterwards.',
-  'admin.update.dataInfo': 'All your data (trips, users, API keys, uploads, Calendar, Atlas, budgets) will be preserved.',
+  'admin.update.dataInfo':
+    'All your data (trips, users, API keys, uploads, Calendar, Atlas, budgets) will be preserved.',
   'admin.update.warning': 'The app will be briefly unavailable during the restart.',
   'admin.update.confirm': 'Update Now',
   'admin.update.installing': 'Updating…',

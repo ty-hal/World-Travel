@@ -1,11 +1,13 @@
 import ReactDOM from 'react-dom'
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react'
+import { CheckCircle2, AlertCircle, X } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { addListener, removeListener } from '../../api/websocket'
 import { reservationsApi } from '../../api/client'
 import { useBackgroundTasksStore, type BackgroundImportTask } from '../../store/backgroundTasksStore'
+import AnimatedAirplaneIcon from '../shared/AnimatedAirplaneIcon'
+import AnimatedCalendarDaysIcon from '../shared/AnimatedCalendarDaysIcon'
 
 /**
  * Global, route-independent widget (bottom-right) that tracks background booking
@@ -106,7 +108,8 @@ export default function BackgroundTasksWidget() {
           style={{ borderRadius: 12, border: '1px solid var(--border-primary)', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '11px 13px', backdropFilter: 'blur(8px)', display: 'flex', gap: 10, alignItems: 'flex-start' }}
         >
           <div style={{ flexShrink: 0, marginTop: 1 }}>
-            {(task.status === 'running' || (task.status === 'done' && task.items === undefined)) && <Loader2 size={16} className="animate-spin" color="var(--accent)" />}
+            {task.status === 'running' && <AnimatedAirplaneIcon size={18} style={{ color: 'var(--accent)' }} />}
+            {task.status === 'done' && task.items === undefined && <AnimatedAirplaneIcon size={18} style={{ color: 'var(--accent)' }} />}
             {task.status === 'done' && task.items !== undefined && <CheckCircle2 size={16} color="#10b981" />}
             {task.status === 'error' && <AlertCircle size={16} color="#ef4444" />}
           </div>
@@ -133,6 +136,7 @@ export default function BackgroundTasksWidget() {
                   className="bg-accent text-accent-text"
                   style={{ marginTop: 4, border: 'none', borderRadius: 8, padding: '4px 12px', fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
+                  <AnimatedCalendarDaysIcon size={14} />{' '}
                   {t('common.import')}
                 </button>
               ) : (
