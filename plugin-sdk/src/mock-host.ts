@@ -51,11 +51,10 @@ export interface MockHostOptions {
   actingUserId?: number;
   /** Whether the Costs (budget) addon is enabled; gates all costs.* (default true). */
   budgetAddonEnabled?: boolean;
-  /** Same idea for the other gated subsystems (default true): journey gates
-   * journal.*, atlas gates atlas.*, vacay gates vacay.*, collections gates
-   * collections.*, collab gates collab.* — a disabled addon refuses with
-   * RESOURCE_FORBIDDEN, exactly like the real host's requireAddon. */
-  journeyAddonEnabled?: boolean;
+  /** Same idea for the other gated subsystems (default true): atlas gates atlas.*,
+   * vacay gates vacay.*, collections gates collections.*, collab gates collab.*
+   * — a disabled addon refuses with RESOURCE_FORBIDDEN, exactly like the real
+   * host's requireAddon. */
   atlasAddonEnabled?: boolean;
   vacayAddonEnabled?: boolean;
   collectionsAddonEnabled?: boolean;
@@ -86,11 +85,8 @@ export interface MockHostOptions {
    * Doubles as the default `config` handed to the notificationChannel hook. Keys must be
    * ones the host would accept at install — `__proto__` & co are rejected here too. */
   userSettings?: Record<string, unknown>;
-  /** The acting user's own (non-trip) data: tags, journals, collections, atlas, vacay.
-   * `journals` also gates journal entry access — an unknown journey id is refused. */
+  /** The acting user's own (non-trip) data: tags, collections, atlas, vacay. */
   tags?: unknown[];
-  journals?: unknown[];
-  journalEntries?: unknown[];
   collections?: unknown[];
   atlasVisited?: { countries?: unknown[]; regions?: unknown[] };
   atlasBucketList?: unknown[];
@@ -290,8 +286,6 @@ export function createMockHost(opts: MockHostOptions = {}): MockHost {
   const visitedCountries: unknown[] = [...(opts.atlasVisited?.countries ?? [])];
   const visitedRegions: unknown[] = [...(opts.atlasVisited?.regions ?? [])];
   const bucketItems: unknown[] = [...(opts.atlasBucketList ?? [])];
-  const journals: unknown[] = [...(opts.journals ?? [])];
-  const journalEntries: unknown[] = [...(opts.journalEntries ?? [])];
   const savedPlaces: unknown[] = [];
   const vacayEntries = new Set<string>();
   const vacayHolidays = new Set<string>();
@@ -885,70 +879,6 @@ export function createMockHost(opts: MockHostOptions = {}): MockHost {
           const i = list.findIndex((x) => x.id === todoId);
           if (i < 0) throw new Error(`RESOURCE_FORBIDDEN: no todo ${todoId} on trip ${tripId}`);
           list.splice(i, 1);
-          return { deleted: true };
-        },
-      },
-      // Journeys are the acting user's own (the journals fixture); every method is
-      // gated on the Journey addon like the real host, and entry writes check the
-      // journey exists/is editable.
-      journal: {
-        async listMine() {
-          need('db:read:journal', 'journal.listMine');
-          requireActingUser();
-          requireAddon(opts.journeyAddonEnabled, 'journey');
-          return journals;
-        },
-        async getEntries(journeyId) {
-          need('db:read:journal', 'journal.getEntries');
-          requireActingUser();
-          requireAddon(opts.journeyAddonEnabled, 'journey');
-          if (!rows(journals).some((x) => x.id === journeyId)) throw new Error(`RESOURCE_FORBIDDEN: no access to journey ${journeyId}`);
-          return rows(journalEntries).filter((x) => x.journey_id === journeyId);
-        },
-        async createEntry(journeyId, input) {
-          need('db:write:journal', 'journal.createEntry');
-          requireActingUser();
-          if (typeof input.entry_date !== 'string' || input.entry_date === '') throw new Error('entry_date is required');
-          requireAddon(opts.journeyAddonEnabled, 'journey');
-          if (!rows(journals).some((x) => x.id === journeyId)) throw new Error(`RESOURCE_FORBIDDEN: no editable journey ${journeyId} for this user`);
-          const entry = { id: journalEntries.length + 1, journey_id: journeyId, ...input };
-          journalEntries.push(entry);
-          return entry;
-        },
-        async createJourney(input) {
-          need('db:write:journal', 'journal.createJourney');
-          requireActingUser();
-          requireAddon(opts.journeyAddonEnabled, 'journey');
-          if (typeof input.title !== 'string' || input.title.trim() === '') throw new Error('journal title is required');
-          const journey = { id: journals.length + 1, ...input };
-          journals.push(journey);
-          return journey;
-        },
-        async deleteJourney(journeyId) {
-          need('db:write:journal', 'journal.deleteJourney');
-          requireActingUser();
-          requireAddon(opts.journeyAddonEnabled, 'journey');
-          const i = rows(journals).findIndex((x) => x.id === journeyId);
-          if (i < 0) throw new Error(`RESOURCE_FORBIDDEN: no deletable journal ${journeyId} for this user`);
-          journals.splice(i, 1);
-          return { deleted: true };
-        },
-        async updateEntry(entryId, input) {
-          need('db:write:journal', 'journal.updateEntry');
-          requireActingUser();
-          requireAddon(opts.journeyAddonEnabled, 'journey');
-          const entry = rows(journalEntries).find((x) => x.id === entryId);
-          if (!entry) throw new Error(`RESOURCE_FORBIDDEN: no editable journal entry ${entryId} for this user`);
-          Object.assign(entry, input);
-          return entry;
-        },
-        async deleteEntry(entryId) {
-          need('db:write:journal', 'journal.deleteEntry');
-          requireActingUser();
-          requireAddon(opts.journeyAddonEnabled, 'journey');
-          const i = rows(journalEntries).findIndex((x) => x.id === entryId);
-          if (i < 0) throw new Error(`RESOURCE_FORBIDDEN: no editable journal entry ${entryId} for this user`);
-          journalEntries.splice(i, 1);
           return { deleted: true };
         },
       },

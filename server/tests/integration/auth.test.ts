@@ -58,7 +58,7 @@ import { buildApp } from '../../src/bootstrap';
 import { createTables } from '../../src/db/schema';
 import { runMigrations } from '../../src/db/migrations';
 import { resetTestDb, resetRateLimits } from '../helpers/test-db';
-import { createUser, createAdmin, createUserWithMfa, createInviteToken, createTrip, createBudgetItem, createJourney, createJourneyEntry, addJourneyContributor, addTripPhoto, createCategory, createTag, createTodoItem, createMcpToken, createBucketListItem, createVisitedCountry, createCollabNote, addTripMember } from '../helpers/factories';
+import { createUser, createAdmin, createUserWithMfa, createInviteToken, createTrip, createBudgetItem, addTripPhoto, createCategory, createTag, createTodoItem, createMcpToken, createBucketListItem, createVisitedCountry, createCollabNote, addTripMember } from '../helpers/factories';
 import { authCookie, authHeader } from '../helpers/auth';
 
 let nestApp: INestApplication;
@@ -613,16 +613,6 @@ describe('Account deletion', () => {
     const budgetItem = createBudgetItem(testDb, otherTrip.id);
     testDb.prepare('UPDATE budget_items SET paid_by_user_id = ? WHERE id = ?').run(target.id, budgetItem.id);
 
-    // journey_contributors: target is a contributor on otherUser's journey
-    const otherJourney = createJourney(testDb, otherUser.id);
-    addJourneyContributor(testDb, otherJourney.id, target.id);
-
-    // journey_entries: target authored an entry on otherUser's journey
-    createJourneyEntry(testDb, otherJourney.id, target.id);
-
-    // journey_share_tokens: target created a share token for otherUser's journey
-    testDb.prepare("INSERT INTO journey_share_tokens (journey_id, token, created_by) VALUES (?, 'jst-auth-test', ?)").run(otherJourney.id, target.id);
-
     // notifications.sender_id (SET NULL): target sent a notification to otherUser
     const sentNotif = testDb.prepare(
       "INSERT INTO notifications (type, scope, target, sender_id, recipient_id, title_key, text_key) VALUES ('simple', 'trip', ?, ?, ?, 'k', 'k')"
@@ -636,10 +626,6 @@ describe('Account deletion', () => {
     testDb.prepare(
       "INSERT INTO user_notice_dismissals (user_id, notice_id, dismissed_at) VALUES (?, 'test-notice', ?)"
     ).run(target.id, Date.now());
-
-    // owned journey: target owns a journey with an entry (cascade-deletes on journey deletion)
-    const ownedJourney = createJourney(testDb, target.id);
-    createJourneyEntry(testDb, ownedJourney.id, target.id);
 
     // trip_files.uploaded_by (SET NULL): target uploaded a file to otherUser's trip
     const fileRow = testDb.prepare(
@@ -748,18 +734,12 @@ describe('Account deletion', () => {
     expect((testDb.prepare('SELECT invited_by FROM trip_members WHERE trip_id = ? AND user_id = ?').get(otherTrip.id, thirdUser.id) as any).invited_by).toBeNull();
     expect(testDb.prepare('SELECT id FROM share_tokens WHERE created_by = ?').get(target.id)).toBeUndefined();
     expect((testDb.prepare('SELECT paid_by_user_id FROM budget_items WHERE id = ?').get(budgetItem.id) as any).paid_by_user_id).toBeNull();
-    expect(testDb.prepare('SELECT user_id FROM journey_contributors WHERE journey_id = ? AND user_id = ?').get(otherJourney.id, target.id)).toBeUndefined();
-    expect(testDb.prepare('SELECT id FROM journey_entries WHERE author_id = ?').get(target.id)).toBeUndefined();
-    expect(testDb.prepare('SELECT id FROM journey_share_tokens WHERE created_by = ?').get(target.id)).toBeUndefined();
     // sent notification survives but sender_id becomes NULL
     expect((testDb.prepare('SELECT sender_id FROM notifications WHERE id = ?').get(sentNotif.lastInsertRowid) as any).sender_id).toBeNull();
     // received notification is cascade-deleted
     expect(testDb.prepare('SELECT id FROM notifications WHERE recipient_id = ?').get(target.id)).toBeUndefined();
     // notice dismissals are cascade-deleted
     expect(testDb.prepare("SELECT user_id FROM user_notice_dismissals WHERE user_id = ? AND notice_id = 'test-notice'").get(target.id)).toBeUndefined();
-    // owned journey and its entries are cascade-deleted
-    expect(testDb.prepare('SELECT id FROM journeys WHERE user_id = ?').get(target.id)).toBeUndefined();
-    expect(testDb.prepare('SELECT id FROM journey_entries WHERE journey_id = ?').get(ownedJourney.id)).toBeUndefined();
     // uploaded file survives but uploaded_by is now NULL
     expect((testDb.prepare('SELECT uploaded_by FROM trip_files WHERE id = ?').get(fileRow.lastInsertRowid) as any).uploaded_by).toBeNull();
     // trek_photos row survives but owner_id is now NULL

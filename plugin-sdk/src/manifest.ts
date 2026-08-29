@@ -41,7 +41,7 @@ const ADDON_ID_RE = /^[a-z][a-z0-9_]{1,39}$/;
 // `trek-plugin validate` can WARN on an addon id TREK doesn't know — never a hard
 // error (a plugin built for a newer TREK may reference an addon this SDK predates).
 export const KNOWN_ADDONS = [
-  'mcp', 'packing', 'budget', 'documents', 'vacay', 'atlas', 'collab', 'journey', 'airtrail', 'llm_parsing', 'collections',
+  'mcp', 'packing', 'budget', 'documents', 'vacay', 'atlas', 'collab', 'airtrail', 'llm_parsing', 'collections',
 ];
 // An outbound host: exact hostname (single-label sibling or dotted FQDN) or a
 // `*.`-wildcard with a multi-label suffix. No `*`, no `*.`, no whole-TLD `*.com`,
@@ -79,18 +79,18 @@ export const KNOWN_PERMISSIONS = [
   'db:own',
   'db:read:trips', 'db:read:users', 'db:read:costs', 'db:read:packing', 'db:read:files',
   'db:read:files:content', 'db:read:collab',
-  'db:read:journal', 'db:read:atlas', 'db:read:vacay', 'db:read:daynotes', 'db:read:collections',
+  'db:read:atlas', 'db:read:vacay', 'db:read:daynotes', 'db:read:collections',
   'db:read:categories', 'db:read:tags', 'db:read:todos',
   'db:write:costs', 'db:write:places', 'db:write:days', 'db:write:itinerary', 'db:write:trips',
   'db:write:reservations', 'db:write:accommodations', 'db:write:packing', 'db:write:files',
   'db:write:collab', 'db:write:members', 'db:write:collections', 'db:write:atlas', 'db:write:vacay',
-  'db:write:journal', 'db:write:tags', 'db:write:todos', 'db:write:daynotes',
+  'db:write:tags', 'db:write:todos', 'db:write:daynotes',
   'db:create:trips',
   'db:meta',
   'ws:broadcast:trip', 'ws:broadcast:user',
   'hook:photo-provider', 'hook:calendar-source', 'hook:place-detail-provider', 'hook:trip-warning-provider',
   'hook:table-contributor', 'hook:map-marker-provider', 'hook:pdf-section-provider', 'hook:atlas-layer-provider',
-  'hook:journal-entry-provider', 'hook:trip-card-provider', 'hook:notification-channel', 'hook:user-data',
+  'hook:trip-card-provider', 'hook:notification-channel', 'hook:user-data',
   'events:subscribe', 'jobs:run', 'http:outbound',
   'weather:read', 'rates:read', 'notify:send', 'ai:invoke', 'oauth:client',
 ];

@@ -1,7 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { registerTodoTools } from './tools/todos';
 import { registerAssignmentTools } from './tools/assignments';
-import { registerJourneyTools } from './tools/journey';
 import { registerReservationTools } from './tools/reservations';
 import { registerTagTools } from './tools/tags';
 import { registerMapsWeatherTools } from './tools/mapsWeather';
@@ -46,8 +45,6 @@ export function registerTools(server: McpServer, userId: number, scopes: string[
   registerTransportTools(server, userId, scopes);
 
   registerTransitTools(server, userId, scopes);
-
-  registerJourneyTools(server, userId, scopes);
 
   registerVacayTools(server, userId, scopes);
 

@@ -72,7 +72,6 @@ export class DayAssignmentsController {
     }
     const assignment = this.assignments.createAssignment(dayId, body.place_id, body.notes);
     this.assignments.broadcast(tripId, 'assignment:created', { assignment }, socketId);
-    this.assignments.reconcile(tripId, socketId);
     return { assignment };
   }
 
@@ -109,7 +108,6 @@ export class DayAssignmentsController {
     }
     this.assignments.deleteAssignment(id);
     this.assignments.broadcast(tripId, 'assignment:deleted', { assignmentId: Number(id), dayId: Number(dayId) }, socketId);
-    this.assignments.reconcile(tripId, socketId);
     return { success: true };
   }
 }
@@ -143,7 +141,6 @@ export class AssignmentOpsController {
     const oldDayId = (existing as { day_id: number }).day_id;
     const { assignment } = this.assignments.moveAssignment(id, body.new_day_id, body.order_index, oldDayId);
     this.assignments.broadcast(tripId, 'assignment:moved', { assignment, oldDayId: Number(oldDayId), newDayId: Number(body.new_day_id) }, socketId);
-    this.assignments.reconcile(tripId, socketId);
     return { assignment };
   }
 
@@ -168,7 +165,6 @@ export class AssignmentOpsController {
     }
     const assignment = this.assignments.updateTime(id, body.place_time, body.end_time);
     this.assignments.broadcast(tripId, 'assignment:updated', { assignment }, socketId);
-    this.assignments.reconcile(tripId, socketId);
     return { assignment };
   }
 

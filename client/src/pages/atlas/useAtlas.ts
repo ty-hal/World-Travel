@@ -7,6 +7,7 @@ import L from 'leaflet'
 import type { GeoJsonFeatureCollection } from '../../types'
 import { A2_TO_A3, normalizeRegionName, type AtlasData, type CountryDetail, type BucketItem } from './atlasModel'
 import { continentForCountry } from '@trek/shared'
+import { atlasMaxBounds, atlasUnvisitedLandFill, atlasWorldZoom, ATLAS_WORLD_LAT, ATLAS_WORLD_ZOOM } from '../../components/Map/leafletTiles'
 
 function useCountryNames(language: string): (code: string) => string {
   const [resolver, setResolver] = useState<(code: string) => string>(() => (code: string) => code)
@@ -36,31 +37,10 @@ export function useAtlas() {
   const dark = dm === true || dm === 'dark' || (dm === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<L.Map | null>(null)
-  const atlasTileLayerRef = useRef<L.TileLayer | null>(null)
-  const atlasPreloadTileLayerRef = useRef<L.TileLayer | null>(null)
   const geoLayerRef = useRef<L.GeoJSON | null>(null)
-  const glareRef = useRef<HTMLDivElement>(null)
-  const borderGlareRef = useRef<HTMLDivElement>(null)
+  const atlasWorldZoomRef = useRef(ATLAS_WORLD_ZOOM)
   const panelRef = useRef<HTMLDivElement>(null)
   const country_layer_by_a2_ref = useRef<Record<string, any>>({})
-
-  const handlePanelMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (!panelRef.current || !glareRef.current || !borderGlareRef.current) return
-    const rect = panelRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    // Subtle inner glow
-    glareRef.current.style.background = `radial-gradient(circle 300px at ${x}px ${y}px, ${dark ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.25)'} 0%, transparent 70%)`
-    glareRef.current.style.opacity = '1'
-    // Border glow that follows cursor
-    borderGlareRef.current.style.opacity = '1'
-    borderGlareRef.current.style.maskImage = `radial-gradient(circle 150px at ${x}px ${y}px, black 0%, transparent 100%)`
-    borderGlareRef.current.style.webkitMaskImage = `radial-gradient(circle 150px at ${x}px ${y}px, black 0%, transparent 100%)`
-  }
-  const handlePanelMouseLeave = () => {
-    if (glareRef.current) glareRef.current.style.opacity = '0'
-    if (borderGlareRef.current) borderGlareRef.current.style.opacity = '0'
-  }
 
   const [data, setData] = useState<AtlasData | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
@@ -129,18 +109,25 @@ export function useAtlas() {
     return opts
   }, [geoData, resolveName])
 
-  // Load atlas data + bucket list
+  // Load atlas data + bucket list. Wonders are optional — a missing/failed
+  // wonders endpoint must not blank the main stats panel.
   useEffect(() => {
+    let cancelled = false
     Promise.all([
       apiClient.get('/addons/atlas/stats'),
       apiClient.get('/addons/atlas/bucket-list'),
-      apiClient.get('/addons/atlas/wonders'),
-    ]).then(([statsRes, bucketRes, wondersRes]) => {
+    ]).then(([statsRes, bucketRes]) => {
+      if (cancelled) return
       setData(statsRes.data)
       setBucketList(bucketRes.data.items || [])
-      setWonders(wondersRes.data.wonders || [])
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => { if (!cancelled) setLoading(false) })
+
+    apiClient.get('/addons/atlas/wonders')
+      .then(res => { if (!cancelled) setWonders(res.data.wonders || []) })
+      .catch(() => { if (!cancelled) setWonders([]) })
+
+    return () => { cancelled = true }
   }, [])
 
   // Load country-border GeoJSON from our API (geoBoundaries, served server-side —
@@ -216,14 +203,19 @@ export function useAtlas() {
     if (loading || !mapRef.current) return
     if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null }
 
+    const worldZoom = atlasWorldZoom(mapRef.current.clientWidth)
+    atlasWorldZoomRef.current = worldZoom
+
     const map = L.map(mapRef.current, {
-      center: [25, 0],
-      zoom: 2,
-      minZoom: 2,
+      center: [ATLAS_WORLD_LAT, 0],
+      zoom: worldZoom,
+      minZoom: worldZoom,
       maxZoom: 10,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
       zoomControl: false,
       attributionControl: false,
-      maxBounds: [[-90, -220], [90, 220]],
+      maxBounds: atlasMaxBounds(worldZoom, worldZoom),
       maxBoundsViscosity: 1.0,
       fadeAnimation: false,
       preferCanvas: true,
@@ -231,39 +223,27 @@ export function useAtlas() {
 
     L.control.zoom({ position: 'bottomright' }).addTo(map)
 
-    const tileUrl = dark
-      ? 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
-
-    const tileLayer = L.tileLayer(tileUrl, {
-      maxZoom: 10,
-      keepBuffer: 25,
-      updateWhenZooming: true,
-      updateWhenIdle: false,
-      tileSize: 256,
-      zoomOffset: 0,
-      crossOrigin: true,
-      referrerPolicy: 'strict-origin-when-cross-origin',
-      className: dark ? 'atlas-dark-tiles' : undefined,
-    } as any).addTo(map)
-    atlasTileLayerRef.current = tileLayer
-
-    // Preload adjacent zoom level tiles
-    const preloadTileLayer = L.tileLayer(tileUrl, {
-      maxZoom: 10,
-      keepBuffer: 10,
-      opacity: 0,
-      tileSize: 256,
-      crossOrigin: true,
-      referrerPolicy: 'strict-origin-when-cross-origin',
-    }).addTo(map)
-    atlasPreloadTileLayerRef.current = preloadTileLayer
-
     // Custom pane for region layer — above overlay (z-index 400)
     map.createPane('regionPane')
     map.getPane('regionPane')!.style.zIndex = '401'
 
     mapInstance.current = map
+
+    const applyPanLimits = () => {
+      const z = map.getZoom()
+      const world = atlasWorldZoomRef.current
+      map.setMaxBounds(atlasMaxBounds(z, world))
+      if (z <= world + 0.08) {
+        const lng = map.getCenter().lng
+        if (Math.abs(map.getCenter().lat - ATLAS_WORLD_LAT) > 0.001) {
+          map.setView([ATLAS_WORLD_LAT, lng], z, { animate: false })
+        }
+      }
+    }
+    applyPanLimits()
+    map.on('zoomend', applyPanLimits)
+    map.on('drag', applyPanLimits)
+    map.on('dragend', applyPanLimits)
 
     // Zoom-based region switching
     map.on('zoomend', () => {
@@ -298,21 +278,8 @@ export function useAtlas() {
     return () => {
       map.remove()
       mapInstance.current = null
-      atlasTileLayerRef.current = null
-      atlasPreloadTileLayerRef.current = null
     }
   }, [loading])
-
-  // Theme changes should not tear down the Atlas map or reload its controls.
-  useEffect(() => {
-    const tileUrl = dark
-      ? 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
-    atlasTileLayerRef.current?.setUrl(tileUrl)
-    atlasPreloadTileLayerRef.current?.setUrl(tileUrl)
-    const container = atlasTileLayerRef.current?.getContainer()
-    container?.classList.toggle('atlas-dark-tiles', dark)
-  }, [dark])
 
   // Render GeoJSON countries
   useEffect(() => {
@@ -347,12 +314,10 @@ export function useAtlas() {
       style: (feature) => {
         const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
         const visited = visitedA3.has(a3)
-        return {
-          fillColor: visited ? colorForCode(a3) : (dark ? '#475569' : '#e2e8f0'),
-          fillOpacity: visited ? 0.7 : (dark ? 0.65 : 0.3),
-          color: dark ? '#94a3b8' : '#cbd5e1',
-          weight: 0.5,
+        if (visited) {
+          return { fillColor: colorForCode(a3), fillOpacity: 0.7, color: dark ? '#94a3b8' : '#cbd5e1', weight: 0.5 }
         }
+        return atlasUnvisitedLandFill(dark)
       },
       onEachFeature: (feature, layer) => {
         const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
@@ -411,7 +376,7 @@ export function useAtlas() {
             })
             layer.on('click', () => handleMarkCountry(countryCode, name))
             layer.on('mouseover', (e) => {
-              e.target.setStyle({ fillOpacity: 0.5, weight: 1.5, color: dark ? '#555' : '#94a3b8' })
+              e.target.setStyle({ fillOpacity: dark ? 1 : 0.5, fillColor: dark ? '#f4f4f5' : '#e2e8f0', weight: 1.5, color: dark ? '#a1a1aa' : '#94a3b8' })
             })
             layer.on('mouseout', (e) => {
               geoLayerRef.current.resetStyle(e.target)
@@ -421,8 +386,9 @@ export function useAtlas() {
       }
     } as L.GeoJSONOptions & { renderer?: L.Renderer }).addTo(mapInstance.current)
 
-    // Restore map view after re-render
-    mapInstance.current.setView(currentCenter, currentZoom, { animate: false })
+    // Restore map view after re-render (keep world-view latitude locked)
+    const lat = currentZoom <= atlasWorldZoomRef.current + 0.08 ? ATLAS_WORLD_LAT : currentCenter.lat
+    mapInstance.current.setView([lat, currentCenter.lng], currentZoom, { animate: false })
   }, [geoData, data, dark])
 
   // Render plugin tint layers (atlasLayerProvider hook) — a dashed wash over the
@@ -546,9 +512,9 @@ export function useAtlas() {
           color: dark ? '#888' : '#64748b',
           weight: 1.2,
         } : {
-          fillColor: dark ? '#94a3b8' : '#000000',
-          fillOpacity: dark ? 0.2 : 0.03,
-          color: dark ? '#94a3b8' : '#94a3b8',
+          ...atlasUnvisitedLandFill(dark),
+          fillOpacity: dark ? 0.88 : 0.03,
+          color: dark ? '#d4d4d8' : '#94a3b8',
           weight: 1,
         }
       },
@@ -817,8 +783,7 @@ export function useAtlas() {
 
   return {
     t, language, navigate, resolveName, dark, loading,
-    mapRef, regionTooltipRef, panelRef, glareRef, borderGlareRef,
-    handlePanelMouseMove, handlePanelMouseLeave,
+    mapRef, regionTooltipRef, panelRef,
     data, setData, stats, countries, selectedCountry, countryDetail,
     geoData,
     loadCountryDetail, handleUnmarkCountry, select_country_from_search,

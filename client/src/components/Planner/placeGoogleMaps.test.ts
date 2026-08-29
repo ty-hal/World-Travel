@@ -1,7 +1,30 @@
 import { describe, it, expect } from 'vitest'
-import { getGoogleMapsUrlForPlace } from './placeGoogleMaps'
+import { getGoogleMapsUrlForCoords, getGoogleMapsUrlForPlace, getGoogleMapsUrlForPoi } from './placeGoogleMaps'
 
 const base = { name: 'Eiffel Tower', lat: 48.8584, lng: 2.2945, google_place_id: null, google_ftid: null } as any
+
+describe('getGoogleMapsUrlForCoords', () => {
+  it('FE-PLACE-GMAPS-000: builds a coords-only search URL', () => {
+    expect(getGoogleMapsUrlForCoords(30.0872706, 31.3347266)).toBe(
+      'https://www.google.com/maps/search/?api=1&query=30.0872706,31.3347266',
+    )
+  })
+})
+
+describe('getGoogleMapsUrlForPoi', () => {
+  it('FE-PLACE-GMAPS-000b: searches the name anchored at lat/lng (RTL-safe)', () => {
+    // Name and coords in separate URL parts — not "name, lat, lng" free text
+    expect(getGoogleMapsUrlForPoi({ name: 'ماكدونالدز', lat: 30.0872706, lng: 31.3347266 })).toBe(
+      'https://www.google.com/maps/search/%D9%85%D8%A7%D9%83%D8%AF%D9%88%D9%86%D8%A7%D9%84%D8%AF%D8%B2/@30.0872706,31.3347266,17z',
+    )
+  })
+
+  it('FE-PLACE-GMAPS-000c: falls back to coords when the name is blank', () => {
+    expect(getGoogleMapsUrlForPoi({ name: '  ', lat: 30.065219, lng: 31.333373 })).toBe(
+      'https://www.google.com/maps/search/?api=1&query=30.065219,31.333373',
+    )
+  })
+})
 
 describe('getGoogleMapsUrlForPlace', () => {
   it('FE-PLACE-GMAPS-001: uses a valid ftid for a precise /place link', () => {

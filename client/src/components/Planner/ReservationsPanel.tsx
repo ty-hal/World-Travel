@@ -48,6 +48,7 @@ const TYPE_OPTIONS = [
   { value: 'transport_other', labelKey: 'reservations.type.transport_other', Icon: Route, color: '#6b7280' },
   { value: 'event',       labelKey: 'reservations.type.event',       Icon: Ticket, color: '#f59e0b' },
   { value: 'tour',        labelKey: 'reservations.type.tour',        Icon: Users, color: '#10b981' },
+  { value: 'activity',    labelKey: 'reservations.type.activity',    Icon: Ticket, color: '#f59e0b' },
   { value: 'other',       labelKey: 'reservations.type.other',       Icon: FileText, color: '#6b7280' },
 ]
 
@@ -132,6 +133,8 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
   const endDay = (isHotel && r.accommodation_end_day_id) ? days.find(d => d.id === r.accommodation_end_day_id)
     : r.end_day_id ? days.find(d => d.id === r.end_day_id)
     : undefined
+  const dayDateStr = startDay?.date?.slice(0, 10)
+  const skipDupDate = isHotel && !!startDay && hasDate && !!dayDateStr && startDt.date === dayDateStr
   const DayLabel = ({ day }: { day: typeof startDay }) => {
     if (!day) return null
     const name = day.title || t('dayplan.dayN', { n: day.day_number })
@@ -204,10 +207,11 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
             </span>
           ) : null}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: 1, justifyContent: 'flex-end' }}>
           <span className="text-content" style={{
             fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 600, marginRight: 6,
-            maxWidth: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            minWidth: 0, flex: 1, textAlign: 'right',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{r.title}</span>
           {canEdit && (
             <button onClick={() => onEdit(r)} title={t('common.edit')} className="bg-transparent text-content-faint" style={{
@@ -251,7 +255,7 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
         {/* Date / Time row — hidden for a hotel linked to an accommodation: its stay
             already shows as the day-range label above, and a reservation_time stamped
             on the auto-created reservation would otherwise duplicate it (#1383). */}
-        {(hasDate || hasTime) && !(isHotel && (r.accommodation_start_day_id || r.accommodation_end_day_id)) && (
+        {(hasDate || hasTime) && !(isHotel && (r.accommodation_start_day_id || r.accommodation_end_day_id)) && !skipDupDate && (
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: hasDate && hasTime ? '1fr 1fr' : '1fr' }}>
             {hasDate && (
               <div>

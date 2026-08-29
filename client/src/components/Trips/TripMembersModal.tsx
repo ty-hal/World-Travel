@@ -444,7 +444,7 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle, o
         </div>
 
         {/* Add member dropdown */}
-        {canManageMembers && <div>
+        {canManageMembers && availableUsers.length > 0 && <div>
           <label className="text-content-secondary" style={{ display: 'block', fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 600, marginBottom: 8 }}>
             {t('members.inviteUser')}
           </label>
@@ -477,10 +477,11 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle, o
               <UserPlus size={13} /> {adding ? '…' : t('members.invite')}
             </button>
           </div>
-          {availableUsers.length === 0 && allUsers.length > 0 && canManageMembers && (
-            <p className="text-content-faint" style={{ fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))', margin: '6px 0 0' }}>{t('members.allHaveAccess')}</p>
-          )}
         </div>}
+
+        {canManageMembers && availableUsers.length === 0 && allUsers.length > 0 && (
+          <p className="text-content-faint" style={{ fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))', margin: 0 }}>{t('members.allHaveAccess')}</p>
+        )}
 
         {/* Members list */}
         <div>

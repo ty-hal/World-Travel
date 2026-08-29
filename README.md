@@ -16,6 +16,8 @@
 
 A self-hosted, real-time collaborative travel planner — with maps, budgets, packing lists, a journal, and AI built in.
 
+> **Workspace commands:** Standard `make start` / `make test` / etc. — see [../AGENTS.md](../AGENTS.md).
+
 <br />
 
 <a href="https://demo.liketrek.com"><img alt="Demo" src="https://img.shields.io/badge/Demo-try-111827?style=for-the-badge" /></a>

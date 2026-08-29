@@ -15,7 +15,6 @@ import {
   tripsApi,
   placesApi,
   adminApi,
-  journeyApi,
   filesApi,
   reservationsApi,
   collabApi,
@@ -42,13 +41,10 @@ describe('every multipart upload disables the global request timeout', () => {
     ['FE-API-UPLOAD-003', 'placesApi.importGpx (10 MB)', () => placesApi.importGpx(7, file()), '/trips/7/places/import/gpx'],
     ['FE-API-UPLOAD-004', 'placesApi.importMapFile (10 MB)', () => placesApi.importMapFile(7, file()), '/trips/7/places/import/map'],
     ['FE-API-UPLOAD-005', 'adminApi.pluginUpload (50 MB)', () => adminApi.pluginUpload(file()), '/admin/plugins/upload'],
-    ['FE-API-UPLOAD-006', 'journeyApi.uploadCover (20 MB)', () => journeyApi.uploadCover(7, fd()), '/journeys/7/cover'],
-    ['FE-API-UPLOAD-007', 'journeyApi.uploadPhotos (20 MB)', () => journeyApi.uploadPhotos(7, fd()), '/journeys/entries/7/photos'],
-    ['FE-API-UPLOAD-008', 'journeyApi.uploadGalleryVideo (500 MB)', () => journeyApi.uploadGalleryVideo(7, fd()), '/journeys/7/gallery/video'],
-    ['FE-API-UPLOAD-009', 'filesApi.upload (500 MB)', () => filesApi.upload(7, fd()), '/trips/7/files'],
-    ['FE-API-UPLOAD-010', 'collabApi.uploadNoteFile (50 MB)', () => collabApi.uploadNoteFile(7, 3, fd()), '/trips/7/collab/notes/3/files'],
-    ['FE-API-UPLOAD-011', 'backupApi.uploadRestore (500 MB)', () => backupApi.uploadRestore(file()), '/backup/upload-restore'],
-    ['FE-API-UPLOAD-012', 'collectionsApi.uploadCover (20 MB)', () => collectionsApi.uploadCover(7, fd()), '/addons/collections/7/cover'],
+    ['FE-API-UPLOAD-006', 'filesApi.upload (500 MB)', () => filesApi.upload(7, fd()), '/trips/7/files'],
+    ['FE-API-UPLOAD-007', 'collabApi.uploadNoteFile (50 MB)', () => collabApi.uploadNoteFile(7, 3, fd()), '/trips/7/collab/notes/3/files'],
+    ['FE-API-UPLOAD-008', 'backupApi.uploadRestore (500 MB)', () => backupApi.uploadRestore(file()), '/backup/upload-restore'],
+    ['FE-API-UPLOAD-009', 'collectionsApi.uploadCover (20 MB)', () => collectionsApi.uploadCover(7, fd()), '/addons/collections/7/cover'],
   ]
 
   for (const [id, desc, invoke, url] of cases) {

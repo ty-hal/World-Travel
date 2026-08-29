@@ -13,7 +13,6 @@ import dayplan from './dayplan';
 import files from './files';
 import help from './help';
 import inspector from './inspector';
-import journey from './journey';
 import login from './login';
 import map from './map';
 import members from './members';
@@ -80,7 +79,6 @@ const locale = {
   ...undo,
   ...todo,
   ...notifications,
-  ...journey,
   ...notif,
   ...oauth,
   ...system_notice,

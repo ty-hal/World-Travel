@@ -17,6 +17,7 @@ import { POI_CATEGORY_BY_KEY, type Poi } from './poiCategories'
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../constants/mapDefaults'
 import { computeMapViewport, TILE_SIZE_RASTER, type ViewportPadding } from '../../utils/mapViewport'
 import { getPinColor } from './pinColors'
+import { OPENSTREETMAP_TILE_URL, resolveLeafletTileUrl } from './leafletTiles'
 
 function categoryIconSvg(iconName: string | null | undefined, size: number): string {
   const IconComponent = (iconName && CATEGORY_ICON_MAP[iconName]) || CATEGORY_ICON_MAP['MapPin']
@@ -453,7 +454,7 @@ export const MapView = memo(function MapView({
   onMapContextMenu = null,
   center = DEFAULT_MAP_CENTER,
   zoom = DEFAULT_MAP_ZOOM,
-  tileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  tileUrl = OPENSTREETMAP_TILE_URL,
   fitKey = 0,
   dayOrderMap = {},
   leftWidth = 0,
@@ -470,6 +471,7 @@ export const MapView = memo(function MapView({
   onViewportChange,
   tripId,
 }: any) {
+  const resolvedTileUrl = resolveLeafletTileUrl(tileUrl)
   const poiMarkers = useMemo(() => (pois as Poi[]).map((poi: Poi) => (
     <Marker
       key={`poi-${poi.osm_id}`}
@@ -696,7 +698,7 @@ export const MapView = memo(function MapView({
       className="w-full h-full bg-[#e5e7eb]"
     >
       <TileLayer
-        url={tileUrl}
+        url={resolvedTileUrl}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         maxZoom={19}
         keepBuffer={8}

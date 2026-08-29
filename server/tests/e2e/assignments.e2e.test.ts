@@ -26,9 +26,6 @@ vi.mock('../../src/db/database', () => ({
 }));
 vi.mock('../../src/websocket', () => ({ broadcast: vi.fn() }));
 
-const { reconcileTripSkeletons } = vi.hoisted(() => ({ reconcileTripSkeletons: vi.fn() }));
-vi.mock('../../src/services/journeyService', () => ({ reconcileTripSkeletons }));
-
 const { checkPermission } = vi.hoisted(() => ({ checkPermission: vi.fn() }));
 vi.mock('../../src/services/permissions', () => ({ checkPermission }));
 
@@ -88,29 +85,24 @@ describe('Assignments e2e (real auth guard + temp SQLite)', () => {
   });
 
   it('201 create, 404 place', async () => {
-    reconcileTripSkeletons.mockClear();
     const ok = await request(server).post('/api/trips/5/days/3/assignments').set('Cookie', sessionCookie(1)).send({ place_id: 2 });
     expect(ok.status).toBe(201);
     expect(ok.body).toEqual({ assignment: { id: 9 } });
-    expect(reconcileTripSkeletons).toHaveBeenCalledWith(5, undefined);
     asg.placeExists.mockReturnValue(false);
     const miss = await request(server).post('/api/trips/5/days/3/assignments').set('Cookie', sessionCookie(1)).send({ place_id: 99 });
     expect(miss.status).toBe(404);
     expect(miss.body).toEqual({ error: 'Place not found' });
   });
 
-  it('200 delete assignment reconciles journey skeletons', async () => {
-    reconcileTripSkeletons.mockClear();
+  it('200 delete assignment', async () => {
     asg.assignmentExistsInDay.mockReturnValue(true);
     const res = await request(server).delete('/api/trips/5/days/3/assignments/9').set('Cookie', sessionCookie(1));
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true });
     expect(asg.deleteAssignment).toHaveBeenCalledWith('9');
-    expect(reconcileTripSkeletons).toHaveBeenCalledWith(5, undefined);
   });
 
-  it('200 move assignment reconciles journey skeletons', async () => {
-    reconcileTripSkeletons.mockClear();
+  it('200 move assignment', async () => {
     asg.getAssignmentForTrip.mockReturnValue({ day_id: 3 });
     asg.moveAssignment.mockReturnValue({ assignment: { id: 9 }, oldDayId: 3 });
     const res = await request(server)
@@ -118,11 +110,9 @@ describe('Assignments e2e (real auth guard + temp SQLite)', () => {
       .set('Cookie', sessionCookie(1))
       .send({ new_day_id: 4, order_index: 0 });
     expect(res.status).toBe(200);
-    expect(reconcileTripSkeletons).toHaveBeenCalledWith(5, undefined);
   });
 
-  it('200 update time reconciles journey skeletons', async () => {
-    reconcileTripSkeletons.mockClear();
+  it('200 update time', async () => {
     asg.getAssignmentForTrip.mockReturnValue({ id: 9 });
     asg.updateTime.mockReturnValue({ id: 9 });
     const res = await request(server)
@@ -130,7 +120,6 @@ describe('Assignments e2e (real auth guard + temp SQLite)', () => {
       .set('Cookie', sessionCookie(1))
       .send({ place_time: '09:00', end_time: null });
     expect(res.status).toBe(200);
-    expect(reconcileTripSkeletons).toHaveBeenCalledWith(5, undefined);
   });
 
   it('200 participants (access-only)', async () => {

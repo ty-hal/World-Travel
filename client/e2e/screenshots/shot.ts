@@ -1,5 +1,5 @@
 import { test as base, expect, type Page, type Locator } from '@playwright/test'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -55,6 +55,13 @@ async function hideDevOnlyUi(page: Page): Promise<void> {
 }
 
 export { expect }
+
+/** Read seed ids at runtime — not module load — so collection works before seed project runs. */
+export function loadSeed(): { tripId: number; collectionId?: number } {
+  return JSON.parse(
+    readFileSync(path.join(process.cwd(), 'e2e', '.tmp', 'seed.json'), 'utf8'),
+  )
+}
 
 export class Shot {
   constructor(private readonly page: Page) {}

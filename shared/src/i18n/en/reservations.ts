@@ -60,6 +60,7 @@ const reservations: TranslationStrings = {
   'reservations.type.cruise': 'Cruise',
   'reservations.type.event': 'Event',
   'reservations.type.tour': 'Tour',
+  'reservations.type.activity': 'Activity',
   'reservations.type.other': 'Other',
   'reservations.type.bus': 'Bus',
   'reservations.type.ferry': 'Ferry',

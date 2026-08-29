@@ -22,6 +22,7 @@ const vacay: TranslationStrings = {
   'vacay.color': 'Color',
   'vacay.add': 'Add',
   'vacay.legend': 'Legend',
+  'vacay.plannedDays': 'Planned vacation',
   'vacay.publicHoliday': 'Public Holiday',
   'vacay.companyHoliday': 'Company Holiday',
   'vacay.weekend': 'Weekend',

@@ -3982,6 +3982,19 @@ function runMigrations(db: Database.Database): void {
       CREATE INDEX IF NOT EXISTS idx_trip_change_events_trip_created
         ON trip_change_events(trip_id, created_at DESC);
     `),
+    () => db.exec(`
+      DROP TABLE IF EXISTS journey_entry_photos;
+      DROP TABLE IF EXISTS journey_share_tokens;
+      DROP TABLE IF EXISTS journey_photos;
+      DROP TABLE IF EXISTS journey_entries;
+      DROP TABLE IF EXISTS journey_contributors;
+      DROP TABLE IF EXISTS journey_trips;
+      DROP TABLE IF EXISTS journey_checkins;
+      DROP TABLE IF EXISTS journey_location_trail;
+      DROP TABLE IF EXISTS journey_members;
+      DROP TABLE IF EXISTS journeys;
+      DELETE FROM addons WHERE id = 'journey';
+    `),
   ];
 
   if (currentVersion < migrations.length) {

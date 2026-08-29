@@ -1,6 +1,4 @@
-import { test, clearNotices } from './shot'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
+import { test, clearNotices, loadSeed } from './shot'
 
 /**
  * Trip-planner tabs and dialogs.
@@ -11,12 +9,8 @@ import path from 'node:path'
  * current wiki ended up with screenshots the text contradicts.
  */
 
-const seed = JSON.parse(
-  readFileSync(path.join(process.cwd(), 'e2e', '.tmp', 'seed.json'), 'utf8'),
-) as { tripId: number }
-
 test.beforeEach(async ({ page }) => {
-  await page.goto(`/trips/${seed.tripId}`)
+  await page.goto(`/trips/${loadSeed().tripId}`)
   await clearNotices(page)
 })
 

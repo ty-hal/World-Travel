@@ -1,36 +1,11 @@
 import { test, expect, devices } from '@playwright/test'
-import { dismissSystemNotices } from './helpers'
+import { createTrip } from './helpers'
 
-// Tablet regression guard for #1432 — the places list must scroll under a touch swipe.
-//
-// A tablet is a coarse-pointer device at a *desktop* viewport width, so the width-based
-// "is this mobile" check that 3.2.1 shipped left `draggable` armed on iPad: the swipe
-// became an HTML5 drag and raised the drop-to-import overlay instead of scrolling. Drag
-// is now gated on `(pointer: coarse)` (useIsTouch), and only a real device context proves
-// it — a jsdom unit test cannot express "coarse pointer at 834px".
-//
-// Needs WebKit (`npx playwright install webkit`, plus libmanette-0.2-0 and libwoff1 on
-// Debian/Ubuntu). WebKit is the right engine here, not a nicety: every browser on iPadOS
-// is WebKit underneath, which is why the reporter saw this in all three they tried.
+// Tablet regression guard for #1432 — needs WebKit (iPad Pro 11 device profile).
 test.use({ ...devices['iPad Pro 11'] })
 
 test('#1432 iPad: places list is scrollable, not draggable', async ({ page }) => {
-  await page.goto('/dashboard')
-
-  await dismissSystemNotices(page)
-
-  await page.locator('.add-trip-card').click()
-  const createBtn = page.getByRole('button', { name: 'Create New Trip' })
-  await expect(createBtn).toBeVisible()
-  const title = `iPad 1432 ${Date.now()}`
-  await page.getByPlaceholder('e.g. Summer in Japan').fill(title)
-  await createBtn.click()
-
-  await page.getByText(title).first().click()
-  await expect(page).toHaveURL(/\/trips\/\d+/)
-  await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 20_000 })
-
-  const tripId = page.url().match(/\/trips\/(\d+)/)![1]
+  const { tripId } = await createTrip(page)
 
   // Seed enough places for the list to overflow and actually need scrolling.
   for (let i = 1; i <= 25; i++) {

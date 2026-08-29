@@ -131,9 +131,9 @@ describe('scaffold + validate dependencies', () => {
 describe('validateManifest dependency rules', () => {
   const base = { id: 'my-plug', name: 'My Plug', version: '1.0.0', type: 'integration', permissions: ['db:own'], trek: '>=3.2.0 <4.0.0' };
   it('accepts valid requiredAddons + pluginDependencies', () => {
-    const r = validateManifest({ ...base, requiredAddons: ['budget', 'journey'], pluginDependencies: [{ id: 'koffi', version: '>=1.0.0 <2.0.0' }] });
+    const r = validateManifest({ ...base, requiredAddons: ['budget', 'atlas'], pluginDependencies: [{ id: 'koffi', version: '>=1.0.0 <2.0.0' }] });
     expect(r.ok).toBe(true);
-    expect(r.manifest?.requiredAddons).toEqual(['budget', 'journey']);
+    expect(r.manifest?.requiredAddons).toEqual(['budget', 'atlas']);
     expect(r.manifest?.pluginDependencies).toEqual([{ id: 'koffi', version: '>=1.0.0 <2.0.0' }]);
   });
   it('rejects a bad addon id, bad dep range, self-dependency, and duplicates', () => {

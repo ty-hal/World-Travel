@@ -94,7 +94,6 @@ export class PlacesController {
     }
     const place = this.places.create(tripId, body as never);
     this.places.broadcast(tripId, 'place:created', { place }, socketId);
-    this.places.onCreated(tripId, place.id);
     return { place };
   }
 
@@ -218,7 +217,6 @@ export class PlacesController {
     if (ids.length === 0) {
       return { deleted: [], count: 0 };
     }
-    for (const id of ids) this.places.onDeleted(id);
     const deleted = this.places.removeMany(tripId, ids);
     for (const id of deleted) {
       this.places.broadcast(tripId, 'place:deleted', { placeId: id }, socketId);
@@ -251,7 +249,6 @@ export class PlacesController {
     const updated = this.places.updateMany(tripId, ids, { category_id: body.category_id as number | null });
     for (const place of updated) {
       this.places.broadcast(tripId, 'place:updated', { place }, socketId);
-      this.places.onUpdated(place.id);
     }
     return { updated: updated.map((p) => p.id), count: updated.length };
   }
@@ -305,7 +302,6 @@ export class PlacesController {
     }
     const place = result;
     this.places.broadcast(tripId, 'place:updated', { place }, socketId);
-    this.places.onUpdated(place.id);
     return { place };
   }
 
@@ -313,7 +309,6 @@ export class PlacesController {
   remove(@CurrentUser() user: User, @Param('tripId') tripId: string, @Param('id') id: string, @Headers('x-socket-id') socketId?: string) {
     const trip = this.requireTrip(tripId, user);
     this.requireEdit(trip, user);
-    this.places.onDeleted(Number(id)); // sync before actual delete
     if (!this.places.remove(tripId, id)) {
       throw new HttpException({ error: 'Place not found' }, 404);
     }

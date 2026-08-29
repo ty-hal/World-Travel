@@ -6,7 +6,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useAddonStore } from '../../store/addonStore'
 import { usePluginStore } from '../../store/pluginStore'
 import { useTranslation } from '../../i18n'
-import { LogOut, ChevronDown, Shield, ArrowLeft, Users, Briefcase, BookOpen } from 'lucide-react'
+import { LogOut, ChevronDown, Shield, ArrowLeft, Users, Briefcase, BookOpen, Settings } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 import InAppNotificationBell from './InAppNotificationBell.tsx'
 import { resolvePluginIcon } from '../shared/PluginIcon'
@@ -14,7 +14,6 @@ import AnimatedCalendarDaysIcon from '../shared/AnimatedCalendarDaysIcon'
 import AnimatedGlobeIcon from '../shared/AnimatedGlobeIcon'
 import AnimatedCompassIcon from '../shared/AnimatedCompassIcon'
 import AnimatedBookmarkIcon from '../shared/AnimatedBookmarkIcon'
-import AnimatedSettingsIcon from '../shared/AnimatedSettingsIcon'
 import AnimatedSunIcon from '../shared/AnimatedSunIcon'
 import AnimatedMoonIcon from '../shared/AnimatedMoonIcon'
 
@@ -111,11 +110,11 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
   return (
     <nav style={{
       background: dark
-        ? (scrolled ? 'rgba(9,9,11,0.78)' : 'rgba(9,9,11,0.95)')
+        ? (scrolled ? 'rgba(20, 24, 32, 0.82)' : 'rgba(18, 22, 30, 0.94)')
         : (scrolled ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.95)'),
       backdropFilter: scrolled ? 'blur(28px) saturate(180%)' : 'blur(20px)',
       WebkitBackdropFilter: scrolled ? 'blur(28px) saturate(180%)' : 'blur(20px)',
-      borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
+      borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.11)' : 'rgba(0,0,0,0.07)'}`,
       boxShadow: scrolled
         ? (dark ? '0 4px 24px rgba(0,0,0,0.35)' : '0 4px 24px rgba(0,0,0,0.08)')
         : (dark ? '0 1px 12px rgba(0,0,0,0.2)' : '0 1px 12px rgba(0,0,0,0.05)'),
@@ -282,7 +281,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
                     className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-content-secondary"
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <AnimatedSettingsIcon size={16} className="w-4 h-4" />
+                    <Settings className="w-4 h-4" />
                     {t('nav.settings')}
                   </Link>
 

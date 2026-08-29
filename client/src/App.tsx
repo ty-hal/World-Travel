@@ -11,16 +11,12 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import DashboardPage from './pages/DashboardPage'
 import TripPlannerPage from './pages/TripPlannerPage'
-import FilesPage from './pages/FilesPage'
 import AdminPage from './pages/AdminPage'
 import SettingsPage from './pages/SettingsPage'
 import VacayPage from './pages/VacayPage'
 import HelpPage from './pages/HelpPage'
 import AtlasPage from './pages/AtlasPage'
-import JourneyPage from './pages/JourneyPage'
-import JourneyDetailPage from './pages/JourneyDetailPage'
 import CollectionsPage from './pages/CollectionsPage'
-import JourneyPublicPage from './pages/JourneyPublicPage'
 import SharedTripPage from './pages/SharedTripPage'
 import JoinTripPage from './pages/JoinTripPage'
 import InAppNotificationsPage from './pages/InAppNotificationsPage.tsx'
@@ -115,6 +111,10 @@ function DevLoginRedirect() {
   return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sm text-slate-500">{error || 'Signing in to local development account…'}</div>
 }
 
+/** Playwright runs Vite in dev mode but needs the real login form, not auto dev-login. */
+const e2eMode = import.meta.env.VITE_E2E === '1' || import.meta.env.VITE_E2E === 'true'
+const useDevAutoLogin = import.meta.env.DEV && !e2eMode
+
 export default function App() {
   const { loadUser, devLogin, isAuthenticated, demoMode, setDemoMode, setDevMode, setIsPrerelease, setAppVersion, setHasMapsKey, setServerTimezone, setAppRequireMfa, setTripRemindersEnabled, setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled } = useAuthStore()
   const { loadSettings } = useSettingsStore()
@@ -122,7 +122,7 @@ export default function App() {
   const { loadPlugins } = usePluginStore()
 
   useEffect(() => {
-    if (import.meta.env.DEV && !location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/')) {
+    if (useDevAutoLogin && !location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/')) {
       devLogin().catch(() => loadUser())
     } else if (!location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/') && !location.pathname.startsWith('/login')) {
       // If the persist snapshot already has an authenticated user, validate
@@ -222,10 +222,9 @@ export default function App() {
       <OfflineBanner />
       <Routes>
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/login" element={import.meta.env.DEV ? <DevLoginRedirect /> : <LoginPage />} />
+        <Route path="/login" element={useDevAutoLogin ? <DevLoginRedirect /> : <LoginPage />} />
         <Route path="/shared/:token" element={<SharedTripPage />} />
-        <Route path="/public/journey/:token" element={<JourneyPublicPage />} />
-        <Route path="/register" element={import.meta.env.DEV ? <DevLoginRedirect /> : <LoginPage />} />
+        <Route path="/register" element={useDevAutoLogin ? <DevLoginRedirect /> : <LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* OAuth 2.1 consent page — intentionally outside ProtectedRoute */}
@@ -281,14 +280,6 @@ export default function App() {
           }
         />
         <Route
-          path="/trips/:id/files"
-          element={
-            <ProtectedRoute>
-              <FilesPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/admin"
           element={
             <ProtectedRoute adminRequired>
@@ -325,22 +316,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AtlasPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/journey"
-          element={
-            <ProtectedRoute addonId="journey">
-              <JourneyPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/journey/:id"
-          element={
-            <ProtectedRoute addonId="journey">
-              <JourneyDetailPage />
             </ProtectedRoute>
           }
         />

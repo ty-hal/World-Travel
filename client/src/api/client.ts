@@ -9,9 +9,6 @@ import {
   mapsPlacePhotoResultSchema, mapsReverseResultSchema, mapsResolveUrlResultSchema,
   type NotificationRespondRequest,
   type SettingUpsertRequest, type SettingsBulkRequest,
-  type JourneyCreateRequest, type JourneyAddTripRequest,
-  type JourneyReorderEntriesRequest, type JourneyProviderPhotosRequest,
-  type JourneyShareLinkRequest,
   type RegisterRequest, type LoginRequest, type ForgotPasswordRequest,
   type ResetPasswordRequest, type ChangePasswordRequest,
   type MfaVerifyLoginRequest, type MfaEnableRequest, type McpTokenCreateRequest,
@@ -753,60 +750,6 @@ export const airtrailApi = {
     apiClient.post(`/trips/${tripId}/reservations/import/airtrail`, connections?.length ? { flightIds, connections } : { flightIds }).then(r => r.data),
 }
 
-export const journeyApi = {
-  list: () => apiClient.get('/journeys').then(r => r.data),
-  create: (data: JourneyCreateRequest) => apiClient.post('/journeys', data).then(r => r.data),
-  get: (id: number) => apiClient.get(`/journeys/${id}`).then(r => r.data),
-  update: (id: number, data: Record<string, unknown>) => apiClient.patch(`/journeys/${id}`, data).then(r => r.data),
-  delete: (id: number) => apiClient.delete(`/journeys/${id}`).then(r => r.data),
-
-  suggestions: () => apiClient.get('/journeys/suggestions').then(r => r.data),
-  availableTrips: () => apiClient.get('/journeys/available-trips').then(r => r.data),
-
-  // Trips (sync sources)
-  addTrip: (id: number, tripId: number) => apiClient.post(`/journeys/${id}/trips`, { trip_id: tripId } satisfies JourneyAddTripRequest).then(r => r.data),
-  removeTrip: (id: number, tripId: number) => apiClient.delete(`/journeys/${id}/trips/${tripId}`).then(r => r.data),
-
-  // Entries
-  listEntries: (id: number) => apiClient.get(`/journeys/${id}/entries`).then(r => r.data),
-  createEntry: (id: number, data: Record<string, unknown>) => apiClient.post(`/journeys/${id}/entries`, data).then(r => r.data),
-  updateEntry: (entryId: number, data: Record<string, unknown>) => apiClient.patch(`/journeys/entries/${entryId}`, data).then(r => r.data),
-  deleteEntry: (entryId: number) => apiClient.delete(`/journeys/entries/${entryId}`).then(r => r.data),
-  reorderEntries: (journeyId: number, orderedIds: number[]) => apiClient.put(`/journeys/${journeyId}/entries/reorder`, { orderedIds } satisfies JourneyReorderEntriesRequest).then(r => r.data),
-
-  // Photos
-  uploadPhotos: (entryId: number, formData: FormData, opts?: UploadOptions) =>
-    postMultipart(`/journeys/entries/${entryId}/photos`, formData, opts),
-  uploadGalleryPhotos: (journeyId: number, formData: FormData, opts?: UploadOptions) =>
-    postMultipart(`/journeys/${journeyId}/gallery/photos`, formData, opts),
-  uploadGalleryVideo: (journeyId: number, formData: FormData, opts?: UploadOptions) =>
-    postMultipart(`/journeys/${journeyId}/gallery/video`, formData, opts),
-  addProviderPhotosToGallery: (journeyId: number, provider: string, assetIds: string[], passphrase?: string, mediaTypes?: string[]) => apiClient.post(`/journeys/${journeyId}/gallery/provider-photos`, { provider, asset_ids: assetIds, ...(passphrase ? { passphrase } : {}), ...(mediaTypes ? { media_types: mediaTypes } : {}) } satisfies JourneyProviderPhotosRequest).then(r => r.data),
-  addProviderPhoto: (entryId: number, provider: string, assetId: string, caption?: string, passphrase?: string) => apiClient.post(`/journeys/entries/${entryId}/provider-photos`, { provider, asset_id: assetId, caption, ...(passphrase ? { passphrase } : {}) }).then(r => r.data),
-  addProviderPhotos: (entryId: number, provider: string, assetIds: string[], caption?: string, passphrase?: string, mediaTypes?: string[]) => apiClient.post(`/journeys/entries/${entryId}/provider-photos`, { provider, asset_ids: assetIds, caption, ...(passphrase ? { passphrase } : {}), ...(mediaTypes ? { media_types: mediaTypes } : {}) }).then(r => r.data),
-  linkPhoto: (entryId: number, journeyPhotoId: number) => apiClient.post(`/journeys/entries/${entryId}/link-photo`, { journey_photo_id: journeyPhotoId }).then(r => r.data),
-  unlinkPhoto: (entryId: number, journeyPhotoId: number) => apiClient.delete(`/journeys/entries/${entryId}/photos/${journeyPhotoId}`).then(r => r.data),
-  deleteGalleryPhoto: (journeyId: number, journeyPhotoId: number) => apiClient.delete(`/journeys/${journeyId}/gallery/${journeyPhotoId}`).then(r => r.data),
-  updatePhoto: (photoId: number, data: Record<string, unknown>) => apiClient.patch(`/journeys/photos/${photoId}`, data).then(r => r.data),
-  deletePhoto: (photoId: number) => apiClient.delete(`/journeys/photos/${photoId}`).then(r => r.data),
-
-  // Cover
-  uploadCover: (id: number, formData: FormData) => postMultipart(`/journeys/${id}/cover`, formData),
-
-  // Contributors
-  addContributor: (id: number, userId: number, role: string) => apiClient.post(`/journeys/${id}/contributors`, { user_id: userId, role }).then(r => r.data),
-  updateContributor: (id: number, userId: number, role: string) => apiClient.patch(`/journeys/${id}/contributors/${userId}`, { role }).then(r => r.data),
-  removeContributor: (id: number, userId: number) => apiClient.delete(`/journeys/${id}/contributors/${userId}`).then(r => r.data),
-
-  // Preferences
-  updatePreferences: (id: number, data: { hide_skeletons?: boolean }) => apiClient.patch(`/journeys/${id}/preferences`, data).then(r => r.data),
-
-  // Share
-  getShareLink: (id: number) => apiClient.get(`/journeys/${id}/share-link`).then(r => r.data),
-  createShareLink: (id: number, perms: JourneyShareLinkRequest) => apiClient.post(`/journeys/${id}/share-link`, perms).then(r => r.data),
-  deleteShareLink: (id: number) => apiClient.delete(`/journeys/${id}/share-link`).then(r => r.data),
-  getPublicJourney: (token: string) => apiClient.get(`/public/journey/${token}`).then(r => r.data),
-}
 
 export const mapsApi = {
   search: (query: string, lang?: string) => apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query }).then(r => checkInDev(mapsSearchResultSchema, r.data, 'maps.search')),

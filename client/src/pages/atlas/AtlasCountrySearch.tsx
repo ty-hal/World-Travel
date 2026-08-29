@@ -19,8 +19,7 @@ interface AtlasCountrySearchProps {
 }
 
 // The floating country search box that overlays the globe (search input + results
-// dropdown). Extracted from AtlasPage as a presentational sibling — behaviour and
-// markup are byte-identical to the inline version it replaced.
+// dropdown). Solid elevated chrome — map tiles must not bleed through labels.
 export default function AtlasCountrySearch({
   dark, t, search, setSearch, results, setResults, open, setOpen, options, onSelect,
 }: AtlasCountrySearchProps): React.ReactElement {
@@ -30,19 +29,14 @@ export default function AtlasCountrySearch({
       style={{ top: 'calc(env(safe-area-inset-top, 0px) + 14px)', left: 0, right: 0, pointerEvents: 'none' }}
     >
       <div style={{ width: 'min(520px, calc(100vw - 28px))', pointerEvents: 'auto' }}>
-        <div style={{
+        <div className="atlas-chrome" style={{
           display: 'flex',
           alignItems: 'center',
           gap: 10,
           padding: '10px 12px',
-          borderRadius: 16,
-          border: '1px solid ' + (dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'),
-          background: dark ? 'rgba(10,10,15,0.55)' : 'rgba(255,255,255,0.55)',
-          backdropFilter: 'blur(18px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(18px) saturate(180%)',
-          boxShadow: dark ? '0 8px 26px rgba(0,0,0,0.25)' : '0 8px 26px rgba(0,0,0,0.10)',
+          borderRadius: 14,
         }}>
-          <AnimatedSearchIcon size={16} className="text-content-faint" style={{ flexShrink: 0 }} />
+          <AnimatedSearchIcon size={16} className="text-content-muted" style={{ flexShrink: 0 }} />
           <input
             value={search}
             onChange={(e) => {
@@ -93,7 +87,7 @@ export default function AtlasCountrySearch({
                 setResults([])
                 setOpen(false)
               }}
-              className="text-content-faint"
+              className="text-content-muted"
               style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}
               aria-label="Clear"
             >
@@ -104,15 +98,11 @@ export default function AtlasCountrySearch({
 
         {open && results.length > 0 && (
           <div
+            className="atlas-chrome"
             style={{
               marginTop: 8,
               borderRadius: 14,
               overflow: 'hidden',
-              border: '1px solid ' + (dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'),
-              background: dark ? 'rgba(10,10,15,0.75)' : 'rgba(255,255,255,0.75)',
-              backdropFilter: 'blur(18px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(18px) saturate(180%)',
-              boxShadow: dark ? '0 12px 30px rgba(0,0,0,0.35)' : '0 12px 30px rgba(0,0,0,0.12)',
             }}
             onMouseLeave={() => setOpen(false)}
           >
@@ -120,10 +110,10 @@ export default function AtlasCountrySearch({
               <button
                 key={r.code}
                 onClick={() => onSelect(r.code)}
+                className="atlas-search-row"
                 style={{
                   width: '100%',
                   border: 'none',
-                  background: 'transparent',
                   cursor: 'pointer',
                   padding: '10px 12px',
                   display: 'flex',
@@ -131,10 +121,7 @@ export default function AtlasCountrySearch({
                   justifyContent: 'space-between',
                   fontFamily: 'inherit',
                   textAlign: 'left',
-                  borderBottom: '1px solid ' + (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'),
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <img src={`https://flagcdn.com/w40/${r.code.toLowerCase()}.png`} alt={r.code} style={{ width: 28, height: 20, borderRadius: 4, objectFit: 'cover' }} />
@@ -142,7 +129,7 @@ export default function AtlasCountrySearch({
                     {r.label}
                   </span>
                 </span>
-                <ChevronRight size={16} className="text-content-faint" style={{ flexShrink: 0 }} />
+                <ChevronRight size={16} className="text-content-muted" style={{ flexShrink: 0 }} />
               </button>
             ))}
           </div>

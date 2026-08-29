@@ -1,18 +1,18 @@
 /**
- * Vibrant two-stop cover gradients — the fallback backdrop for any entity that
+ * Muted two-stop cover gradients — the fallback backdrop for any entity that
  * has no photo yet (a trip, a saved place). Picked by a stable numeric id so a
- * given entity always keeps the same colour. Mirrors the dashboard trip-card
- * palette so collection cards feel of a piece with the dashboard.
+ * given entity always keeps the same colour. Tuned for dashboard/collections:
+ * desaturated enough to sit on dark UI without neon glare.
  */
 export const GRADIENTS = [
-  'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-  'linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%)',
-  'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+  'linear-gradient(135deg, #5b6eae 0%, #6b5b95 100%)',
+  'linear-gradient(135deg, #9b7bb8 0%, #b87d8a 100%)',
+  'linear-gradient(135deg, #5a9eb8 0%, #6b8cae 100%)',
+  'linear-gradient(135deg, #5a9a7a 0%, #6a9a8a 100%)',
+  'linear-gradient(135deg, #b8906a 0%, #a88a6a 100%)',
+  'linear-gradient(135deg, #8a8aae 0%, #a89ab8 100%)',
+  'linear-gradient(135deg, #a89090 0%, #b8a8a0 100%)',
+  'linear-gradient(135deg, #4a8a9a 0%, #5a6a8a 100%)',
 ] as const
 
 /** Deterministic gradient for a numeric id (handles negatives defensively). */

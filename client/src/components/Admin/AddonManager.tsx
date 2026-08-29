@@ -252,40 +252,49 @@ export default function AddonManager({ bagTrackingEnabled, onToggleBagTracking, 
                 {globalAddons.map(addon => (
                   <div key={addon.id}>
                     <AddonRow addon={addon} onToggle={handleToggle} t={t} />
-                    {/* Memories providers as sub-items under Journey addon */}
-                    {addon.id === 'journey' && providerOptions.length > 0 && (
-                      <div className="px-6 py-3 border-b border-edge-secondary bg-surface-secondary" style={{ paddingLeft: 70 }}>
-                        <div className="space-y-2">
-                          {providerOptions.map(provider => {
-                            const ProviderIcon = PROVIDER_ICONS[provider.key]
-                            return (
-                            <div key={provider.key} className="flex items-center gap-4" style={{ minHeight: 32 }}>
-                              {ProviderIcon && <span className="text-content-faint"><ProviderIcon size={14} /></span>}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div className="text-sm font-medium text-content-secondary">{provider.label}</div>
-                                <div className="text-xs mt-0.5 text-content-faint">{provider.description}</div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className={`hidden sm:inline text-xs font-medium ${provider.enabled ? 'text-content' : 'text-content-faint'}`}>
-                                  {provider.enabled ? t('admin.addons.enabled') : t('admin.addons.disabled')}
-                                </span>
-                                <button
-                                  onClick={provider.toggle}
-                                  className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                  style={{ background: provider.enabled ? 'var(--text-primary)' : 'var(--border-primary)' }}
-                                >
-                                  <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
-                                    style={{ transform: provider.enabled ? 'translateX(20px)' : 'translateX(0)' }} />
-                                </button>
-                              </div>
-                            </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Photo provider addons (Immich, Synology, …) */}
+            {photoProviderAddons.length > 0 && (
+              <div>
+                <div className="px-6 py-2.5 border-b border-t flex items-center gap-2 bg-surface-secondary border-edge-secondary">
+                  <Image size={13} className="text-content-muted" />
+                  <span className="text-xs font-medium uppercase tracking-wider text-content-muted">
+                    {t('admin.addons.type.photo_provider')}
+                  </span>
+                </div>
+                <div className="px-6 py-3 border-b border-edge-secondary bg-surface-secondary" style={{ paddingLeft: 70 }}>
+                  <div className="space-y-2">
+                    {providerOptions.map(provider => {
+                      const ProviderIcon = PROVIDER_ICONS[provider.key]
+                      return (
+                      <div key={provider.key} className="flex items-center gap-4" style={{ minHeight: 32 }}>
+                        {ProviderIcon && <span className="text-content-faint"><ProviderIcon size={14} /></span>}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="text-sm font-medium text-content-secondary">{provider.label}</div>
+                          <div className="text-xs mt-0.5 text-content-faint">{provider.description}</div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`hidden sm:inline text-xs font-medium ${provider.enabled ? 'text-content' : 'text-content-faint'}`}>
+                            {provider.enabled ? t('admin.addons.enabled') : t('admin.addons.disabled')}
+                          </span>
+                          <button
+                            onClick={provider.toggle}
+                            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                            style={{ background: provider.enabled ? 'var(--text-primary)' : 'var(--border-primary)' }}
+                          >
+                            <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                              style={{ transform: provider.enabled ? 'translateX(20px)' : 'translateX(0)' }} />
+                          </button>
+                        </div>
+                      </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 

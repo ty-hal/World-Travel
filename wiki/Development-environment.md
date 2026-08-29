@@ -124,6 +124,10 @@ These commands run across all workspaces at once and are the recommended way to 
 | `npm run lint`       | Lint shared, server, and client                                    |
 | `npm run format`     | Format shared, server, and client                                  |
 | `npm run format:check` | Check formatting across all workspaces                           |
+| `npm run capture`      | Playwright wiki screenshots → `client/e2e/.tmp/shots/`           |
+| `npm run capture-promote` | Resize staging PNGs into `wiki/assets/`                       |
+
+**Capture staging** (`client/e2e/.tmp/shots/`, gitignored): each screen produces `<Name>.png`, `<Name>.html`, and `<Name>.css.json`. From the repo root, `make capture` / `make capture-promote` / `make capture-open` are equivalent shortcuts (see `AGENTS.md`).
 
 ### Shared (`/shared`)
 
@@ -176,6 +180,8 @@ The `@trek/shared` package is the single source of truth for code shared between
 | `npm run test:coverage`    | Run tests with coverage report                       |
 | `npm run lint`             | Lint source                                          |
 | `npm run format`           | Format source                                        |
+| `npm run shots`            | Wiki screenshot harness → `e2e/.tmp/shots/`            |
+| `npm run shots:promote`    | Resize staging PNGs into `../wiki/assets/`           |
 
 ---
 

@@ -1,6 +1,4 @@
-import { test, clearNotices, expect } from './shot'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
+import { test, clearNotices, expect, loadSeed } from './shot'
 
 /**
  * Detail pages and the surfaces that need a couple of clicks to reach.
@@ -10,22 +8,12 @@ import path from 'node:path'
  * the run instead of producing a screenshot of the wrong screen.
  */
 
-const seed = JSON.parse(
-  readFileSync(path.join(process.cwd(), 'e2e', '.tmp', 'seed.json'), 'utf8'),
-) as { tripId: number; collectionId?: number; journeyId?: number }
-
 test('collection detail', async ({ page, shot }) => {
+  const seed = loadSeed()
   test.skip(!seed.collectionId, 'collections addon unavailable during seed')
   await page.goto(`/collections/${seed.collectionId}`)
   await clearNotices(page)
   await shot.page_('CollectionDetail')
-})
-
-test('journey detail', async ({ page, shot }) => {
-  test.skip(!seed.journeyId, 'journey addon unavailable during seed')
-  await page.goto(`/journey/${seed.journeyId}`)
-  await clearNotices(page)
-  await shot.page_('JourneyDetail')
 })
 
 test('mcp access — admin', async ({ page, shot }) => {
@@ -41,8 +29,6 @@ test('two-factor setup', async ({ page, shot }) => {
   await clearNotices(page)
   await page.getByRole('button', { name: 'Account', exact: true }).first().click()
   await page.waitForTimeout(600)
-  // The enrolment flow is behind a button whose label varies with state; match
-  // loosely and fall back to capturing the tab itself.
   const enable = page.getByRole('button', { name: /two-factor|2fa|authenticator/i }).first()
   if (await enable.isVisible().catch(() => false)) {
     await enable.click()
@@ -55,16 +41,11 @@ test('two-factor setup', async ({ page, shot }) => {
  * Settle-up.
  *
  * WARNING for anyone extending this file: the "Settle up" button in the Costs
- * toolbar is not a view — it RECORDS the settling transfers. An earlier version
- * of this test clicked it, which zeroed every balance and left the capture
- * showing "Everyone's square". Because all screenshot specs share one database
- * and this file sorts before planner.shot.ts, it also poisoned Costs.png in the
- * same run.
- *
- * Screenshot specs must not mutate state. Capture the "Add payment" dialog
- * instead — same surface, no side effect — and close it again.
+ * toolbar is not a view — it RECORDS the settling transfers. Capture the "Add
+ * payment" dialog instead — same surface, no side effect — and close it again.
  */
 test('costs — record a settle-up payment', async ({ page, shot }) => {
+  const seed = loadSeed()
   await page.goto(`/trips/${seed.tripId}`)
   await clearNotices(page)
   await page.getByRole('button', { name: 'Costs', exact: true }).first().click()
@@ -77,10 +58,17 @@ test('costs — record a settle-up payment', async ({ page, shot }) => {
 
   const modal = page.locator('.trek-modal-backdrop > div').first()
   await expect(modal).toBeVisible()
+
+  const amountInput = modal.locator('input[inputmode="decimal"]').first()
+  if (await amountInput.isVisible().catch(() => false)) {
+    await amountInput.fill('15000')
+  }
+
   await shot.element('CostsSettleUp', modal)
 })
 
 test('trip files', async ({ page, shot }) => {
+  const seed = loadSeed()
   await page.goto(`/trips/${seed.tripId}/files`)
   await clearNotices(page)
   await expect(page).toHaveURL(/files/)

@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Car, Bus, Sailboat, Bike, CarTaxiFront, TramFront, Paperclip, FileText, X, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react'
+import { TramFront, Paperclip, FileText, X, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react'
 import AnimatedAirplaneIcon from '../shared/AnimatedAirplaneIcon'
 import AnimatedShipIcon from '../shared/AnimatedShipIcon'
 import AnimatedTrainTrackIcon from '../shared/AnimatedTrainTrackIcon'
 import AnimatedRouteIcon from '../shared/AnimatedRouteIcon'
+import AnimatedBusIcon from '../shared/AnimatedBusIcon'
+import AnimatedCarIcon from '../shared/AnimatedCarIcon'
+import AnimatedTaxiIcon from '../shared/AnimatedTaxiIcon'
+import AnimatedBikeIcon from '../shared/AnimatedBikeIcon'
+import AnimatedSailboatIcon from '../shared/AnimatedSailboatIcon'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import CustomTimePicker from '../shared/CustomTimePicker'
@@ -113,12 +118,12 @@ function emptyStationWaypoint(dayId: string | number = ''): StationWaypointForm 
 const TYPE_OPTIONS = [
   { value: 'flight',          labelKey: 'reservations.type.flight',          Icon: AnimatedAirplaneIcon },
   { value: 'train',           labelKey: 'reservations.type.train',           Icon: AnimatedTrainTrackIcon },
-  { value: 'bus',             labelKey: 'reservations.type.bus',             Icon: Bus },
-  { value: 'car',             labelKey: 'reservations.type.car',             Icon: Car },
-  { value: 'taxi',            labelKey: 'reservations.type.taxi',            Icon: CarTaxiFront },
-  { value: 'bicycle',         labelKey: 'reservations.type.bicycle',         Icon: Bike },
+  { value: 'bus',             labelKey: 'reservations.type.bus',             Icon: AnimatedBusIcon },
+  { value: 'car',             labelKey: 'reservations.type.car',             Icon: AnimatedCarIcon },
+  { value: 'taxi',            labelKey: 'reservations.type.taxi',            Icon: AnimatedTaxiIcon },
+  { value: 'bicycle',         labelKey: 'reservations.type.bicycle',         Icon: AnimatedBikeIcon },
   { value: 'cruise',          labelKey: 'reservations.type.cruise',          Icon: AnimatedShipIcon },
-  { value: 'ferry',           labelKey: 'reservations.type.ferry',           Icon: Sailboat },
+  { value: 'ferry',           labelKey: 'reservations.type.ferry',           Icon: AnimatedSailboatIcon },
   { value: 'transport_other', labelKey: 'reservations.type.transport_other', Icon: AnimatedRouteIcon },
 ]
 

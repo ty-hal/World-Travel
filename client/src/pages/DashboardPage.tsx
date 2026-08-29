@@ -23,6 +23,7 @@ import AnimatedTicketIcon from '../components/shared/AnimatedTicketIcon'
 import AnimatedRefreshCwIcon from '../components/shared/AnimatedRefreshCwIcon'
 import { IcsSubscribeModal } from '../components/Planner/IcsSubscribeModal'
 import CollectionsWidget from '../components/Dashboard/CollectionsWidget'
+import { entityGradient } from '../utils/gradients'
 import PluginWidgets from '../components/Plugins/PluginWidgets'
 import PluginFrame from '../components/Plugins/PluginFrame'
 import { TripCardBadges, useTripCardBadges } from '../components/Plugins/TripCardBadges'
@@ -70,17 +71,7 @@ function CoverImages({ images, className }: { images: string[]; className: strin
     : <img className={className} src={images[0]} alt="" />
 }
 
-const GRADIENTS = [
-  'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-  'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-  'linear-gradient(135deg, #96fbc4 0%, #f9f586 100%)',
-]
-function tripGradient(id: number): string { return GRADIENTS[id % GRADIENTS.length] }
+function tripGradient(id: number): string { return entityGradient(id) }
 
 // Day + short month for the boarding pass / cards, plus the year — but only
 // when it isn't the current year (this year's trips stay clutter-free), e.g.
@@ -126,7 +117,7 @@ function initials(name: string | null | undefined): string {
 }
 
 const RES_ICON: Record<string, React.ReactElement> = {
-  flight: <AnimatedAirplaneIcon size={16} animate="always" />, hotel: <Hotel size={16} />, restaurant: <Utensils size={16} />,
+  flight: <AnimatedAirplaneIcon size={16} animate="hover" />, hotel: <Hotel size={16} />, restaurant: <Utensils size={16} />,
 }
 const RES_TYPE_CLASS: Record<string, string> = { flight: 'flight', hotel: 'hotel', restaurant: 'food' }
 
@@ -841,7 +832,19 @@ function UpcomingTool({ items, locale, onOpen }: {
             const timeStr = parsed.time ? formatTime(parsed.time, locale, timeFormat) : null
             const typeClass = RES_TYPE_CLASS[r.type] || 'other'
             return (
-              <div className="upc-item" key={r.id} onClick={(e) => openCard(e, `/trips/${r.trip_id}`, () => onOpen(r.trip_id))}>
+              <div
+                className="upc-item"
+                key={r.id}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => openCard(e, `/trips/${r.trip_id}`, () => onOpen(r.trip_id))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    openCard(e as unknown as React.MouseEvent, `/trips/${r.trip_id}`, () => onOpen(r.trip_id))
+                  }
+                }}
+              >
                 <div className="upc-date"><div className="d mono">{dateStr?.d ?? '–'}</div><div className="m">{dateStr?.m ?? ''}</div></div>
                 <div className="upc-info">
                   <div className="t">{r.title}</div>

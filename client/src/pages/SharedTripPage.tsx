@@ -28,6 +28,7 @@ import { isDayInAccommodationRange } from '../utils/dayOrder';
 import { getFlightLegs, getTrainLegs } from '../utils/flightLegs';
 import { splitReservationDateTime } from '../utils/formatters';
 import { computeMapViewport, TILE_SIZE_RASTER } from '../utils/mapViewport';
+import { OPENSTREETMAP_TILE_URL } from '../components/Map/leafletTiles';
 import { useSharedTrip } from './sharedTrip/useSharedTrip';
 
 const TRANSPORT_ICONS = { flight: Plane, train: Train, bus: Bus, car: Car, cruise: Ship };
@@ -409,7 +410,7 @@ export default function SharedTripPage() {
                 style={{ width: '100%', height: '100%' }}
               >
                 <TileLayer
-                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                  url={OPENSTREETMAP_TILE_URL}
                   referrerPolicy="strict-origin-when-cross-origin"
                 />
                 <FitBoundsToPlaces places={mapPlaces} framedOnMount={framed !== null} />

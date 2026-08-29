@@ -1,5 +1,6 @@
 import React from 'react'
 import { MapViewAuto } from '../Map/MapViewAuto'
+import { resolveLeafletTileUrl } from '../Map/leafletTiles'
 import type { CollectionPlace } from '@trek/shared'
 import { mappablePlaces } from '../../pages/collections/collectionsModel'
 
@@ -18,11 +19,9 @@ interface CollectionMapProps {
  * The parent `.col-mapwrap` supplies the rounded, bordered box + height, so this
  * just fills it.
  */
-export default function CollectionMap({ places, selectedPlaceId, onOpenPlace, onDeselect, dark }: CollectionMapProps): React.ReactElement {
+export default function CollectionMap({ places, selectedPlaceId, onOpenPlace, onDeselect, dark: _dark }: CollectionMapProps): React.ReactElement {
   const pts = mappablePlaces(places)
-  const tileUrl = dark
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+  const tileUrl = resolveLeafletTileUrl(null)
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
