@@ -224,21 +224,16 @@ describe('createMockHost', () => {
     await expect(ungranted.ctx.trips.getDays(1)).rejects.toThrow(/PERMISSION_DENIED/);
   });
 
-  it('removeMember + journey create/delete round out the write symmetry, grant-gated', async () => {
+  it('removeMember is grant-gated like production', async () => {
     const host = createMockHost({
-      grants: ['db:write:members', 'db:write:journal'],
+      grants: ['db:write:members'],
       actingUserId: 42,
       trips: { 1: { members: [42, 7] } },
     });
     expect(await host.ctx.trips.removeMember(1, 7)).toEqual({ removed: true });
     expect(await host.ctx.trips.removeMember(1, 999)).toEqual({ removed: true }); // prod's DELETE reports removed:true either way
-    const j = await host.ctx.journal.createJourney({ title: 'Imported', trip_ids: [1] });
-    expect(j).toMatchObject({ title: 'Imported' });
-    expect(await host.ctx.journal.deleteJourney(1)).toEqual({ deleted: true });
-    // grants enforced identically to production
     const ungranted = createMockHost({ grants: [], actingUserId: 42, trips: { 1: { members: [42, 7] } } });
     await expect(ungranted.ctx.trips.removeMember(1, 7)).rejects.toThrow(/PERMISSION_DENIED/);
-    await expect(ungranted.ctx.journal.createJourney({ title: 'x' })).rejects.toThrow(/PERMISSION_DENIED/);
   });
 
   it('creates a trip for the acting user and serves rates + collab reads against the grants', async () => {
@@ -416,13 +411,12 @@ describe('createMockHost', () => {
     await expect(host.ctx.users.getById(999)).rejects.toThrow(/no access to user 999/); // no shared trip
   });
 
-  it('addon toggles gate journal/vacay/collections like production; atlas normalizes codes', async () => {
+  it('addon toggles gate vacay/collections like production; atlas normalizes codes', async () => {
     const off = createMockHost({
-      grants: ['db:read:journal', 'db:read:atlas', 'db:write:atlas', 'db:read:vacay', 'db:read:collections'],
+      grants: ['db:read:atlas', 'db:write:atlas', 'db:read:vacay', 'db:read:collections'],
       actingUserId: 1,
-      journeyAddonEnabled: false, vacayAddonEnabled: false, collectionsAddonEnabled: false,
+      vacayAddonEnabled: false, collectionsAddonEnabled: false,
     });
-    await expect(off.ctx.journal.listMine()).rejects.toThrow(/journey addon is disabled/);
     await expect(off.ctx.vacay.mine()).rejects.toThrow(/vacay addon is disabled/);
     await expect(off.ctx.collections.listMine()).rejects.toThrow(/collections addon is disabled/);
     expect(await off.ctx.atlas.markCountry('de')).toEqual({ visited: true }); // atlas stays enabled

@@ -543,7 +543,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
         html.dark .costs-root {
           --c-bg: #121215; --c-bg2: #18181c;
           --c-surface: #1a1a1e; --c-surface2: #202027;
-          --c-ink: #f4f4f5; --c-ink2: #a1a1aa; --c-ink3: #71717a;
+          --c-ink: var(--text-primary); --c-ink2: var(--text-muted); --c-ink3: var(--text-faint);
           --c-line: #2a2a31;
         }
         .costs-root .bg-surface-card { background: var(--c-surface) !important; }
@@ -606,15 +606,15 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
         {/* Total card */}
-        <section style={{ background: 'linear-gradient(135deg,#1f2937,#111827)', color: '#fff', borderRadius: 22, padding: '20px 20px 16px', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.28)' }}>
+        <section className="costs-total-card" style={{ borderRadius: 22, padding: '20px 20px 16px', boxShadow: '0 8px 24px -8px rgba(0,0,0,0.28)' }}>
           <div style={{ fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{t('costs.totalSpend')}</div>
-          <div style={{ fontSize: 'calc(44px * var(--fs-scale-title, 1))', fontWeight: 700, letterSpacing: '-0.04em', lineHeight: 1, marginTop: 8, display: 'flex', alignItems: 'baseline' }}>{bigMoney(totals.totalSpend, 24, 'rgba(255,255,255,0.6)')}</div>
-          <div style={{ display: 'flex', gap: 18, marginTop: 12, fontSize: 'calc(12px * var(--fs-scale-body, 1))', color: 'rgba(255,255,255,0.6)', flexWrap: 'wrap' }}>
-            <span>{t('costs.yourShare')} · <b style={{ color: '#fff', fontWeight: 600 }}>{fmt0(totals.myShare)}</b></span>
-            <span>{t('costs.youPaid')} · <b style={{ color: '#fff', fontWeight: 600 }}>{fmt0(totals.myPaid)}</b></span>
+          <div style={{ fontSize: 'calc(44px * var(--fs-scale-title, 1))', fontWeight: 700, letterSpacing: '-0.04em', lineHeight: 1, marginTop: 8, display: 'flex', alignItems: 'baseline' }}>{bigMoney(totals.totalSpend, 24, 'var(--costs-total-muted)')}</div>
+          <div style={{ display: 'flex', gap: 18, marginTop: 12, fontSize: 'calc(12px * var(--fs-scale-body, 1))', color: 'var(--costs-total-muted)', flexWrap: 'wrap' }}>
+            <span>{t('costs.yourShare')} · <b style={{ color: 'var(--costs-total-ink)', fontWeight: 600 }}>{fmt0(totals.myShare)}</b></span>
+            <span>{t('costs.youPaid')} · <b style={{ color: 'var(--costs-total-ink)', fontWeight: 600 }}>{fmt0(totals.myPaid)}</b></span>
           </div>
           {canEdit && (
-            <button onClick={() => { setEditing(null); setModalOpen(true) }} style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.16)', color: '#fff', padding: 13, borderRadius: 14, fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={() => { setEditing(null); setModalOpen(true) }} style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'var(--costs-total-button-bg)', border: '1px solid var(--costs-total-button-border)', color: 'var(--costs-total-ink)', padding: 13, borderRadius: 14, fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               <Plus size={17} /> {t('costs.addExpense')}
             </button>
           )}
@@ -866,7 +866,8 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
 // ── pure subcomponents ─────────────────────────────────────────────────────
 function SummaryCard({ label, sub, amount, currency, locale, icon, foot, tone }: { label: string; sub: string; amount: number; currency: string; locale: string; icon: React.ReactNode; foot: React.ReactNode; tone: 'owe' | 'owed' | 'total' | 'unfinished' }) {
   const total = tone === 'total'
-  const accent = tone === 'owe' ? '#dc2626' : tone === 'owed' ? '#16a34a' : tone === 'unfinished' ? '#d97706' : undefined
+  const zeroNeutral = !total && Math.abs(amount || 0) < 0.01
+  const accent = zeroNeutral ? undefined : tone === 'owe' ? '#dc2626' : tone === 'owed' ? '#16a34a' : tone === 'unfinished' ? '#d97706' : undefined
   const muted = total ? 'rgba(255,255,255,0.55)' : 'var(--text-faint)'
   // formatToParts keeps the design's "big integer + muted symbol/decimals" styling
   // while letting Intl place the symbol and pick separators per locale + currency.
@@ -877,16 +878,16 @@ function SummaryCard({ label, sub, amount, currency, locale, icon, foot, tone }:
   } catch { parts = null }
   const big = (p: Intl.NumberFormatPart) => p.type === 'integer' || p.type === 'group' || p.type === 'minusSign'
   return (
-    <div className={total ? '' : 'bg-surface-card border border-edge'}
-      style={{ borderRadius: 22, padding: '26px 28px', position: 'relative', overflow: 'hidden', ...(total ? { background: 'linear-gradient(135deg,#1f2937,#111827)', color: '#fff' } : {}) }}>
+    <div className={total ? 'costs-total-card' : 'bg-surface-card border border-edge'}
+      style={{ borderRadius: 22, padding: '26px 28px', position: 'relative', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-        <span style={{ width: 36, height: 36, borderRadius: 11, display: 'grid', placeItems: 'center', background: total ? 'rgba(255,255,255,0.12)' : (accent + '22'), color: total ? '#fff' : accent }}>{icon}</span>
+        <span style={{ width: 36, height: 36, borderRadius: 11, display: 'grid', placeItems: 'center', background: total ? 'var(--costs-total-icon-bg)' : (accent ? accent + '22' : 'var(--bg-tertiary)'), color: total ? 'var(--costs-total-ink)' : (accent || 'var(--text-faint)') }}>{icon}</span>
         <div>
           <div style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 600 }} className={total ? '' : 'text-content'}>{label}</div>
           <div style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', opacity: total ? 0.6 : 1 }} className={total ? '' : 'text-content-faint'}>{sub}</div>
         </div>
       </div>
-      <div style={{ fontSize: 'calc(46px * var(--fs-scale-title, 1))', fontWeight: 600, letterSpacing: '-0.035em', lineHeight: 1, marginTop: 20, display: 'flex', alignItems: 'baseline', color: total ? '#fff' : accent }}>
+      <div style={{ fontSize: 'calc(46px * var(--fs-scale-title, 1))', fontWeight: 600, letterSpacing: '-0.035em', lineHeight: 1, marginTop: 20, display: 'flex', alignItems: 'baseline', color: total ? 'var(--costs-total-ink)' : (accent || 'var(--text-primary)') }}>
         {parts
           ? parts.map((p, i) => <span key={i} style={big(p) ? undefined : { fontSize: 'calc(26px * var(--fs-scale-title, 1))', fontWeight: 500, color: muted }}>{p.value}</span>)
           : <span>{formatMoney(amount, currency, locale)}</span>}

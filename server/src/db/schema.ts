@@ -149,6 +149,21 @@ function createTables(db: Database.Database): void {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS imported_flight_segments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      source_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      origin_name TEXT NOT NULL,
+      destination_name TEXT NOT NULL,
+      origin_lat REAL NOT NULL,
+      origin_lng REAL NOT NULL,
+      destination_lat REAL NOT NULL,
+      destination_lng REAL NOT NULL,
+      UNIQUE(user_id, source_id)
+    );
+
     CREATE TABLE IF NOT EXISTS place_tags (
       place_id INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,
       tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
@@ -201,6 +216,17 @@ function createTables(db: Database.Database): void {
       file_size INTEGER,
       mime_type TEXT,
       description TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS trip_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      url TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'google-drive',
+      description TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -534,6 +560,7 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_budget_items_trip_id ON budget_items(trip_id);
     CREATE INDEX IF NOT EXISTS idx_reservations_trip_id ON reservations(trip_id);
     CREATE INDEX IF NOT EXISTS idx_trip_files_trip_id ON trip_files(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_trip_links_trip_id ON trip_links(trip_id);
     CREATE INDEX IF NOT EXISTS idx_day_notes_day_id ON day_notes(day_id);
     CREATE INDEX IF NOT EXISTS idx_photos_trip_id ON photos(trip_id);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);

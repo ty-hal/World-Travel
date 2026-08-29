@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTripStore } from '../store/tripStore'
@@ -26,6 +26,7 @@ import PackingListPanel from '../components/Packing/PackingListPanel'
 import ApplyTemplateButton from '../components/Packing/ApplyTemplateButton'
 import TodoListPanel from '../components/Todo/TodoListPanel'
 import FileManager from '../components/Files/FileManager'
+import TripPhotoAlbums from '../components/Files/TripPhotoAlbums'
 import CostsPanel, { ExpenseModal, type ExpensePrefill } from '../components/Budget/CostsPanel'
 import type { BookingExpenseRequest } from '../components/Planner/BookingCostsSection.types'
 import type { BudgetItem } from '../types'
@@ -34,7 +35,7 @@ import PluginFrame from '../components/Plugins/PluginFrame'
 import TripWarningsBanner from '../components/Planner/TripWarningsBanner'
 import Navbar from '../components/Layout/Navbar'
 import { useToast } from '../components/shared/Toast'
-import { Map, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Ticket, PackageCheck, Wallet, FolderOpen, Users, Train } from 'lucide-react'
+import { Map, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Ticket, PackageCheck, Wallet, FolderOpen, Users, Train, History } from 'lucide-react'
 import { useTranslation } from '../i18n'
 import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, mapsApi } from '../api/client'
 import { accommodationRepo } from '../repo/accommodationRepo'
@@ -50,6 +51,60 @@ import { ListTodo, Upload, Plus, Trash2, FolderPlus } from 'lucide-react'
 import { useTripPlanner } from './tripPlanner/useTripPlanner'
 import { usePoiExplore } from '../components/Map/usePoiExplore'
 import PoiCategoryPill from '../components/Map/PoiCategoryPill'
+
+interface TripChangeEvent {
+  id: number
+  action: string
+  entity_type: string
+  entity_id: number | null
+  before_json: string | null
+  after_json: string | null
+  created_at: string
+}
+
+function historyActionLabel(action: string): string {
+  if (action === 'Optimize day') return 'Optimized day itinerary'
+  if (action === 'Revert optimization') return 'Reverted day optimization'
+  return action.replace(/[_-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
+
+function historyEntityLabel(entityType: string): string {
+  const labels: Record<string, string> = {
+    day_assignments: 'Day itinerary',
+    place: 'Place',
+    reservation: 'Booking',
+    budget: 'Expense',
+  }
+  return labels[entityType] || entityType.replace(/[_-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
+
+function TripHistoryPanel({ events, loading, onRevert }: { events: TripChangeEvent[]; loading: boolean; onRevert: (event: TripChangeEvent) => void }): React.ReactElement {
+  return (
+    <div className="bg-surface" style={{ height: '100%', overflow: 'auto', padding: 28 }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <h2 className="text-content" style={{ margin: 0, fontSize: 22 }}>Trip history</h2>
+        <p className="text-content-muted" style={{ margin: '6px 0 20px', fontSize: 13 }}>Planning changes are saved here so itinerary edits can be reviewed or reverted.</p>
+        {loading && <p className="text-content-muted">Loading history…</p>}
+        {!loading && events.length === 0 && <p className="text-content-muted">No changes recorded yet.</p>}
+        <div style={{ display: 'grid', gap: 8 }}>
+          {events.map(event => {
+            const canRevert = event.action === 'Optimize day' && event.before_json && event.entity_id
+            return (
+              <div key={event.id} className="bg-surface-card border border-edge" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 12 }}>
+                <History size={15} className="text-content-muted" />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="text-content" style={{ fontWeight: 600, fontSize: 13 }}>{historyActionLabel(event.action)}</div>
+                  <div className="text-content-muted" style={{ fontSize: 11 }}>{new Date(event.created_at).toLocaleString()} · {historyEntityLabel(event.entity_type)}</div>
+                </div>
+                {canRevert && <button className="border border-edge bg-surface-secondary text-content" style={{ borderRadius: 8, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }} onClick={() => onRevert(event)}>Revert</button>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function ListsContainer({ tripId, packingItems, todoItems }: { tripId: number; packingItems: PackingItem[]; todoItems: TodoItem[] }) {
   const [subTab, setSubTab] = useState<'packing' | 'todo'>(() => {
@@ -208,13 +263,47 @@ export default function TripPlannerPage(): React.ReactElement | null {
     isMobile, isTouch,
     expandedDayIds, setExpandedDayIds, mapPlaces,
     route, routeSegments, routeInfo, setRoute, setRouteInfo, updateRouteForDay,
-    handleSelectDay, handlePlaceClick, handleMarkerClick, handleMapClick, handleMapContextMenu, openAddPlaceFromPoi,
+    handleSelectDay, handlePlaceClick, handleMarkerClick, handleMapClick, handleMapContextMenu, openPoiInGoogleMaps,
     handleSavePlace, openPlaceEditor, handleDeletePlace, confirmDeletePlace, confirmDeletePlaces, confirmChangeCategory,
     handleAssignToDay, handleRemoveAssignment, handleReorder, handleReorderDays, handleAddDay, handleUpdateDayTitle,
     handleSaveReservation, handleSaveTransport, handleDeleteReservation,
     selectedPlace, dayOrderMap, dayPlaces,
-    mapTileUrl, fontStyle, splashDone,
+    mapTileUrl, fontStyle,
   } = useTripPlanner()
+
+  const [historyEvents, setHistoryEvents] = useState<TripChangeEvent[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  useEffect(() => {
+    if (activeTab !== 'history' || !Number.isFinite(tripId)) return
+    setHistoryLoading(true)
+    tripsApi.history(tripId)
+      .then(data => setHistoryEvents((data as { events?: TripChangeEvent[] }).events || []))
+      .catch(() => setHistoryEvents([]))
+      .finally(() => setHistoryLoading(false))
+  }, [activeTab, tripId])
+  const revertHistoryEvent = async (event: TripChangeEvent) => {
+    if (!event.entity_id || !event.before_json) return
+    let orderedIds: unknown
+    let afterIds: unknown = null
+    try {
+      orderedIds = JSON.parse(event.before_json)
+      afterIds = JSON.parse(event.after_json || 'null')
+    } catch {
+      return
+    }
+    if (!Array.isArray(orderedIds) || !orderedIds.every(id => Number.isInteger(id))) return
+    try {
+      await assignmentsApi.reorder(tripId, event.entity_id, orderedIds as number[])
+      await tripActions.loadTrip(tripId)
+      await tripsApi.recordHistory(tripId, {
+        action: 'Revert optimization', entityType: event.entity_type, entityId: event.entity_id,
+        before: afterIds, after: orderedIds,
+      })
+      setHistoryEvents(events => events.filter(item => item.id !== event.id))
+    } catch {
+      toast.error('Could not revert this change')
+    }
+  }
 
   const poi = usePoiExplore()
   const [glMap, setGlMap] = useState<CompassMap | null>(null)
@@ -235,7 +324,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
     else if (req.prefill) setBookingExpense({ editing: null, prefill: req.prefill })
   }
 
-  if (isLoading || !splashDone) {
+  if (isLoading) {
     return (
       <div className="bg-surface" style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -263,7 +352,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
           {trip?.title || 'TREK'}
         </div>
         <div className="text-content-faint" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 500, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 32, animation: 'fadeInUp 0.5s ease-out 0.1s both' }}>
-          {t('trip.loadingPhotos')}
+          {t('common.loading')}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {[0, 1, 2].map(i => (
@@ -284,12 +373,14 @@ export default function TripPlannerPage(): React.ReactElement | null {
 
       <div className="bg-surface-elevated border-b border-edge-faint" style={{
         position: 'fixed', top: 'var(--nav-h)', left: 0, right: 0, zIndex: 40,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '0 12px',
+        display: 'flex', alignItems: 'center',
+        padding: '0 8px',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         height: 44,
+        overflow: 'hidden',
       }}>
+        <div style={{ width: '100%', minWidth: 0, overflowX: 'auto', display: 'flex', justifyContent: 'center' }}>
         <SlidingTabs
           tabs={TRIP_TABS.map(tab => ({
             id: tab.id,
@@ -300,6 +391,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
           activeTab={activeTab}
           onChange={handleTabChange}
         />
+        </div>
       </div>
 
       {/* Offset by navbar + tab bar (44px) */}
@@ -308,6 +400,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
         {/* Plugin validation/warning contributions (#1429) — navbar chips for
             plugins with a tab here, floating bottom overlay for the rest. */}
         <TripWarningsBanner tripId={tripId} onOpenPluginTab={(pid) => handleTabChange(`plugin:${pid}`)} />
+
+        {activeTab === 'history' && <TripHistoryPanel events={historyEvents} loading={historyLoading} onRevert={revertHistoryEvent} />}
 
         {activeTab === 'plan' && (
           <div style={{ position: 'absolute', inset: 0 }}>
@@ -339,7 +433,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
                 if (r) setMapTransportDetail(r)
               }}
               pois={poi.pois}
-              onPoiClick={openAddPlaceFromPoi}
+              onPoiClick={openPoiInGoogleMaps}
               onViewportChange={poi.onViewportChange}
               onMapReady={setGlMap}
             />
@@ -728,6 +822,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
             />
           </div>
         )}
+
+        {activeTab === 'photos' && <TripPhotoAlbums tripId={tripId} />}
 
         {activeTab === 'collab' && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 'var(--bottom-nav-h)', overflow: 'hidden' }}>

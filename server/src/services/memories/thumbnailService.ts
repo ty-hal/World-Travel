@@ -2,8 +2,6 @@ import { Jimp } from 'jimp'
 import path from 'path'
 import fs from 'fs/promises'
 import crypto from 'crypto'
-import { isAddonEnabled } from '../adminService'
-import { ADDON_IDS } from '../../addons'
 
 const THUMB_MAX = 800
 const THUMB_QUALITY = 80
@@ -12,8 +10,6 @@ export async function ensureLocalThumbnail(
   uploadsRoot: string,
   originalRelPath: string,
 ): Promise<{ thumbnailRelPath: string; width: number; height: number } | null> {
-  if (!isAddonEnabled(ADDON_IDS.JOURNEY)) return null
-
   const originalAbs = path.join(uploadsRoot, originalRelPath)
   try { await fs.access(originalAbs) } catch { return null }
 

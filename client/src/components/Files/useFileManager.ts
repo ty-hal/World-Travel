@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone'
 import { useToast } from '../shared/Toast'
 import { useTranslation, translateApiError } from '../../i18n'
 import { filesApi } from '../../api/client'
-import type { Place, Reservation, TripFile, Day, AssignmentsMap } from '../../types'
+import type { Place, Reservation, TripFile, TripLink, Day, AssignmentsMap } from '../../types'
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
 import { getAuthUrl } from '../../api/authUrl'
@@ -35,10 +35,46 @@ export function useFileManager({ files = [], onUpload, onDelete, onUpdate, place
   const [showTrash, setShowTrash] = useState(false)
   const [trashFiles, setTrashFiles] = useState<TripFile[]>([])
   const [loadingTrash, setLoadingTrash] = useState(false)
+  const [links, setLinks] = useState<TripLink[]>([])
+  const [showLinkModal, setShowLinkModal] = useState(false)
+  const [linkTitle, setLinkTitle] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [linkDescription, setLinkDescription] = useState('')
   const toast = useToast()
   const can = useCanDo()
   const trip = useTripStore((s) => s.trip)
   const { t, locale } = useTranslation()
+
+  const loadLinks = useCallback(async () => {
+    try { setLinks((await filesApi.listLinks(tripId)).links || []) } catch { /* */ }
+  }, [tripId])
+
+  useEffect(() => { loadLinks() }, [loadLinks])
+
+  const closeLinkModal = () => {
+    setShowLinkModal(false)
+    setLinkTitle('')
+    setLinkUrl('')
+    setLinkDescription('')
+  }
+
+  const createLink = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      await filesApi.createLink(tripId, { title: linkTitle, url: linkUrl, description: linkDescription })
+      await loadLinks()
+      closeLinkModal()
+      toast.success('Google link added')
+    } catch (err) {
+      toast.error(translateApiError(t, err, 'Unable to add Google link'))
+    }
+  }
+
+  const deleteLink = async (id: number) => {
+    if (!confirm('Remove this Google link?')) return
+    try { await filesApi.deleteLink(tripId, id); setLinks(prev => prev.filter(link => link.id !== id)) } catch { toast.error('Unable to remove Google link') }
+  }
+
 
   const loadTrash = useCallback(async () => {
     setLoadingTrash(true)
@@ -204,6 +240,8 @@ export function useFileManager({ files = [], onUpload, onDelete, onUpdate, place
   return {
     files, places, days, assignments, reservations, tripId, allowedFileTypes,
     uploading, filterType, setFilterType, lightboxIndex, setLightboxIndex,
+    links, showLinkModal, setShowLinkModal, linkTitle, setLinkTitle, linkUrl, setLinkUrl,
+    linkDescription, setLinkDescription, closeLinkModal, createLink, deleteLink,
     showTrash, trashFiles, loadingTrash, toast, can, trip, t, locale,
     toggleTrash, refreshFiles, handleStar, handleRestore, handlePermanentDelete, handleEmptyTrash,
     previewFile, setPreviewFile, previewFileUrl, assignFileId, setAssignFileId,

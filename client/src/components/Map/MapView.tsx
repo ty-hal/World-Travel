@@ -16,6 +16,8 @@ import type { Reservation } from '../../types'
 import { POI_CATEGORY_BY_KEY, type Poi } from './poiCategories'
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../constants/mapDefaults'
 import { computeMapViewport, TILE_SIZE_RASTER, type ViewportPadding } from '../../utils/mapViewport'
+import { getPinColor } from './pinColors'
+import { OPENSTREETMAP_TILE_URL, resolveLeafletTileUrl } from './leafletTiles'
 
 function categoryIconSvg(iconName: string | null | undefined, size: number): string {
   const IconComponent = (iconName && CATEGORY_ICON_MAP[iconName]) || CATEGORY_ICON_MAP['MapPin']
@@ -50,12 +52,13 @@ function createPlaceIcon(place, orderNumbers, isSelected) {
   const cached = iconCache.get(cacheKey)
   if (cached) return cached
   const size = isSelected ? 44 : 36
-  const borderColor = isSelected ? '#111827' : (place.category_color || 'white')
+  const pinColor = getPinColor(place.category_name)
+  const borderColor = isSelected ? '#111827' : pinColor
   const borderWidth = isSelected ? 3 : 2.5
   const shadow = isSelected
     ? '0 0 0 3px rgba(17,24,39,0.25), 0 4px 14px rgba(0,0,0,0.3)'
     : '0 2px 8px rgba(0,0,0,0.22)'
-  const bgColor = place.category_color || '#6b7280'
+  const bgColor = pinColor
 
   // Number badges (bottom-right)
   let badgeHtml = ''
@@ -451,7 +454,7 @@ export const MapView = memo(function MapView({
   onMapContextMenu = null,
   center = DEFAULT_MAP_CENTER,
   zoom = DEFAULT_MAP_ZOOM,
-  tileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  tileUrl = OPENSTREETMAP_TILE_URL,
   fitKey = 0,
   dayOrderMap = {},
   leftWidth = 0,
@@ -468,6 +471,7 @@ export const MapView = memo(function MapView({
   onViewportChange,
   tripId,
 }: any) {
+  const resolvedTileUrl = resolveLeafletTileUrl(tileUrl)
   const poiMarkers = useMemo(() => (pois as Poi[]).map((poi: Poi) => (
     <Marker
       key={`poi-${poi.osm_id}`}
@@ -661,7 +665,7 @@ export const MapView = memo(function MapView({
         <Polyline
           key={`gpx-${place.id}`}
           positions={coords}
-          color={place.category_color || '#3b82f6'}
+          color={getPinColor(place.category_name)}
           weight={3.5}
           opacity={0.75}
         />
@@ -694,7 +698,7 @@ export const MapView = memo(function MapView({
       className="w-full h-full bg-[#e5e7eb]"
     >
       <TileLayer
-        url={tileUrl}
+        url={resolvedTileUrl}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         maxZoom={19}
         keepBuffer={8}
@@ -783,7 +787,7 @@ export const MapView = memo(function MapView({
         </div>
         {hoveredPlace.category_name && CatIcon && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
-            <CatIcon size={10} style={{ color: hoveredPlace.category_color || '#6b7280', flexShrink: 0 }} />
+            <CatIcon size={10} style={{ color: getPinColor(hoveredPlace.category_name), flexShrink: 0 }} />
             <span style={{ fontSize: 11, color: '#6b7280' }}>{hoveredPlace.category_name}</span>
           </div>
         )}

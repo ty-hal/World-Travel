@@ -21,7 +21,7 @@ function ListRow({ list, active, onSelect }: { list: Collection; active: boolean
   return (
     <div className="col-row">
       <button type="button" onClick={() => onSelect(list.id)} className={`col-row-btn${active ? ' on' : ''}`}>
-        <span className="dot" style={{ background: list.color || '#6366f1' }} />
+        <span className="dot" style={{ ['--dot-color' as string]: list.color || '#6366f1' }} />
         <span className="nm">{list.name}</span>
         <span className="ct">{list.place_count ?? 0}</span>
       </button>

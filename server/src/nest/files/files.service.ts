@@ -47,4 +47,7 @@ export class FilesService {
   createFileLink(id: string, opts: Parameters<typeof svc.createFileLink>[1]) { return svc.createFileLink(id, opts); }
   deleteFileLink(linkId: string, id: string) { return svc.deleteFileLink(linkId, id); }
   getFileLinks(id: string) { return svc.getFileLinks(id); }
+  listTripLinks(tripId: string) { return svc.listTripLinks(tripId); }
+  createTripLink(tripId: string, userId: number, input: { title: string; url: string; description?: string }) { return svc.createTripLink(tripId, userId, input); }
+  deleteTripLink(id: string, tripId: string) { return svc.deleteTripLink(id, tripId); }
 }

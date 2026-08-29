@@ -15,11 +15,15 @@ import {
 } from './dashboard/dashboardModel'
 import {
   Plus, Edit2, Trash2, Archive, Copy, ArrowRight, MapPin,
-  Plane, Hotel, Utensils, Clock, RefreshCw, ArrowRightLeft, Calendar,
-  LayoutGrid, List, Ticket, X, CalendarPlus,
+  Hotel, Utensils, Clock, ArrowRightLeft, Calendar,
+  LayoutGrid, List, X, CalendarPlus,
 } from 'lucide-react'
+import AnimatedAirplaneIcon from '../components/shared/AnimatedAirplaneIcon'
+import AnimatedTicketIcon from '../components/shared/AnimatedTicketIcon'
+import AnimatedRefreshCwIcon from '../components/shared/AnimatedRefreshCwIcon'
 import { IcsSubscribeModal } from '../components/Planner/IcsSubscribeModal'
 import CollectionsWidget from '../components/Dashboard/CollectionsWidget'
+import { entityGradient } from '../utils/gradients'
 import PluginWidgets from '../components/Plugins/PluginWidgets'
 import PluginFrame from '../components/Plugins/PluginFrame'
 import { TripCardBadges, useTripCardBadges } from '../components/Plugins/TripCardBadges'
@@ -33,17 +37,41 @@ import { useAddonStore } from '../store/addonStore'
 import { normalizeAppearance } from '@trek/shared'
 import '../styles/dashboard.css'
 
-const GRADIENTS = [
-  'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-  'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-  'linear-gradient(135deg, #96fbc4 0%, #f9f586 100%)',
-]
-function tripGradient(id: number): string { return GRADIENTS[id % GRADIENTS.length] }
+const DEFAULT_TRIP_COVERS: Record<string, string[]> = {
+  'Mexico City': ['https://cdn.mos.cms.futurecdn.net/6Txsk2q5k3Hxho7cVhdrbV-1000-80.jpg'],
+  'Peru & Easter Island': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQjaYcjzofmBOHv9ZHeYgLz8KGTIu_SRiIuPOKqFQSwpw&s=10'],
+  'Middle East': [
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvRPhYGDAkE97AhDIfIP3ZEv0_l7gZFQhsbysxcChmfA&s=10',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRkdVxqKELmEDWiDYCS1lg3KpxD1l9MWAkn71bFAbDIqA&s=10',
+  ],
+  'Grand Canyon & Sedona': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRfpj0USn-3AXM2Q3oxKfoOlfwGOgvJweXoRORoXCdjWQ&s'],
+  'Grand Canyon': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRfpj0USn-3AXM2Q3oxKfoOlfwGOgvJweXoRORoXCdjWQ&s'],
+  'New England': ['https://t3.ftcdn.net/jpg/03/12/98/38/240_F_312983834_7WSgFX4z0zyZ5zEBXGNyGGA2wklOP2HM.jpg'],
+  'Utah in Las Vegas': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7sllsGS3cNKmYO-0Hm6B_mNsCGwk5GvLFE9m91mjnuOiQ6XPomjlmScPX&s=10'],
+  'Utah': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7sllsGS3cNKmYO-0Hm6B_mNsCGwk5GvLFE9m91mjnuOiQ6XPomjlmScPX&s=10'],
+  'Utah & Las Vegas': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7sllsGS3cNKmYO-0Hm6B_mNsCGwk5GvLFE9m91mjnuOiQ6XPomjlmScPX&s=10'],
+  'Europe 2019': ['https://media.architecturaldigest.com/photos/66df5877d600aa994603fbd5/1:1/w_2000,h_2000,c_limit/GettyImages-1467072114.jpg'],
+  'Europe Summer 2019': ['https://media.architecturaldigest.com/photos/66df5877d600aa994603fbd5/1:1/w_2000,h_2000,c_limit/GettyImages-1467072114.jpg'],
+  'Europe Christmas 2018': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT976cEHu0UJLTgqf-kgyi8rgxLmeCDO58Kz2V8gsfeKQ&s=10'],
+  'England Christmas 2018': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT976cEHu0UJLTgqf-kgyi8rgxLmeCDO58Kz2V8gsfeKQ&s=10'],
+  'England': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT976cEHu0UJLTgqf-kgyi8rgxLmeCDO58Kz2V8gsfeKQ&s=10'],
+  'Europe Summer 2018': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvtu4WkAs-joHP5dmM5SBJQG1YKo6vptKSv_1ExlMb0A&s=10'],
+  'France & Italy': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvtu4WkAs-joHP5dmM5SBJQG1YKo6vptKSv_1ExlMb0A&s=10'],
+  'Spain & Netherlands': ['https://media.architecturaldigest.com/photos/66df5877d600aa994603fbd5/1:1/w_2000,h_2000,c_limit/GettyImages-1467072114.jpg'],
+  'Midwest Road Trip Loop': ['https://www.boboandchichi.com/wp-content/uploads/aerial-view-of-Madison-Wisconsin-and-the-Wisconsin-Capitol-Building.jpg'],
+}
+
+function tripCovers(trip: DashboardTrip): string[] {
+  return trip.cover_image ? [trip.cover_image] : DEFAULT_TRIP_COVERS[trip.title] || (trip.trip_preview_image ? [trip.trip_preview_image] : [])
+}
+
+function CoverImages({ images, className }: { images: string[]; className: string }): React.ReactElement {
+  return images.length > 1
+    ? <div className={`${className} cover-collage`}>{images.map((src) => <img key={src} src={src} alt="" />)}</div>
+    : <img className={className} src={images[0]} alt="" />
+}
+
+function tripGradient(id: number): string { return entityGradient(id) }
 
 // Day + short month for the boarding pass / cards, plus the year — but only
 // when it isn't the current year (this year's trips stay clutter-free), e.g.
@@ -89,7 +117,7 @@ function initials(name: string | null | undefined): string {
 }
 
 const RES_ICON: Record<string, React.ReactElement> = {
-  flight: <Plane size={16} />, hotel: <Hotel size={16} />, restaurant: <Utensils size={16} />,
+  flight: <AnimatedAirplaneIcon size={16} animate="hover" />, hotel: <Hotel size={16} />, restaurant: <Utensils size={16} />,
 }
 const RES_TYPE_CLASS: Record<string, string> = { flight: 'flight', hotel: 'hotel', restaurant: 'food' }
 
@@ -157,7 +185,7 @@ export default function DashboardPage(): React.ReactElement {
               <div className="dash-error" role="alert">
                 <span className="dash-error-txt">{t('dashboard.loadErrorBanner')}</span>
                 <button className="dash-error-retry" onClick={retryLoad}>
-                  <RefreshCw size={15} />
+                  <AnimatedRefreshCwIcon size={15} />
                   {t('dashboard.retry')}
                 </button>
               </div>
@@ -167,6 +195,7 @@ export default function DashboardPage(): React.ReactElement {
                 trip={spotlight}
                 bundle={heroBundle}
                 locale={locale}
+                href={`/trips/${spotlight.id}`}
                 onOpen={() => navigate(`/trips/${spotlight.id}`)}
                 onEdit={() => { setEditingTrip(spotlight); setShowForm(true) }}
                 onCopy={() => setCopyTrip(spotlight)}
@@ -223,6 +252,7 @@ export default function DashboardPage(): React.ReactElement {
                     trip={trip}
                     locale={locale}
                     badges={badgesFor(trip.id)}
+                    href={`/trips/${trip.id}`}
                     onOpen={() => navigate(`/trips/${trip.id}`)}
                     onEdit={() => { setEditingTrip(trip); setShowForm(true) }}
                     onCopy={() => setCopyTrip(trip)}
@@ -254,16 +284,6 @@ export default function DashboardPage(): React.ReactElement {
           )}
         </main>
       </div>
-
-      <button
-        className="fab-new-trip"
-        onClick={() => { setEditingTrip(null); setShowForm(true) }}
-        aria-label={t('dashboard.newTrip')}
-        title={t('dashboard.newTrip')}
-      >
-        <Plus size={22} strokeWidth={2.4} />
-        <span className="fab-label">{t('dashboard.newTrip')}</span>
-      </button>
 
       {showForm && (
         <TripFormModal
@@ -298,12 +318,21 @@ export default function DashboardPage(): React.ReactElement {
   )
 }
 
+function openCard(e: React.MouseEvent, href: string, onOpen: () => void): void {
+  if (e.metaKey || e.ctrlKey) {
+    window.open(href, '_blank', 'noopener,noreferrer')
+    return
+  }
+  onOpen()
+}
+
 // ── Boarding-pass hero ───────────────────────────────────────────────────────
-function BoardingPassHero({ trip, bundle, locale, onOpen, onEdit, onCopy, onArchive, onDelete }: {
-  trip: DashboardTrip; bundle: HeroBundle | null; locale: string; onOpen: () => void
+function BoardingPassHero({ trip, bundle, locale, href, onOpen, onEdit, onCopy, onArchive, onDelete }: {
+  trip: DashboardTrip; bundle: HeroBundle | null; locale: string; href: string; onOpen: () => void
   onEdit: () => void; onCopy: () => void; onArchive: () => void; onDelete: () => void
 }): React.ReactElement {
   const { t } = useTranslation()
+  const covers = tripCovers(trip)
   const mobile = useIsMobile()
   const heroPlugins = usePluginStore(s => s.plugins).filter(p => p.type === 'widget' && p.slot === 'hero')
   const stop = (e: React.MouseEvent, fn: () => void) => { e.stopPropagation(); fn() }
@@ -384,7 +413,7 @@ function BoardingPassHero({ trip, bundle, locale, onOpen, onEdit, onCopy, onArch
         <div className="places-preview">
           {places.slice(0, 3).map(p => (
             <div key={p.id} className="place-av">
-              <PlaceAvatar place={p} size={mobile ? 24 : 32} category={{ color: p.category_color ?? undefined, icon: p.category_icon ?? undefined }} />
+              <PlaceAvatar place={p} size={mobile ? 24 : 32} category={{ name: p.category_name ?? p.category?.name ?? p.category_icon ?? p.category?.icon ?? undefined, color: p.category_color ?? p.category?.color ?? undefined, icon: p.category_icon ?? p.category?.icon ?? undefined }} />
             </div>
           ))}
           {places.length === 0 && <div className="place-more"><MapPin size={15} /></div>}
@@ -397,9 +426,9 @@ function BoardingPassHero({ trip, bundle, locale, onOpen, onEdit, onCopy, onArch
 
   return (
     <>
-    <section className="hero-trip" onClick={onOpen}>
-      {trip.cover_image
-        ? <img className="bg" src={trip.cover_image} alt={trip.title} />
+    <section className="hero-trip" onClick={(e) => openCard(e, href, onOpen)}>
+      {covers.length
+        ? <CoverImages images={covers} className="bg" />
         : <div className="bg" style={{ background: tripGradient(trip.id) }} />}
       <div className="scrim" />
       <div className="hero-content">
@@ -429,14 +458,14 @@ function BoardingPassHero({ trip, bundle, locale, onOpen, onEdit, onCopy, onArch
                 ))}
               </div>
             )}
-            <div className="hero-pass" onClick={(e) => { e.stopPropagation(); onOpen() }}>
+            <div className="hero-pass" onClick={(e) => { e.stopPropagation(); openCard(e, href, onOpen) }}>
               <div className="hero-pass-inner">{passCells}</div>
             </div>
           </div>
         )}
       </div>
     </section>
-    {mobile && <section className="pass-card" onClick={onOpen}>{passCells}</section>}
+    {mobile && <section className="pass-card" onClick={(e) => openCard(e, href, onOpen)}>{passCells}</section>}
     </>
   )
 }
@@ -539,15 +568,17 @@ function AtlasStats({ stats }: { stats: TravelStats | null }): React.ReactElemen
 }
 
 // ── Trip card ────────────────────────────────────────────────────────────────
-function TripCard({ trip, locale, badges, onOpen, onEdit, onCopy, onArchive, onDelete }: {
-  trip: DashboardTrip; locale: string; badges?: TripCardBadge[]; onOpen: () => void
+function TripCard({ trip, locale, badges, href, onOpen, onEdit, onCopy, onArchive, onDelete }: {
+  trip: DashboardTrip; locale: string; badges?: TripCardBadge[]; href: string; onOpen: () => void
   onEdit: () => void; onCopy: () => void; onArchive: () => void; onDelete: () => void
 }): React.ReactElement {
   const { t } = useTranslation()
+  const covers = tripCovers(trip)
   const status = getTripStatus(trip)
   const start = splitDate(trip.start_date, locale)
   const end = splitDate(trip.end_date, locale)
   const until = daysUntil(trip.start_date)
+  const approximateDate = trip.date_precision && trip.date_precision !== 'day' ? trip.date_label : null
 
   const statusClass = status === 'ongoing' ? '' : status === 'past' ? 'completed' : status === 'future' || status === 'today' || status === 'tomorrow' ? 'upcoming' : 'idea'
   const statusLabel = status === 'ongoing' ? t('dashboard.mobile.liveNow')
@@ -560,10 +591,10 @@ function TripCard({ trip, locale, badges, onOpen, onEdit, onCopy, onArchive, onD
   const stop = (e: React.MouseEvent, fn: () => void) => { e.stopPropagation(); fn() }
 
   return (
-    <article className="trip-card" onClick={onOpen}>
+    <article className="trip-card" onClick={(e) => openCard(e, href, onOpen)}>
       <div className="trip-cover">
-        {trip.cover_image
-          ? <img src={trip.cover_image} alt={trip.title} />
+        {covers.length
+          ? <CoverImages images={covers} className="trip-cover-image" />
           : <div style={{ width: '100%', height: '100%', background: tripGradient(trip.id) }} />}
         <div className={`trip-status ${statusClass}`}><span className="indicator" /> {statusLabel}</div>
         <div className="trip-actions">
@@ -578,7 +609,7 @@ function TripCard({ trip, locale, badges, onOpen, onEdit, onCopy, onArchive, onD
       </div>
       <div className="trip-body">
         <div className="trip-dates">
-          {start && end ? (
+          {approximateDate ? <span className="date-num">{approximateDate}</span> : start && end ? (
             <>
               <span className="date-num">{fullDate(trip.start_date, locale)}</span>
               <span className="date-arrow"><ArrowRight size={11} /></span>
@@ -651,8 +682,8 @@ function CurrencyTool(): React.ReactElement {
   return (
     <div className="tool">
       <div className="tool-head">
-        <div className="tool-title"><RefreshCw size={14} /> {t('dashboard.currency')}</div>
-        <button className="tool-action" aria-label={t('dashboard.aria.refreshRates')} onClick={fetchRate}><RefreshCw size={14} /></button>
+        <div className="tool-title"><AnimatedRefreshCwIcon size={14} /> {t('dashboard.currency')}</div>
+        <button className="tool-action" aria-label={t('dashboard.aria.refreshRates')} onClick={fetchRate}><AnimatedRefreshCwIcon size={14} /></button>
       </div>
       <div className="fx-input">
         <div className="fx-field">
@@ -675,7 +706,7 @@ function CurrencyTool(): React.ReactElement {
 }
 
 // ── Timezone tool ────────────────────────────────────────────────────────────
-const DEFAULT_ZONES = ['Europe/London', 'Asia/Tokyo']
+const DEFAULT_ZONES: string[] = []
 
 // Fallback for the rare browser without Intl.supportedValuesOf.
 const FALLBACK_ZONES = [
@@ -697,7 +728,7 @@ function TimezoneTool({ locale }: { locale: string }): React.ReactElement {
   const isLoaded = useSettingsStore(s => s.isLoaded)
   const updateSetting = useSettingsStore(s => s.updateSetting)
   const stored = useSettingsStore(s => s.settings.dashboard_timezones)
-  // Unset (never chosen) falls back to home + defaults; an explicit list is honoured.
+  // Unset (never chosen) starts with only the user's local timezone; an explicit list is honoured.
   const zones = stored ?? [home, ...DEFAULT_ZONES]
   const setZones = (next: string[]) => { updateSetting('dashboard_timezones', next).catch(() => {}) }
   const [adding, setAdding] = useState(false)
@@ -801,7 +832,19 @@ function UpcomingTool({ items, locale, onOpen }: {
             const timeStr = parsed.time ? formatTime(parsed.time, locale, timeFormat) : null
             const typeClass = RES_TYPE_CLASS[r.type] || 'other'
             return (
-              <div className="upc-item" key={r.id} onClick={() => onOpen(r.trip_id)}>
+              <div
+                className="upc-item"
+                key={r.id}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => openCard(e, `/trips/${r.trip_id}`, () => onOpen(r.trip_id))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    openCard(e as unknown as React.MouseEvent, `/trips/${r.trip_id}`, () => onOpen(r.trip_id))
+                  }
+                }}
+              >
                 <div className="upc-date"><div className="d mono">{dateStr?.d ?? '–'}</div><div className="m">{dateStr?.m ?? ''}</div></div>
                 <div className="upc-info">
                   <div className="t">{r.title}</div>
@@ -810,7 +853,7 @@ function UpcomingTool({ items, locale, onOpen }: {
                     {r.location || r.place_name || r.trip_title}
                   </div>
                 </div>
-                <div className={`upc-type ${typeClass}`}>{RES_ICON[r.type] || <Ticket size={16} />}</div>
+                <div className={`upc-type ${typeClass}`}>{RES_ICON[r.type] || <AnimatedTicketIcon size={16} />}</div>
               </div>
             )
           })}

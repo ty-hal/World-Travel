@@ -182,4 +182,11 @@ describe('PlaceAvatar', () => {
     render(<PlaceAvatar place={basePlaceWithImage} />);
     expect(mockObserve).not.toHaveBeenCalled();
   });
+
+  it('FE-COMP-AVATAR-017: prefers the shared palette when only the category icon is available', () => {
+    const { container } = render(
+      <PlaceAvatar place={basePlaceWithImage} category={{ name: '🍽️', color: '#ef4444' }} />
+    );
+    expect((container.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(217, 93, 79)');
+  });
 });

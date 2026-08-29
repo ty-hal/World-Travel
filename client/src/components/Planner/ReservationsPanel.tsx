@@ -8,9 +8,10 @@ import { useTranslation } from '../../i18n'
 import {
   Plane, Hotel, Utensils, Train, Car, Ship, Bus, Sailboat, Bike, CarTaxiFront, Route, Ticket, FileText, MapPin,
   Calendar, Hash, CheckCircle2, Circle, Pencil, Trash2, Plus, ChevronDown, ChevronRight, Users,
-  ExternalLink, BookMarked, Lightbulb, Link2, Clock, ArrowRight, AlertCircle, Download,
+  ExternalLink, Lightbulb, Link2, Clock, ArrowRight, AlertCircle, Download,
   TramFront, Footprints, StickyNote,
 } from 'lucide-react'
+import AnimatedTicketIcon from '../shared/AnimatedTicketIcon'
 import { openFile } from '../../utils/fileDownload'
 import { TransitTitle, TransitLegChips, TransitMetaBadges, fmtTransitDuration } from './transitDisplay'
 import Markdown from 'react-markdown'
@@ -47,6 +48,7 @@ const TYPE_OPTIONS = [
   { value: 'transport_other', labelKey: 'reservations.type.transport_other', Icon: Route, color: '#6b7280' },
   { value: 'event',       labelKey: 'reservations.type.event',       Icon: Ticket, color: '#f59e0b' },
   { value: 'tour',        labelKey: 'reservations.type.tour',        Icon: Users, color: '#10b981' },
+  { value: 'activity',    labelKey: 'reservations.type.activity',    Icon: Ticket, color: '#f59e0b' },
   { value: 'other',       labelKey: 'reservations.type.other',       Icon: FileText, color: '#6b7280' },
 ]
 
@@ -131,6 +133,8 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
   const endDay = (isHotel && r.accommodation_end_day_id) ? days.find(d => d.id === r.accommodation_end_day_id)
     : r.end_day_id ? days.find(d => d.id === r.end_day_id)
     : undefined
+  const dayDateStr = startDay?.date?.slice(0, 10)
+  const skipDupDate = isHotel && !!startDay && hasDate && !!dayDateStr && startDt.date === dayDateStr
   const DayLabel = ({ day }: { day: typeof startDay }) => {
     if (!day) return null
     const name = day.title || t('dayplan.dayN', { n: day.day_number })
@@ -151,7 +155,7 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
   }
 
   return (
-    <div className="bg-surface-card" style={{
+    <div className={isTransportType ? 'bg-surface-card transport-reservation-card' : 'bg-surface-card'} data-status={r.status} style={{
       borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column',
       border: `1px solid ${confirmed ? 'rgba(22,163,74,0.25)' : 'rgba(217,119,6,0.25)'}`,
       transition: 'box-shadow 0.15s ease',
@@ -203,10 +207,11 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
             </span>
           ) : null}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: 1, justifyContent: 'flex-end' }}>
           <span className="text-content" style={{
             fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 600, marginRight: 6,
-            maxWidth: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            minWidth: 0, flex: 1, textAlign: 'right',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{r.title}</span>
           {canEdit && (
             <button onClick={() => onEdit(r)} title={t('common.edit')} className="bg-transparent text-content-faint" style={{
@@ -250,7 +255,7 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
         {/* Date / Time row — hidden for a hotel linked to an accommodation: its stay
             already shows as the day-range label above, and a reservation_time stamped
             on the auto-created reservation would otherwise duplicate it (#1383). */}
-        {(hasDate || hasTime) && !(isHotel && (r.accommodation_start_day_id || r.accommodation_end_day_id)) && (
+        {(hasDate || hasTime) && !(isHotel && (r.accommodation_start_day_id || r.accommodation_end_day_id)) && !skipDupDate && (
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: hasDate && hasTime ? '1fr 1fr' : '1fr' }}>
             {hasDate && (
               <div>
@@ -835,7 +840,7 @@ export default function ReservationsPanel({ tripId, reservations, days, assignme
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 80px' }} className="max-md:!px-4 max-md:!pt-4">
         {total === 0 && reservations.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <BookMarked size={36} className="text-content-faint" style={{ display: 'block', margin: '0 auto 12px' }} />
+            <AnimatedTicketIcon size={36} animate="always" className="text-content-faint" style={{ display: 'block', margin: '0 auto 12px' }} />
             <p className="text-content-secondary" style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, margin: '0 0 4px' }}>{t('reservations.empty')}</p>
             <p className="text-content-faint" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', margin: 0 }}>{t('reservations.emptyHint')}</p>
           </div>

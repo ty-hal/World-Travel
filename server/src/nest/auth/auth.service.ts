@@ -24,6 +24,7 @@ export class AuthService {
   // Public config + auth flows
   getAppConfig(user: User | undefined) { return auth.getAppConfig(user); }
   demoLogin() { return auth.demoLogin(); }
+  devLogin() { return auth.devLogin(); }
   validateInviteToken(token: string) { return auth.validateInviteToken(token); }
   registerUser(body: unknown) { return auth.registerUser(body as Parameters<typeof auth.registerUser>[0]); }
   loginUser(body: unknown) { return auth.loginUser(body as Parameters<typeof auth.loginUser>[0]); }

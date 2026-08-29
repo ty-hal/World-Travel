@@ -42,4 +42,16 @@ describe('BackgroundTasksWidget', () => {
     expect(screen.getByText('No reservations could be extracted from the uploaded files.')).toBeInTheDocument()
     expect(screen.queryByText(/AI parsing failed/)).not.toBeInTheDocument()
   })
+
+  it('uses the animated travel icon while an import is running', () => {
+    useBackgroundTasksStore.setState({ tasks: [task({ status: 'running', items: undefined })] })
+    render(<BackgroundTasksWidget />)
+    expect(document.querySelector('.trek-animated-airplane')).toBeInTheDocument()
+  })
+
+  it('uses the animated calendar for completed imports with reviewable items', () => {
+    useBackgroundTasksStore.setState({ tasks: [task({ items: [{} as never] })] })
+    render(<BackgroundTasksWidget />)
+    expect(document.querySelector('.trek-animated-calendar')).toBeInTheDocument()
+  })
 })

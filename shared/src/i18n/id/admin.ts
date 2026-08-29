@@ -517,7 +517,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Lacak pengeluaran dan rencanakan anggaran perjalananmu',
   'admin.addons.catalog.documents.name': 'Dokumen',
   'admin.addons.catalog.documents.description': 'Simpan dan kelola dokumen perjalanan',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Perencana liburan pribadi dengan tampilan kalender',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': 'Peta dunia dengan negara yang pernah dikunjungi dan statistik perjalanan',

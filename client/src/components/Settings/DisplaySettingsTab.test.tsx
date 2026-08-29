@@ -52,13 +52,13 @@ describe('DisplaySettingsTab', () => {
     expect(screen.getByText(/12h/i)).toBeInTheDocument();
   });
 
-  it('FE-COMP-DISPLAY-015: clicking a language button calls updateSetting with that language code', async () => {
+  it('FE-COMP-DISPLAY-015: English is the only supported language', async () => {
     const user = userEvent.setup();
     const updateSetting = vi.fn().mockResolvedValue(undefined);
     seedStore(useSettingsStore, { settings: buildSettings({ language: 'en' }), updateSetting });
     render(<DisplaySettingsTab />);
-    await user.click(screen.getByText('Deutsch'));
-    expect(updateSetting).toHaveBeenCalledWith('language', 'de');
+    await user.click(screen.getByText('English'));
+    expect(updateSetting).toHaveBeenCalledWith('language', 'en');
   });
 
   it('FE-COMP-DISPLAY-016: active language button is visually highlighted', () => {

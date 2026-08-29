@@ -26,7 +26,6 @@ vi.mock('../../src/db/database', () => ({
   db, canAccessTrip, isOwner: vi.fn(() => true), getPlaceWithTags: vi.fn(), closeDb: () => {}, reinitialize: () => {},
 }));
 vi.mock('../../src/websocket', () => ({ broadcast: vi.fn() }));
-vi.mock('../../src/services/journeyService', () => ({ onPlaceCreated: vi.fn(), onPlaceUpdated: vi.fn(), onPlaceDeleted: vi.fn() }));
 
 const { checkPermission } = vi.hoisted(() => ({ checkPermission: vi.fn() }));
 vi.mock('../../src/services/permissions', () => ({ checkPermission }));

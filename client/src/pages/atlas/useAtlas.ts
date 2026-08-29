@@ -7,6 +7,7 @@ import L from 'leaflet'
 import type { GeoJsonFeatureCollection } from '../../types'
 import { A2_TO_A3, normalizeRegionName, type AtlasData, type CountryDetail, type BucketItem } from './atlasModel'
 import { continentForCountry } from '@trek/shared'
+import { atlasMaxBounds, atlasUnvisitedLandFill, atlasWorldZoom, ATLAS_WORLD_LAT, ATLAS_WORLD_ZOOM } from '../../components/Map/leafletTiles'
 
 function useCountryNames(language: string): (code: string) => string {
   const [resolver, setResolver] = useState<(code: string) => string>(() => (code: string) => code)
@@ -37,28 +38,9 @@ export function useAtlas() {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<L.Map | null>(null)
   const geoLayerRef = useRef<L.GeoJSON | null>(null)
-  const glareRef = useRef<HTMLDivElement>(null)
-  const borderGlareRef = useRef<HTMLDivElement>(null)
+  const atlasWorldZoomRef = useRef(ATLAS_WORLD_ZOOM)
   const panelRef = useRef<HTMLDivElement>(null)
   const country_layer_by_a2_ref = useRef<Record<string, any>>({})
-
-  const handlePanelMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (!panelRef.current || !glareRef.current || !borderGlareRef.current) return
-    const rect = panelRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    // Subtle inner glow
-    glareRef.current.style.background = `radial-gradient(circle 300px at ${x}px ${y}px, ${dark ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.25)'} 0%, transparent 70%)`
-    glareRef.current.style.opacity = '1'
-    // Border glow that follows cursor
-    borderGlareRef.current.style.opacity = '1'
-    borderGlareRef.current.style.maskImage = `radial-gradient(circle 150px at ${x}px ${y}px, black 0%, transparent 100%)`
-    borderGlareRef.current.style.webkitMaskImage = `radial-gradient(circle 150px at ${x}px ${y}px, black 0%, transparent 100%)`
-  }
-  const handlePanelMouseLeave = () => {
-    if (glareRef.current) glareRef.current.style.opacity = '0'
-    if (borderGlareRef.current) borderGlareRef.current.style.opacity = '0'
-  }
 
   const [data, setData] = useState<AtlasData | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
@@ -91,8 +73,12 @@ export function useAtlas() {
   const [bucketSearching, setBucketSearching] = useState(false)
   const [bucketPoiMonth, setBucketPoiMonth] = useState(0)
   const [bucketPoiYear, setBucketPoiYear] = useState(0)
-  const [bucketTab, setBucketTab] = useState<'stats' | 'bucket'>('stats')
+  const [bucketTab, setBucketTab] = useState<'stats' | 'bucket' | 'wonders'>('stats')
+  const [wonders, setWonders] = useState<any[]>([])
   const bucketMarkersRef = useRef<any>(null)
+  const wonderMarkersRef = useRef<any>(null)
+  const wonderMarkerByIdRef = useRef<Record<string, L.Marker>>({})
+  const activeWonderMarkerRef = useRef<L.Marker | null>(null)
 
   const [atlas_country_search, set_atlas_country_search] = useState('')
   const [atlas_country_results, set_atlas_country_results] = useState<{ code: string; label: string }[]>([])
@@ -123,16 +109,25 @@ export function useAtlas() {
     return opts
   }, [geoData, resolveName])
 
-  // Load atlas data + bucket list
+  // Load atlas data + bucket list. Wonders are optional — a missing/failed
+  // wonders endpoint must not blank the main stats panel.
   useEffect(() => {
+    let cancelled = false
     Promise.all([
       apiClient.get('/addons/atlas/stats'),
       apiClient.get('/addons/atlas/bucket-list'),
     ]).then(([statsRes, bucketRes]) => {
+      if (cancelled) return
       setData(statsRes.data)
       setBucketList(bucketRes.data.items || [])
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => { if (!cancelled) setLoading(false) })
+
+    apiClient.get('/addons/atlas/wonders')
+      .then(res => { if (!cancelled) setWonders(res.data.wonders || []) })
+      .catch(() => { if (!cancelled) setWonders([]) })
+
+    return () => { cancelled = true }
   }, [])
 
   // Load country-border GeoJSON from our API (geoBoundaries, served server-side —
@@ -208,14 +203,19 @@ export function useAtlas() {
     if (loading || !mapRef.current) return
     if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null }
 
+    const worldZoom = atlasWorldZoom(mapRef.current.clientWidth)
+    atlasWorldZoomRef.current = worldZoom
+
     const map = L.map(mapRef.current, {
-      center: [25, 0],
-      zoom: 3,
-      minZoom: 3,
+      center: [ATLAS_WORLD_LAT, 0],
+      zoom: worldZoom,
+      minZoom: worldZoom,
       maxZoom: 10,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
       zoomControl: false,
       attributionControl: false,
-      maxBounds: [[-90, -220], [90, 220]],
+      maxBounds: atlasMaxBounds(worldZoom, worldZoom),
       maxBoundsViscosity: 1.0,
       fadeAnimation: false,
       preferCanvas: true,
@@ -223,36 +223,27 @@ export function useAtlas() {
 
     L.control.zoom({ position: 'bottomright' }).addTo(map)
 
-    const tileUrl = dark
-      ? 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
-
-    L.tileLayer(tileUrl, {
-      maxZoom: 10,
-      keepBuffer: 25,
-      updateWhenZooming: true,
-      updateWhenIdle: false,
-      tileSize: 256,
-      zoomOffset: 0,
-      crossOrigin: true,
-      referrerPolicy: 'strict-origin-when-cross-origin',
-    } as any).addTo(map)
-
-    // Preload adjacent zoom level tiles
-    L.tileLayer(tileUrl, {
-      maxZoom: 10,
-      keepBuffer: 10,
-      opacity: 0,
-      tileSize: 256,
-      crossOrigin: true,
-      referrerPolicy: 'strict-origin-when-cross-origin',
-    }).addTo(map)
-
     // Custom pane for region layer — above overlay (z-index 400)
     map.createPane('regionPane')
     map.getPane('regionPane')!.style.zIndex = '401'
 
     mapInstance.current = map
+
+    const applyPanLimits = () => {
+      const z = map.getZoom()
+      const world = atlasWorldZoomRef.current
+      map.setMaxBounds(atlasMaxBounds(z, world))
+      if (z <= world + 0.08) {
+        const lng = map.getCenter().lng
+        if (Math.abs(map.getCenter().lat - ATLAS_WORLD_LAT) > 0.001) {
+          map.setView([ATLAS_WORLD_LAT, lng], z, { animate: false })
+        }
+      }
+    }
+    applyPanLimits()
+    map.on('zoomend', applyPanLimits)
+    map.on('drag', applyPanLimits)
+    map.on('dragend', applyPanLimits)
 
     // Zoom-based region switching
     map.on('zoomend', () => {
@@ -284,8 +275,11 @@ export function useAtlas() {
       if (map.getZoom() >= 6) loadRegionsForViewportRef.current()
     })
 
-    return () => { map.remove(); mapInstance.current = null }
-  }, [dark, loading])
+    return () => {
+      map.remove()
+      mapInstance.current = null
+    }
+  }, [loading])
 
   // Render GeoJSON countries
   useEffect(() => {
@@ -320,12 +314,10 @@ export function useAtlas() {
       style: (feature) => {
         const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
         const visited = visitedA3.has(a3)
-        return {
-          fillColor: visited ? colorForCode(a3) : (dark ? '#1e1e2e' : '#e2e8f0'),
-          fillOpacity: visited ? 0.7 : 0.3,
-          color: dark ? '#333' : '#cbd5e1',
-          weight: 0.5,
+        if (visited) {
+          return { fillColor: colorForCode(a3), fillOpacity: 0.7, color: dark ? '#94a3b8' : '#cbd5e1', weight: 0.5 }
         }
+        return atlasUnvisitedLandFill(dark)
       },
       onEachFeature: (feature, layer) => {
         const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
@@ -384,7 +376,7 @@ export function useAtlas() {
             })
             layer.on('click', () => handleMarkCountry(countryCode, name))
             layer.on('mouseover', (e) => {
-              e.target.setStyle({ fillOpacity: 0.5, weight: 1.5, color: dark ? '#555' : '#94a3b8' })
+              e.target.setStyle({ fillOpacity: dark ? 1 : 0.5, fillColor: dark ? '#f4f4f5' : '#e2e8f0', weight: 1.5, color: dark ? '#a1a1aa' : '#94a3b8' })
             })
             layer.on('mouseout', (e) => {
               geoLayerRef.current.resetStyle(e.target)
@@ -394,8 +386,9 @@ export function useAtlas() {
       }
     } as L.GeoJSONOptions & { renderer?: L.Renderer }).addTo(mapInstance.current)
 
-    // Restore map view after re-render
-    mapInstance.current.setView(currentCenter, currentZoom, { animate: false })
+    // Restore map view after re-render (keep world-view latitude locked)
+    const lat = currentZoom <= atlasWorldZoomRef.current + 0.08 ? ATLAS_WORLD_LAT : currentCenter.lat
+    mapInstance.current.setView([lat, currentCenter.lng], currentZoom, { animate: false })
   }, [geoData, data, dark])
 
   // Render plugin tint layers (atlasLayerProvider hook) — a dashed wash over the
@@ -519,9 +512,9 @@ export function useAtlas() {
           color: dark ? '#888' : '#64748b',
           weight: 1.2,
         } : {
-          fillColor: dark ? '#ffffff' : '#000000',
-          fillOpacity: 0.03,
-          color: dark ? '#555' : '#94a3b8',
+          ...atlasUnvisitedLandFill(dark),
+          fillOpacity: dark ? 0.88 : 0.03,
+          color: dark ? '#d4d4d8' : '#94a3b8',
           weight: 1,
         }
       },
@@ -741,6 +734,41 @@ export function useAtlas() {
     bucketMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
   }, [bucketList])
 
+  // Render archaeological wonders as a lightweight map index. The list remains
+  // useful for exact names; the map supplies the spatial overview.
+  useEffect(() => {
+    if (!mapInstance.current) return
+    if (wonderMarkersRef.current) mapInstance.current.removeLayer(wonderMarkersRef.current)
+    wonderMarkerByIdRef.current = {}
+    activeWonderMarkerRef.current = null
+    if (bucketTab !== 'wonders') return
+    const markers = wonders.filter(w => Number.isFinite(w.lat) && Number.isFinite(w.lng)).map(w => {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${w.visited ? '#22c55e' : '#818cf8'};border:2px solid white;box-shadow:0 2px 7px rgba(0,0,0,.35)"><span style="display:block;width:5px;height:5px;margin:4.5px;background:white;border-radius:50%"></span></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 18],
+      })
+      const marker = L.marker([w.lat, w.lng], { icon }).bindTooltip(`${w.label}${w.country ? ` · ${w.country}` : ''}`, {
+        className: 'atlas-tooltip', direction: 'top', offset: [0, -16],
+      })
+      wonderMarkerByIdRef.current[String(w.source_id)] = marker
+      return marker
+    })
+    wonderMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
+  }, [bucketTab, wonders])
+
+  const focusWonder = (wonder: any): void => {
+    const map = mapInstance.current
+    const marker = wonderMarkerByIdRef.current[String(wonder.source_id)]
+    if (!map || !marker || !Number.isFinite(wonder.lat) || !Number.isFinite(wonder.lng)) return
+    if (activeWonderMarkerRef.current && activeWonderMarkerRef.current !== marker) activeWonderMarkerRef.current.closeTooltip()
+    map.setView([wonder.lat, wonder.lng], Math.max(map.getZoom(), 5), { animate: true })
+    marker.openTooltip()
+    marker.setZIndexOffset(1000)
+    activeWonderMarkerRef.current = marker
+  }
+
   const loadCountryDetail = async (code: string): Promise<void> => {
     setSelectedCountry(code)
     try {
@@ -755,9 +783,9 @@ export function useAtlas() {
 
   return {
     t, language, navigate, resolveName, dark, loading,
-    mapRef, regionTooltipRef, panelRef, glareRef, borderGlareRef,
-    handlePanelMouseMove, handlePanelMouseLeave,
+    mapRef, regionTooltipRef, panelRef,
     data, setData, stats, countries, selectedCountry, countryDetail,
+    geoData,
     loadCountryDetail, handleUnmarkCountry, select_country_from_search,
     visitedRegions, setVisitedRegions,
     atlas_country_search, set_atlas_country_search,
@@ -766,6 +794,7 @@ export function useAtlas() {
     confirmAction, setConfirmAction, executeConfirmAction,
     bucketMonth, setBucketMonth, bucketYear, setBucketYear,
     bucketList, setBucketList, bucketTab, setBucketTab,
+    wonders, focusWonder,
     showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm,
     handleAddBucketItem, handleDeleteBucketItem, handleBucketPoiSearch, handleSelectBucketPoi,
     bucketSearchResults, setBucketSearchResults,

@@ -463,7 +463,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Sledování výdajů a plánování rozpočtu cesty',
   'admin.addons.catalog.documents.name': 'Dokumenty',
   'admin.addons.catalog.documents.description': 'Ukládání a správa cestovních dokladů',
-  'admin.addons.catalog.vacay.name': 'Dovolená (Vacay)',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Osobní plánovač dovolené s kalendářem',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': 'Mapa světa s navštívenými zeměmi a statistikami',

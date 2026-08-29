@@ -21,6 +21,7 @@ import { POI_CATEGORY_BY_KEY, type Poi } from './poiCategories'
 import { buildPoiPopupHtml } from './placePopup'
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../constants/mapDefaults'
 import { computeMapViewport, TILE_SIZE_GL } from '../../utils/mapViewport'
+import { getPinColor } from './pinColors'
 
 function categoryIconSvg(iconName: string | null | undefined, size: number): string {
   const IconComponent = (iconName && CATEGORY_ICON_MAP[iconName]) || CATEGORY_ICON_MAP['MapPin']
@@ -102,12 +103,13 @@ interface Props {
 
 function createMarkerElement(place: Place & { category_color?: string; category_icon?: string }, photoUrl: string | null, orderNumbers: number[] | null, selected: boolean): HTMLDivElement {
   const size = selected ? 44 : 36
-  const borderColor = selected ? '#111827' : (place.category_color || 'white')
+  const pinColor = getPinColor((place as Place & { category_name?: string }).category_name)
+  const borderColor = selected ? '#111827' : pinColor
   const borderWidth = selected ? 3 : 2.5
   const shadow = selected
     ? '0 0 0 3px rgba(17,24,39,0.25), 0 4px 14px rgba(0,0,0,0.3)'
     : '0 2px 8px rgba(0,0,0,0.22)'
-  const bgColor = place.category_color || '#6b7280'
+  const bgColor = pinColor
 
   // The visual circle is `size` + 2*border on each side. To make the
   // mapbox `anchor: 'center'` land on the real visual middle of the marker
@@ -911,7 +913,7 @@ export function MapViewGL({
         if (!coords || coords.length < 2) return []
         return [{
           type: 'Feature' as const,
-          properties: { color: (place as Place & { category_color?: string }).category_color || '#3b82f6' },
+          properties: { color: getPinColor((place as Place & { category_name?: string }).category_name) },
           geometry: { type: 'LineString' as const, coordinates: coords.map(([lat, lng]) => [lng, lat]) },
         }]
       } catch { return [] }
@@ -1141,7 +1143,7 @@ export function MapViewGL({
           </div>
           {hoverPlace.category_name && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
-              <HoverIcon size={10} style={{ color: hoverPlace.category_color || '#6b7280', flexShrink: 0 }} />
+              <HoverIcon size={10} style={{ color: getPinColor(hoverPlace.category_name), flexShrink: 0 }} />
               <span style={{ fontSize: 11, color: '#6b7280' }}>{hoverPlace.category_name}</span>
             </div>
           )}

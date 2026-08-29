@@ -68,6 +68,7 @@ interface AuthState {
   setPlacesAutocompleteEnabled: (val: boolean) => void
   setPlacesDetailsEnabled: (val: boolean) => void
   demoLogin: () => Promise<AuthResponse>
+  devLogin: () => Promise<AuthResponse>
 }
 
 // Sequence counter to prevent stale loadUser responses from overwriting fresh auth state
@@ -337,6 +338,21 @@ export const useAuthStore = create<AuthState>()(
       return data
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Demo login failed')
+      set({ isLoading: false, error })
+      throw new Error(error)
+    }
+  },
+  devLogin: async () => {
+    authSequence++
+    set({ isLoading: true, error: null })
+    try {
+      const data = await authApi.devLogin() as AuthResponse
+      set({ user: data.user, isAuthenticated: true, isLoading: false, error: null })
+      await onAuthSuccess(data.user.id)
+      connect()
+      return data
+    } catch (err: unknown) {
+      const error = getApiErrorMessage(err, 'Development login failed')
       set({ isLoading: false, error })
       throw new Error(error)
     }

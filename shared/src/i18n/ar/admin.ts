@@ -475,7 +475,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'تتبع النفقات وخطط ميزانية الرحلة',
   'admin.addons.catalog.documents.name': 'المستندات',
   'admin.addons.catalog.documents.description': 'حفظ وإدارة وثائق السفر',
-  'admin.addons.catalog.vacay.name': 'الإجازة',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'مخطط إجازات شخصي مع عرض تقويم',
   'admin.addons.catalog.atlas.name': 'الأطلس',
   'admin.addons.catalog.atlas.description': 'خريطة العالم مع الدول التي تمت زيارتها وإحصائيات السفر',

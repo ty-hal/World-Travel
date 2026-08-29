@@ -1,5 +1,8 @@
 import { execSync, spawn } from 'node:child_process';
 
+process.env.NODE_ENV = 'development';
+process.env.COOKIE_SECURE = 'false';
+
 console.log('[dev] initial build...');
 execSync('node scripts/build.mjs', { stdio: 'inherit' });
 
@@ -26,6 +29,14 @@ tsc.stdout.on('data', (chunk) => {
     nodeProc = spawn('node', ['--require', 'tsconfig-paths/register', '--watch', 'dist/index.js'], {
       stdio: 'inherit',
       shell: true,
+      env: { ...process.env, NODE_ENV: 'development', COOKIE_SECURE: 'false' },
+    });
+    nodeProc.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        console.error(
+          '[dev] Backend exited. If you see EADDRINUSE on :3001, a Playwright E2E server may still be running — run `npm run e2e:free-ports --workspace=client` and restart dev.',
+        );
+      }
     });
     children.push(nodeProc);
   }

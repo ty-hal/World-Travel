@@ -33,9 +33,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // Empty = no personal display currency, so Costs falls back to the trip's own.
   default_currency: '',
   language: localStorage.getItem('app_language') || 'en',
-  temperature_unit: 'celsius',
-  distance_unit: 'metric',
-  time_format: '24h',
+  temperature_unit: 'fahrenheit',
+  distance_unit: 'imperial',
+  time_format: '12h',
   show_place_description: false,
   optimize_from_accommodation: true,
   map_provider: 'leaflet',
@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dashboard_fx_to: 'USD',
   appearance: DEFAULT_APPEARANCE,
   // dashboard_timezones is intentionally left unset so the widget can tell "never
-  // chosen" (fall back to home + defaults) from an explicitly emptied list.
+  // chosen" (fall back to the user's home timezone) from an explicitly emptied list.
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

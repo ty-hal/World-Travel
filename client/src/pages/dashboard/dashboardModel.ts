@@ -11,13 +11,15 @@ import type { Trip } from '../../types'
 // endpoints (it already carries the computed day_count/place_count/is_owner/
 // owner_username/shared_count fields). Kept as a named alias so the existing
 // imports stay stable.
-export type DashboardTrip = Trip
+export type DashboardTrip = Trip & { trip_preview_image?: string | null }
 
 export interface Member { id: number; username: string; avatar_url?: string | null }
 export interface Place {
   id: number; name: string; image_url: string | null; lat: number | null; lng: number | null
   google_place_id: string | null; osm_id: string | null
+  category_name?: string | null
   category_color?: string | null; category_icon?: string | null
+  category?: { name?: string | null; color?: string | null; icon?: string | null } | null
 }
 export interface HeroBundle { members: Member[]; places: Place[] }
 export interface TravelStats { totalTrips?: number; totalDays?: number; totalPlaces?: number; totalDistanceKm?: number; countries?: string[] }

@@ -1,5 +1,6 @@
 import React from 'react'
-import { Bell, CheckCheck, Trash2 } from 'lucide-react'
+import { CheckCheck, Trash2 } from 'lucide-react'
+import AnimatedBellIcon from '../components/shared/AnimatedBellIcon'
 import { useTranslation } from '../i18n'
 import PageShell from '../components/Layout/PageShell'
 import { Spinner } from '../components/shared/Spinner'
@@ -83,7 +84,7 @@ export default function InAppNotificationsPage(): React.ReactElement {
               </div>
             ) : displayed.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 px-4 text-center gap-3">
-                <Bell className="w-12 h-12 text-content-faint" />
+                <AnimatedBellIcon size={48} animate="always" className="w-12 h-12 text-content-faint" />
                 <p className="text-base font-medium text-content-muted">{t('notifications.empty')}</p>
                 <p className="text-sm text-content-faint">{t('notifications.emptyDescription')}</p>
               </div>

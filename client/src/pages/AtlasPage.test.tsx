@@ -33,6 +33,7 @@ vi.mock('leaflet', () => {
 
   const mockMap = {
     setView: vi.fn().mockReturnThis(),
+    setMaxBounds: vi.fn().mockReturnThis(),
     on: vi.fn().mockImplementation((event: string, cb: Function) => {
       if (event === 'zoomend') {
         // Invoke with zoom=5 to cover the shouldShow=true branch (loadRegionsForViewport)
@@ -66,7 +67,7 @@ vi.mock('leaflet', () => {
 
   const L = {
     map: vi.fn(() => mockMap),
-    tileLayer: vi.fn(() => ({ addTo: vi.fn().mockReturnThis() })),
+    tileLayer: vi.fn(() => ({ addTo: vi.fn().mockReturnThis(), setUrl: vi.fn().mockReturnThis(), remove: vi.fn() })),
     // Call onEachFeature and style callbacks for each feature so those paths are covered
     geoJSON: vi.fn((data: any, options: any) => {
       if (options?.onEachFeature && data?.features) {
@@ -180,6 +181,8 @@ function useDefaultAtlasHandlers() {
     http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json({ type: 'FeatureCollection', features: [] })),
     // Handler for region GeoJSON fetch (triggered by loadRegionsForViewport when intersects=true)
     http.get('/api/addons/atlas/regions/geo', () => HttpResponse.json({ features: [] })),
+    http.get('/api/addons/atlas/wonders', () => HttpResponse.json({ wonders: [] })),
+    http.get('/api/atlas-layers', () => HttpResponse.json({ layers: [] })),
   );
 }
 

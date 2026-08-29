@@ -432,7 +432,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': '跟踪支出并规划旅行预算',
   'admin.addons.catalog.documents.name': '文档',
   'admin.addons.catalog.documents.description': '存储和管理旅行文档',
-  'admin.addons.catalog.vacay.name': '假期',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': '带日历视图的个人假期规划器',
   'admin.addons.catalog.atlas.name': '足迹',
   'admin.addons.catalog.atlas.description': '标记已访问国家和旅行统计的世界地图',

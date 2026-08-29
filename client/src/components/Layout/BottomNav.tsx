@@ -3,29 +3,30 @@ import { useAddonStore } from '../../store/addonStore'
 import { usePluginStore } from '../../store/pluginStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
-import { LayoutGrid, CalendarDays, Globe, Compass, Bookmark, Plus } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { LayoutGrid, Plus } from 'lucide-react'
+import type { ComponentType, SVGProps } from 'react'
 import { resolvePluginIcon } from '../shared/PluginIcon'
+import AnimatedCalendarDaysIcon from '../shared/AnimatedCalendarDaysIcon'
+import AnimatedGlobeIcon from '../shared/AnimatedGlobeIcon'
+import AnimatedBookmarkIcon from '../shared/AnimatedBookmarkIcon'
 
-const ADDON_NAV: Record<string, { icon: LucideIcon; labelKey: string }> = {
-  vacay:       { icon: CalendarDays, labelKey: 'admin.addons.catalog.vacay.name' },
-  atlas:       { icon: Globe,        labelKey: 'admin.addons.catalog.atlas.name' },
-  journey:     { icon: Compass,      labelKey: 'admin.addons.catalog.journey.name' },
-  collections: { icon: Bookmark,     labelKey: 'admin.addons.catalog.collections.name' },
+type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number }>
+
+const ADDON_NAV: Record<string, { icon: NavIcon; labelKey: string }> = {
+  vacay:       { icon: AnimatedCalendarDaysIcon, labelKey: 'admin.addons.catalog.vacay.name' },
+  atlas:       { icon: AnimatedGlobeIcon,        labelKey: 'admin.addons.catalog.atlas.name' },
+  collections: { icon: AnimatedBookmarkIcon,     labelKey: 'admin.addons.catalog.collections.name' },
 }
 
-interface NavItem { to: string; label: string; icon: LucideIcon }
+interface NavItem { to: string; label: string; icon: NavIcon }
 
 // The centre "+" means something different per context: inside a trip it adds a
-// place, on the journey list it starts a journey, inside a journey it adds an
-// entry — everywhere else it creates a new trip. Pages pick the intent up from
+// place; everywhere else it creates a new trip. Pages pick the intent up from
 // the ?create= query param.
 function useCreateAction(): { label: string; run: () => void } {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const inTrip = useMatch('/trips/:id')
-  const inJourney = useMatch('/journey/:id')
-  const onJourneyList = useMatch('/journey')
 
   if (inTrip) {
     // The "+" is context-aware per active tab: Bookings → reservation,
@@ -37,12 +38,6 @@ function useCreateAction(): { label: string; run: () => void } {
     if (tripTab === 'buchungen') return { label: t('reservations.addManual'), run: () => navigate(`/trips/${id}?create=reservation`) }
     if (tripTab === 'transports') return { label: t('transport.addManual'), run: () => navigate(`/trips/${id}?create=transport`) }
     return { label: t('places.addPlace'), run: () => navigate(`/trips/${id}?create=place`) }
-  }
-  if (inJourney) {
-    return { label: t('journey.detail.addEntry'), run: () => navigate(`/journey/${inJourney.params.id}?create=entry`) }
-  }
-  if (onJourneyList) {
-    return { label: t('journey.new'), run: () => navigate('/journey?create=1') }
   }
   return { label: t('dashboard.newTrip'), run: () => navigate('/dashboard?create=1') }
 }

@@ -5,7 +5,7 @@ import type { TripFile } from '../../types'
 import { getAuthUrl } from '../../api/authUrl'
 import { openFile as openFileUrl } from '../../utils/fileDownload'
 import { triggerDownload, isVideo } from './FileManager.helpers'
-import VideoPlayer from '../Journey/VideoPlayer'
+import VideoPlayer from '../shared/VideoPlayer'
 
 // Image lightbox with gallery navigation
 interface ImageLightboxProps {

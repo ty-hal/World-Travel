@@ -505,7 +505,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Track expenses and plan your trip budget',
   'admin.addons.catalog.documents.name': 'Documents',
   'admin.addons.catalog.documents.description': 'Store and manage travel documents',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Personal vacation planner with calendar view',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': 'World map with visited countries and travel stats',
@@ -598,7 +598,8 @@ const admin: TranslationStrings = {
   'admin.update.confirmTitle': 'Install Update?',
   'admin.update.confirmText':
     'TREK will be updated from {current} to {version}. The server will restart automatically afterwards.',
-  'admin.update.dataInfo': 'All your data (trips, users, API keys, uploads, Vacay, Atlas, budgets) will be preserved.',
+  'admin.update.dataInfo':
+    'All your data (trips, users, API keys, uploads, Calendar, Atlas, budgets) will be preserved.',
   'admin.update.warning': 'The app will be briefly unavailable during the restart.',
   'admin.update.confirm': 'Update Now',
   'admin.update.installing': 'Updating…',

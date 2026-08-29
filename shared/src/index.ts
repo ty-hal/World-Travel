@@ -35,7 +35,6 @@ export * from './collection/collection.schema';
 export * from './trip/trip.schema';
 export * from './collab/collab.schema';
 export * from './file/file.schema';
-export * from './journey/journey.schema';
 export * from './share/share.schema';
 export * from './settings/settings.schema';
 export * from './appearance/appearance.schema';

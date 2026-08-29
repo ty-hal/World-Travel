@@ -5,7 +5,7 @@ declare global { interface Window { __dragData: DragDataPayload | null } }
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
 import { avatarSrc } from '../../utils/avatarSrc'
 import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLink, Clock, Pencil, GripVertical, Ticket, Plus, FileText, Trash2, Car, Lock, Hotel, Footprints, Route as RouteIcon, Bookmark, TramFront } from 'lucide-react'
-import { assignmentsApi, reservationsApi } from '../../api/client'
+import { assignmentsApi, reservationsApi, tripsApi } from '../../api/client'
 import { calculateRoute, calculateRouteWithLegs, optimizeRoute, generateGoogleMapsUrl } from '../Map/RouteCalculator'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import ConfirmDialog from '../shared/ConfirmDialog'
@@ -209,6 +209,7 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
   const [dragOverDayId, setDragOverDayId] = useState(null)
   const [transportDetail, setTransportDetail] = useState(null)
   const [transportPosVersion, setTransportPosVersion] = useState(0)
+  const [lastOptimization, setLastOptimization] = useState<{ dayId: number; orderedIds: number[] } | null>(null)
 
   useEffect(() => {
     if (externalTransportDetail) {
@@ -917,13 +918,29 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
       if (!result[i]) result[i] = optimizedQueue[qi++]
     }
 
-    await onReorder(dayId, result.map(a => a.id))
+    const nextIds = result.map(a => a.id)
+    await onReorder(dayId, nextIds)
+    // Durable history complements the immediate in-memory undo action.
+    tripsApi.recordHistory(tripId, {
+      action: 'Optimize day', entityType: 'day_assignments', entityId: dayId,
+      before: prevIds, after: nextIds,
+    }).catch(() => undefined)
     const usedHotel = !!(anchors.start || anchors.end)
     toast.success(usedHotel ? t('dayplan.toast.routeOptimizedFromHotel') : t('dayplan.toast.routeOptimized'))
     const capturedDayId = dayId
+    setLastOptimization({ dayId: capturedDayId, orderedIds: prevIds })
     pushUndo?.(t('undo.optimize'), async () => {
       await tripActions.reorderAssignments(tripId, capturedDayId, prevIds)
+      setLastOptimization(null)
     })
+  }
+
+  const handleRevertOptimization = async () => {
+    if (!lastOptimization) return
+    const { dayId, orderedIds } = lastOptimization
+    await tripActions.reorderAssignments(tripId, dayId, orderedIds)
+    setLastOptimization(null)
+    toast.success(t('undo.optimize'))
   }
 
 
@@ -1141,6 +1158,8 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
     handleCalculateRoute,
     toggleLock,
     handleOptimize,
+    handleRevertOptimization,
+    lastOptimization,
     handleDropOnDay,
     handleDropOnRow,
     totalCostLabel,
@@ -1312,6 +1331,8 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
     handleCalculateRoute,
     toggleLock,
     handleOptimize,
+    handleRevertOptimization,
+    lastOptimization,
     handleDropOnDay,
     handleDropOnRow,
     totalCostLabel,
@@ -2427,13 +2448,15 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             <path d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
                           </svg>
                         </button>
-                        <button onClick={() => handleOptimize(day.id)} className="bg-surface-hover text-content-secondary" style={{
-                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                          padding: '6px 0', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 500, borderRadius: 8, border: 'none',
-                          cursor: 'pointer', fontFamily: 'inherit',
-                        }}>
-                          <RotateCcw size={12} strokeWidth={2} />
-                          {t('dayplan.optimize')}
+                        <button
+                          onClick={lastOptimization?.dayId === day.id ? handleRevertOptimization : () => handleOptimize(day.id)}
+                          aria-label={lastOptimization?.dayId === day.id ? 'Revert route optimization' : 'Optimize route'}
+                          title={lastOptimization?.dayId === day.id ? 'Restore the previous stop order' : 'Reorder stops to reduce travel'}
+                          className={lastOptimization?.dayId === day.id ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100' : 'bg-content text-surface'}
+                          style={{ flex: '0 1 150px', width: 150, minWidth: 120, maxWidth: 150, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px 10px', fontSize: 'calc(12px * var(--fs-scale-caption, 1))', fontWeight: 600, borderRadius: 8, border: lastOptimization?.dayId === day.id ? '1px solid rgba(180,83,9,0.35)' : 'none', cursor: 'pointer', fontFamily: 'inherit', touchAction: 'manipulation' }}
+                        >
+                          {lastOptimization?.dayId === day.id ? <RotateCcw size={14} strokeWidth={2.2} /> : <RouteIcon size={14} strokeWidth={2.2} />}
+                          <span>{lastOptimization?.dayId === day.id ? 'Revert' : t('dayplan.optimize')}</span>
                         </button>
                         <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-faint)', flexShrink: 0 }}>
                           {(['driving', 'walking'] as const).map(p => {

@@ -91,6 +91,35 @@ export class FilesController {
     return { files: this.files.listFiles(tripId, trash === 'true') };
   }
 
+  @Get('links')
+  listLinks(@CurrentUser() user: User, @Param('tripId') tripId: string) {
+    this.requireTrip(tripId, user);
+    return { links: this.files.listTripLinks(tripId) };
+  }
+
+  @Post('links')
+  @HttpCode(201)
+  createLink(@CurrentUser() user: User, @Param('tripId') tripId: string, @Body() body: { title?: string; url?: string; description?: string }, @Headers('x-socket-id') socketId?: string) {
+    const trip = this.requireTrip(tripId, user);
+    if (!this.files.can('file_upload', trip, user)) throw new HttpException({ error: 'No permission to add links' }, 403);
+    try {
+      const link = this.files.createTripLink(tripId, user.id, { title: body.title || '', url: body.url || '', description: body.description });
+      this.files.broadcast(tripId, 'link:created', { link }, socketId);
+      return { link };
+    } catch (err) {
+      throw new HttpException({ error: err instanceof Error ? err.message : 'Invalid Google link' }, 400);
+    }
+  }
+
+  @Delete('links/:linkId')
+  removeLink(@CurrentUser() user: User, @Param('tripId') tripId: string, @Param('linkId') linkId: string, @Headers('x-socket-id') socketId?: string) {
+    const trip = this.requireTrip(tripId, user);
+    if (!this.files.can('file_delete', trip, user)) throw new HttpException({ error: 'No permission to delete links' }, 403);
+    if (!this.files.deleteTripLink(linkId, tripId)) throw new HttpException({ error: 'Link not found' }, 404);
+    this.files.broadcast(tripId, 'link:deleted', { linkId: Number(linkId) }, socketId);
+    return { success: true };
+  }
+
   @Post()
   @UseInterceptors(FileInterceptor('file', UPLOAD))
   upload(

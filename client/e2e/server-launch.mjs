@@ -11,9 +11,21 @@ import { spawn, execSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+const PORT = 3001
+
+/** Kill anything still bound to our port from a prior aborted E2E or dev run. */
+function freePort(port) {
+  if (process.platform === 'win32') return
+  try {
+    execSync(`lsof -ti :${port} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore', shell: true })
+  } catch {}
+}
+
 const here = path.dirname(fileURLToPath(import.meta.url))
 const dbFile = path.join(here, '.tmp', 'e2e.db')
 const serverDir = path.join(here, '..', '..', 'server')
+
+freePort(PORT)
 
 for (const f of [dbFile, `${dbFile}-wal`, `${dbFile}-shm`]) {
   try { rmSync(f, { force: true }) } catch {}
@@ -27,8 +39,11 @@ const env = {
   TREK_DB_FILE: dbFile,
   ADMIN_EMAIL: 'e2e@trek.local',
   ADMIN_PASSWORD: 'E2eTest12345!',
-  PORT: '3001',
+  PORT: String(PORT),
   NODE_ENV: 'development',
+  // Prevent the admin update banner from polluting E2E screenshots when GitHub
+  // reports a newer release than the local package version.
+  APP_VERSION: '99.0.0',
 }
 
 const child = spawn(process.execPath, ['--require', 'tsconfig-paths/register', 'dist/index.js'], {
@@ -36,7 +51,13 @@ const child = spawn(process.execPath, ['--require', 'tsconfig-paths/register', '
   env,
   stdio: 'inherit',
 })
-const stop = () => { try { child.kill() } catch {} }
+
+function stop() {
+  if (!child?.pid) return
+  try { child.kill('SIGTERM') } catch {}
+  try { child.kill('SIGKILL') } catch {}
+}
+
 process.on('SIGINT', stop)
 process.on('SIGTERM', stop)
 process.on('exit', stop)

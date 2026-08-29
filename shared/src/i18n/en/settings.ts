@@ -90,7 +90,7 @@ const settings: TranslationStrings = {
   'settings.notifyBookingChange': 'Booking changes',
   'settings.notifyTripReminder': 'Trip reminders',
   'settings.notifyTodoDue': 'Todo due soon',
-  'settings.notifyVacayInvite': 'Vacay fusion invitations',
+  'settings.notifyVacayInvite': 'Calendar fusion invitations',
   'settings.notifyPhotosShared': 'Shared photos (Immich)',
   'settings.notifyCollabMessage': 'Chat messages (Collab)',
   'settings.notifyPackingTagged': 'Packing list: assignments',
@@ -484,7 +484,8 @@ const settings: TranslationStrings = {
   'settings.offline.banner.failed': 'Failed to sync: {count}',
   'settings.offline.banner.conflicts': 'Conflicts: {count}',
   'settings.alwaysShowRoutes': 'Always show booking routes',
-  'settings.alwaysShowRoutesHint': 'Automatically draw the route for every flight, train and other booking on the map — no need to switch it on per item.',
+  'settings.alwaysShowRoutesHint':
+    'Automatically draw the route for every flight, train and other booking on the map — no need to switch it on per item.',
 };
 
 export default settings;

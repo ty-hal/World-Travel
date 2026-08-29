@@ -4,15 +4,13 @@ import { canAccessTrip } from '../../db/database';
 import { checkPermission } from '../../services/permissions';
 import type { User } from '../../types';
 import * as svc from '../../services/placeService';
-import { onPlaceCreated, onPlaceUpdated, onPlaceDeleted } from '../../services/journeyService';
 
 type Trip = { user_id: number };
 
 /**
  * Thin Nest wrapper around the existing place service. Trip access mirrors the
  * requireTripAccess middleware (canAccessTrip); mutations use 'place_edit'. The
- * SQL, the GPX/map/list importers and the journey hooks reuse the legacy code
- * unchanged.
+ * SQL and the GPX/map/list importers reuse the legacy code unchanged.
  */
 @Injectable()
 export class PlacesService {
@@ -79,9 +77,4 @@ export class PlacesService {
   searchImage(tripId: string, id: string, userId: number) {
     return svc.searchPlaceImage(tripId, id, userId);
   }
-
-  // Journey hooks — non-fatal, mirroring the route's try/catch wrappers.
-  onCreated(tripId: string, placeId: number): void { try { onPlaceCreated(Number(tripId), placeId); } catch { /* non-fatal */ } }
-  onUpdated(placeId: number): void { try { onPlaceUpdated(placeId); } catch { /* non-fatal */ } }
-  onDeleted(placeId: number): void { try { onPlaceDeleted(placeId); } catch { /* non-fatal */ } }
 }

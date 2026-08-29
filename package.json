@@ -8,6 +8,7 @@
     "shared"
   ],
   "scripts": {
+    "setup": "npm ci",
     "version:major": "npm version major --workspaces --include-workspace-root --no-git-tag-version",
     "version:minor": "npm version minor --workspaces --include-workspace-root --no-git-tag-version",
     "version:patch": "npm version patch --workspaces --include-workspace-root --no-git-tag-version",
@@ -18,6 +19,9 @@
     "dev": "npm run build --workspace=shared && concurrently --names shared,server,client \"npm run build:watch --workspace=shared\" \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
     "build": "npm run build --workspace=shared && npm run build --workspace=server && npm run build --workspace=client",
     "test": "npm run test --workspace=shared && npm run test --workspace=server && npm run test --workspace=client",
+    "check": "npm run lint && npm run format:check && npm run test",
+    "capture": "npm run build --workspace=shared && npm run shots --workspace=client",
+    "capture-promote": "npm run shots:promote --workspace=client",
     "test:cov": "npm run test:coverage --workspace=server && npm run test:coverage --workspace=client",
     "test:e2e": "npm run test:e2e --workspace=server",
     "lint": "npm run lint --workspace=shared && npm run lint --workspace=server && npm run lint --workspace=client",

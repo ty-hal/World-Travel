@@ -396,9 +396,14 @@ export default function MapSettingsTab(): React.ReactElement {
       )}
 
       <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="block text-sm font-medium text-slate-700">Map preview</label>
+          <span className="text-xs text-slate-400">{provider === 'leaflet' ? 'Leaflet' : provider === 'mapbox-gl' ? 'Mapbox GL' : 'MapLibre GL'}</span>
+        </div>
         <div style={{ position: 'relative', inset: 0, height: '200px', width: '100%' }}>
           {provider !== 'leaflet' ? (
             <GlMapPreview
+              key={`${provider}:${mapboxToken}:${mapboxStyle}`}
               provider={provider}
               token={mapboxToken}
               style={mapboxStyle}
@@ -413,6 +418,7 @@ export default function MapSettingsTab(): React.ReactElement {
           ) : (
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             React.createElement(MapView as any, {
+              key: `${provider}:${mapTileUrl}`,
               places: previewPlaces,
               dayPlaces: [],
               route: null,

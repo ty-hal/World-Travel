@@ -4,15 +4,13 @@ import { canAccessTrip } from '../../db/database';
 import { checkPermission } from '../../services/permissions';
 import type { User } from '../../types';
 import * as svc from '../../services/assignmentService';
-import { reconcileTripSkeletons } from '../../services/journeyService';
 
 type Trip = { user_id: number };
 
 /**
  * Thin Nest wrapper around the existing assignment service. Trip access mirrors
  * the requireTripAccess middleware (canAccessTrip); mutations use 'day_edit'.
- * The SQL, the move/reorder logic and the journey skeleton reconcile reuse the
- * legacy code unchanged.
+ * The SQL and the move/reorder logic reuse the legacy code unchanged.
  */
 @Injectable()
 export class AssignmentsService {
@@ -42,15 +40,6 @@ export class AssignmentsService {
 
   createAssignment(dayId: string, placeId: unknown, notes?: string | null) {
     return svc.createAssignment(dayId, placeId as never, notes as never);
-  }
-
-  /**
-   * Re-mirror the trip's day-assigned places onto every linked journey's skeleton
-   * suggestions. Called after any assignment mutation (create/delete/move/time) so
-   * the journey stays in sync. Non-fatal, like the route's try/catch.
-   */
-  reconcile(tripId: string, socketId?: string): void {
-    try { reconcileTripSkeletons(Number(tripId), socketId); } catch { /* non-fatal */ }
   }
 
   assignmentExistsInDay(id: string, dayId: string, tripId: string) {

@@ -7,6 +7,7 @@ import { isMarkdown } from './FileManager.helpers'
 import { FileManagerToolbar } from './FileManagerToolbar'
 import { TrashView } from './FileManagerTrashView'
 import { FilesView } from './FileManagerFilesView'
+import { GoogleLinkModal } from './GoogleLinkModal'
 
 export default function FileManager(props: FileManagerProps) {
   const S = useFileManager(props)
@@ -18,6 +19,8 @@ export default function FileManager(props: FileManagerProps) {
 
       {/* Assign modal */}
       {assignFileId && <AssignModal {...S} />}
+      <GoogleLinkModal {...S} />
+
 
       {/* Document preview modal (markdown is rendered inline; everything else PDF/object) */}
       {previewFile && (isMarkdown(previewFile.mime_type, previewFile.original_name)

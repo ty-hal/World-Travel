@@ -524,7 +524,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': 'Παρακολουθήστε τα έξοδα και σχεδιάστε τον προϋπολογισμό του ταξιδιού σας',
   'admin.addons.catalog.documents.name': 'Έγγραφα',
   'admin.addons.catalog.documents.description': 'Αποθηκεύστε και διαχειριστείτε ταξιδιωτικά έγγραφα',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': 'Προσωπικός σχεδιαστής διακοπών με προβολή ημερολογίου',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description':

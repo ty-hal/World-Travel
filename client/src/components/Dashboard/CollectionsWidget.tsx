@@ -3,15 +3,13 @@ import { Bookmark, ArrowRight, MapPin } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from '../../i18n'
 import { collectionsApi } from '../../api/collections'
-import { entityGradient } from '../../utils/gradients'
 import type { Collection } from '@trek/shared'
 
 /**
  * Dashboard sidebar widget — a glassy `.tool` card that surfaces the user's
- * saved-place LISTS as compact colour-washed badges (a mini version of the
- * collections hero): each badge shows the list's cover image (tinted with its
- * colour) or a colour gradient, its name and place count, and jumps to that
- * list. Fetches only list() (per-list place_count), so no N+1.
+ * saved-place LISTS as compact surface rows with a colour accent stripe (and an
+ * optional cover thumbnail). Each row shows the list name and place count and
+ * jumps to that list. Fetches only list() (per-list place_count), so no N+1.
  */
 export default function CollectionsWidget({ onOpen }: { onOpen: () => void }): React.ReactElement {
   const { t } = useTranslation()
@@ -49,13 +47,13 @@ export default function CollectionsWidget({ onOpen }: { onOpen: () => void }): R
           {lists.slice(0, 6).map(list => (
             <button
               key={list.id}
-              className="col-badge"
+              className={`col-badge${list.cover_image ? ' has-cover' : ''}`}
               style={{ ['--badge-color' as string]: list.color || '#6366f1' }}
               onClick={() => navigate(`/collections/${list.id}`)}
             >
-              {list.cover_image
-                ? <img className="col-badge-media" src={list.cover_image} alt="" />
-                : <div className="col-badge-media" style={{ backgroundImage: entityGradient(list.id) }} />}
+              {list.cover_image && (
+                <img className="col-badge-media" src={list.cover_image} alt="" />
+              )}
               <div className="col-badge-tint" />
               <div className="col-badge-body">
                 <span className="col-badge-name">{list.name}</span>

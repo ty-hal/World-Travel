@@ -48,6 +48,15 @@ export class AuthPublicController {
     return { token: result.token, user: result.user };
   }
 
+  @Post('dev-login')
+  @HttpCode(200)
+  devLogin(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const result = this.auth.devLogin();
+    if (result.error) throw new HttpException({ error: result.error }, result.status!);
+    this.auth.setAuthCookie(res, result.token!, req);
+    return { token: result.token, user: result.user };
+  }
+
   @Get('invite/:token')
   invite(@Param('token') token: string, @Req() req: Request) {
     this.limit('login', req, 10);

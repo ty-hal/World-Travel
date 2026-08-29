@@ -58,9 +58,9 @@ Tap outside the overlay or use the close button to return to the map.
 
 The planner tracks your recent actions — adding places, assigning them to days, reordering, and removing assignments — in a short undo ring. The **Undo** button appears in the Day Plan Sidebar toolbar (at the top of the sidebar) whenever an undoable action is available. It shows the name of the last action as a tooltip on hover and reverses it when clicked.
 
-## Splash Screen
+## Loading
 
-When you first open a trip, a brief loading screen appears while the planner data and place photos are fetched. This screen shows the trip title and a loading animation. Once data is ready and a short grace period for photos has elapsed, the planner workspace appears.
+When you first open a trip, a brief loading screen appears while the planner data is fetched. Place photos load in the background and do not block the planner workspace.
 
 ## Getting Around
 

@@ -117,10 +117,6 @@ export interface HostDeps {
   canManageMembers(tripId: number, userId: number): boolean;
   addTripMember(tripId: number, targetUserId: number, invitedBy: number): unknown;
   removeTripMember(tripId: number, targetUserId: number, actingUserId: number): unknown;
-  /** The acting user's own journals (journey addon must be enabled). */
-  listJournalsForUser(userId: number): unknown;
-  /** The entries of one of the acting user's journeys (journey addon; access-checked). */
-  journalEntriesForUser(userId: number, journeyId: number): unknown;
   /** The acting user's visited countries + regions (atlas addon must be enabled). */
   atlasVisitedForUser(userId: number): unknown;
   /** The acting user's bucket-list items (atlas addon must be enabled). */
@@ -147,14 +143,6 @@ export interface HostDeps {
   // --- Vacay write (plan resolved from the acting user; vacay addon gated) ---
   vacayToggleEntry(userId: number, date: string): unknown;
   vacayToggleCompanyHoliday(userId: number, date: string, note: string | undefined): unknown;
-  // --- Journal write (journeyService.canEdit self-gates; journey addon gated) ---
-  createJournalEntry(userId: number, journeyId: number, input: Record<string, unknown>): unknown;
-  updateJournalEntry(userId: number, entryId: number, input: Record<string, unknown>): unknown;
-  deleteJournalEntry(userId: number, entryId: number): unknown;
-  /** Create/delete a JOURNAL itself (owned by the acting user) — lets an importer
-   * bootstrap the journal it then fills, and clean it up. */
-  createJournal(userId: number, input: Record<string, unknown>): unknown;
-  deleteJournal(userId: number, journeyId: number): unknown;
   /** A trip day's notes (trip-scoped), for `daynotes.list`. */
   listDayNotes(tripId: number, dayId: number): unknown[];
   /** Create a day note (the day must be on the trip); broadcasts dayNote:created. */
@@ -468,18 +456,6 @@ export class PluginRpcHost {
         this.tripRead(p, uid, () => deps.listCollabMessages(num(p.tripId, 'tripId'), p.before != null ? num(p.before, 'before') : undefined)),
       );
     }
-    if (has('db:read:journal')) {
-      this.methods.set('journal.listMine', (_p, uid) => {
-        if (uid === undefined) throw new ForbiddenResource('journal reads require an authenticated user context');
-        return deps.listJournalsForUser(uid);
-      });
-      // A journey's entries (photos/story/checkins). Journeys are user-scoped, not
-      // trip-scoped, so the access check is journey membership inside the wiring.
-      this.methods.set('journal.getEntries', (p, uid) => {
-        if (uid === undefined) throw new ForbiddenResource('journal reads require an authenticated user context');
-        return deps.journalEntriesForUser(uid, num(p.journeyId, 'journeyId'));
-      });
-    }
     if (has('db:read:atlas')) {
       this.methods.set('atlas.visited', (_p, uid) => {
         if (uid === undefined) throw new ForbiddenResource('atlas reads require an authenticated user context');
@@ -580,26 +556,6 @@ export class PluginRpcHost {
       this.methods.set('vacay.toggleEntry', (p, uid) => deps.vacayToggleEntry(requireUid(uid), dateStr(p.date)));
       this.methods.set('vacay.toggleCompanyHoliday', (p, uid) =>
         deps.vacayToggleCompanyHoliday(requireUid(uid), dateStr(p.date), typeof p.note === 'string' ? p.note.slice(0, 256) : undefined));
-    }
-    if (has('db:write:journal')) {
-      // Journal write: journeyService.canEdit self-gates every call against the
-      // acting user (owner/contributor) — the wiring maps a refusal to
-      // RESOURCE_FORBIDDEN. Journeys are user-scoped, not trip-scoped.
-      const requireUid = (uid: number | undefined): number => {
-        if (uid === undefined) throw new ForbiddenResource('journal writes require an authenticated user context');
-        return uid;
-      };
-      this.methods.set('journal.createEntry', (p, uid) => {
-        const u = requireUid(uid);
-        const input = asPayload(p.input);
-        if (typeof input.entry_date !== 'string' || input.entry_date === '') throw new BadParams('entry_date is required');
-        return deps.createJournalEntry(u, num(p.journeyId, 'journeyId'), input);
-      });
-      this.methods.set('journal.updateEntry', (p, uid) =>
-        deps.updateJournalEntry(requireUid(uid), num(p.entryId, 'entryId'), asPayload(p.input)));
-      this.methods.set('journal.deleteEntry', (p, uid) => deps.deleteJournalEntry(requireUid(uid), num(p.entryId, 'entryId')));
-      this.methods.set('journal.createJourney', (p, uid) => deps.createJournal(requireUid(uid), asPayload(p.input)));
-      this.methods.set('journal.deleteJourney', (p, uid) => deps.deleteJournal(requireUid(uid), num(p.journeyId, 'journeyId')));
     }
     if (has('db:read:daynotes')) {
       // Day notes are trip-scoped (core, no addon), so the standard membership gate applies.

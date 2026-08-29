@@ -1,19 +1,4 @@
-import { test, clearNotices } from './shot'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-
-/**
- * Top-level navigable surfaces. One capture per route; anything that needs a
- * dialog opened or a tab clicked lives in its own spec so a failure there
- * cannot take these down with it.
- *
- * Names are the target filenames in wiki/assets/ — see docs/screenshot-map.md
- * for which wiki page consumes which file.
- */
-
-const seed = JSON.parse(
-  readFileSync(path.join(process.cwd(), 'e2e', '.tmp', 'seed.json'), 'utf8'),
-) as { tripId: number; collectionId?: number; journeyId?: number }
+import { test, clearNotices, loadSeed } from './shot'
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/dashboard')
@@ -27,6 +12,7 @@ test('dashboard', async ({ page, shot }) => {
 })
 
 test('trip planner', async ({ page, shot }) => {
+  const seed = loadSeed()
   await page.goto(`/trips/${seed.tripId}`)
   await shot.page_('TripPlanner')
 })
@@ -46,11 +32,6 @@ test('collections', async ({ page, shot }) => {
   await shot.page_('Collections')
 })
 
-test('journey', async ({ page, shot }) => {
-  await page.goto('/journey')
-  await shot.page_('Journey')
-})
-
 test('notifications inbox', async ({ page, shot }) => {
   await page.goto('/notifications')
   await shot.page_('NotificationsInbox')
@@ -62,6 +43,7 @@ test('in-app help', async ({ page, shot }) => {
 })
 
 test('files', async ({ page, shot }) => {
+  const seed = loadSeed()
   await page.goto(`/trips/${seed.tripId}/files`)
   await shot.page_('Files')
 })

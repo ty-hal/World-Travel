@@ -1,11 +1,20 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import type React from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTripStore } from '../../store/tripStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getCached, fetchPhoto } from '../../services/photoService'
 import { useToast } from '../../components/shared/Toast'
-import { Map, Ticket, PackageCheck, Wallet, FolderOpen, Users, Train } from 'lucide-react'
+import AnimatedTicketIcon from '../../components/shared/AnimatedTicketIcon'
+import AnimatedWalletIcon from '../../components/shared/AnimatedWalletIcon'
+import AnimatedFolderOpenIcon from '../../components/shared/AnimatedFolderOpenIcon'
+import AnimatedMapIcon from '../../components/shared/AnimatedMapIcon'
+import AnimatedTrainTrackIcon from '../../components/shared/AnimatedTrainTrackIcon'
+import AnimatedPackageCheckIcon from '../../components/shared/AnimatedPackageCheckIcon'
+import AnimatedImagesIcon from '../../components/shared/AnimatedImagesIcon'
+import AnimatedHistoryIcon from '../../components/shared/AnimatedHistoryIcon'
+import AnimatedUsersIcon from '../../components/shared/AnimatedUsersIcon'
 import { resolvePluginIcon } from '../../components/shared/PluginIcon'
 import { useTranslation, translateApiError } from '../../i18n'
 import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, healthApi, airtrailApi, mapsApi, placesApi } from '../../api/client'
@@ -14,6 +23,7 @@ import type { BookingImportPreviewItem } from '@trek/shared'
 import { accommodationRepo } from '../../repo/accommodationRepo'
 import { offlineDb, getImportFiles, deleteImportFiles } from '../../db/offlineDb'
 import { isEffectivelyOffline } from '../../sync/networkMode'
+import { resolveLeafletTileUrl } from '../../components/Map/leafletTiles'
 import { useBackgroundTasksStore } from '../../store/backgroundTasksStore'
 import { useAuthStore } from '../../store/authStore'
 import { useResizablePanels } from '../../hooks/useResizablePanels'
@@ -28,6 +38,7 @@ import type { Accommodation, TripMember, Day, Place, Reservation } from '../../t
 import { DEFAULT_MAP_LAT, DEFAULT_MAP_LNG, DEFAULT_MAP_ZOOM } from '../../constants/mapDefaults'
 import { resolvePoolAssignmentId } from './tripPlannerModel'
 import { isRoutableReservation } from '../../utils/reservationRoutes'
+import { getGoogleMapsUrlForPoi } from '../../components/Planner/placeGoogleMaps'
 import {
   parseStoredConnections, resolveEffectiveConnections, resolveVisibleConnectionIds,
   toggleConnectionId, toggleAllConnections as flipAllConnectionsMode,
@@ -43,7 +54,7 @@ import {
  * Behaviour is identical to the previous in-component logic.
  */
 export function useTripPlanner() {
-  const { id } = useParams<{ id: string }>()
+  const { id, tab: routeTab } = useParams<{ id: string; tab?: string }>()
   // The route param is a string; convert once here so every downstream component
   // prop and store call gets a real number. An absent/invalid id becomes NaN,
   // which stays falsy in the `if (tripId)` guards below.
@@ -52,6 +63,14 @@ export function useTripPlanner() {
   const toast = useToast()
   const { t, language } = useTranslation()
   const { settings } = useSettingsStore()
+  const tabRouteAliases: Record<string, string> = {
+    plan: 'plan', transports: 'transports', book: 'buchungen', bookings: 'buchungen', buchungen: 'buchungen',
+    lists: 'listen', listen: 'listen', costs: 'finanzplan', finanzplan: 'finanzplan', files: 'dateien', dateien: 'dateien',
+    photos: 'photos', collab: 'collab', history: 'history',
+  }
+  const routeForTab: Record<string, string> = {
+    plan: 'plan', transports: 'transports', buchungen: 'book', listen: 'lists', finanzplan: 'costs', dateien: 'files', photos: 'photos', collab: 'collab', history: 'history',
+  }
   // trip-page plugins mount as tabs inside this trip planner (tripId-scoped).
   const allPlugins = usePluginStore(s => s.plugins)
   const pluginsLoaded = usePluginStore(s => s.loaded)
@@ -123,14 +142,17 @@ export function useTripPlanner() {
   // A trip-page plugin may replace core tabs while it's active (its manifest names
   // them; 'plan' is never replaceable) and may pick where its own tab sits.
   const replacedTabs = new Set(tripPagePlugins.flatMap(p => p.tripPage?.replaces ?? []))
-  const TRIP_TABS = [
-    { id: 'plan', label: t('trip.tabs.plan'), icon: Map },
-    { id: 'transports', label: t('trip.tabs.transports'), icon: Train },
-    { id: 'buchungen', label: t('trip.tabs.reservations'), shortLabel: t('trip.tabs.reservationsShort'), icon: Ticket },
-    ...(enabledAddons.packing ? [{ id: 'listen', label: t('trip.tabs.lists'), shortLabel: t('trip.tabs.listsShort'), icon: PackageCheck }] : []),
-    ...(enabledAddons.budget ? [{ id: 'finanzplan', label: t('trip.tabs.budget'), icon: Wallet }] : []),
-    ...(enabledAddons.documents ? [{ id: 'dateien', label: t('trip.tabs.files'), icon: FolderOpen }] : []),
-    ...(enabledAddons.collab ? [{ id: 'collab', label: t('admin.addons.catalog.collab.name'), icon: Users }] : []),
+  type TripTabIcon = React.ComponentType<{ size?: number; className?: string }>
+  const TRIP_TABS: { id: string; label: string; shortLabel?: string; icon: TripTabIcon }[] = [
+    { id: 'plan', label: t('trip.tabs.plan'), icon: AnimatedMapIcon },
+    { id: 'transports', label: t('trip.tabs.transports'), icon: AnimatedTrainTrackIcon },
+    { id: 'buchungen', label: t('trip.tabs.reservations'), shortLabel: t('trip.tabs.reservationsShort'), icon: AnimatedTicketIcon },
+    ...(enabledAddons.packing ? [{ id: 'listen', label: t('trip.tabs.lists'), shortLabel: t('trip.tabs.listsShort'), icon: AnimatedPackageCheckIcon as TripTabIcon }] : []),
+    ...(enabledAddons.budget ? [{ id: 'finanzplan', label: t('trip.tabs.budget'), icon: AnimatedWalletIcon as TripTabIcon }] : []),
+    ...(enabledAddons.documents ? [{ id: 'dateien', label: t('trip.tabs.files'), icon: AnimatedFolderOpenIcon as TripTabIcon }] : []),
+    { id: 'photos', label: 'Photos', icon: AnimatedImagesIcon },
+    { id: 'history', label: 'History', icon: AnimatedHistoryIcon },
+    ...(enabledAddons.collab ? [{ id: 'collab', label: t('admin.addons.catalog.collab.name'), icon: AnimatedUsersIcon as TripTabIcon }] : []),
   ].filter(tab => tab.id === 'plan' || !replacedTabs.has(tab.id))
   // Positioned plugin tabs splice in ascending order so two positions stay stable;
   // the rest append, exactly as before this capability existed.
@@ -139,9 +161,14 @@ export function useTripPlanner() {
   for (const p of tripPagePlugins.filter(p => p.tripPage?.position == null)) TRIP_TABS.push({ id: `plugin:${p.id}`, label: p.name, icon: resolvePluginIcon(p.icon) })
 
   const [activeTab, setActiveTab] = useState<string>(() => {
-    const saved = sessionStorage.getItem(`trip-tab-${tripId}`)
-    return saved || 'plan'
+    return routeTab ? (tabRouteAliases[routeTab] || 'plan') : 'plan'
   })
+
+  useEffect(() => {
+    const nextTab = routeTab ? (tabRouteAliases[routeTab] || 'plan') : 'plan'
+    setActiveTab(nextTab)
+    sessionStorage.setItem(`trip-tab-${tripId}`, nextTab)
+  }, [tripId, routeTab])
 
   useEffect(() => {
     // Don't evict a saved plugin tab before the plugin feed has loaded.
@@ -160,6 +187,7 @@ export function useTripPlanner() {
     const tabId = replacedTabs.has(rawTabId) ? 'plan' : rawTabId
     setActiveTab(tabId)
     sessionStorage.setItem(`trip-tab-${tripId}`, tabId)
+    navigate(`/trips/${tripId}/${routeForTab[tabId] || tabId}`)
     if (tabId === 'finanzplan') tripActions.loadBudgetItems?.(tripId)
     if (tabId === 'dateien' && (!files || files.length === 0)) tripActions.loadFiles?.(tripId)
   }
@@ -463,23 +491,12 @@ export function useTripPlanner() {
     } catch { /* best effort */ }
   }, [language])
 
-  // Open the Add-Place form pre-filled from an OSM "explore" POI marker — all the
-  // data already comes from the POI, so no reverse-geocode is needed.
-  const openAddPlaceFromPoi = useCallback((poi: { lat: number; lng: number; name: string; address: string | null; website: string | null; phone: string | null; osm_id: string }) => {
-    if (!can('place_edit', trip)) return
-    setPrefillCoords({
-      lat: poi.lat,
-      lng: poi.lng,
-      name: poi.name,
-      address: poi.address || '',
-      website: poi.website || undefined,
-      phone: poi.phone || undefined,
-      osm_id: poi.osm_id,
-    })
-    setEditingPlace(null)
-    setEditingAssignmentId(null)
-    setShowPlaceForm(true)
-  }, [trip])
+  // Explore markers are for discovery; inspect them in Google Maps before adding.
+  // Name + @lat,lng keeps RTL names out of a free-text coords mashup that Google
+  // fails to parse, while still opening the business listing near the pin.
+  const openPoiInGoogleMaps = useCallback((poi: { lat: number; lng: number; name: string; address: string | null }) => {
+    window.open(getGoogleMapsUrlForPoi(poi), '_blank', 'noopener,noreferrer')
+  }, [])
 
   const handleSavePlace = useCallback(async (data) => {
     const pendingFiles = data._pendingFiles
@@ -909,18 +926,9 @@ export function useTripPlanner() {
     return da.map(a => a.place).filter(p => p?.lat && p?.lng)
   }, [selectedDayId, assignments])
 
-  const mapTileUrl = settings.map_tile_url || 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+  const mapTileUrl = resolveLeafletTileUrl(settings.map_tile_url)
 
   const fontStyle = { fontFamily: "var(--font-system)" }
-
-  // Splash screen — show for initial load + a brief moment for photos to start loading
-  const [splashDone, setSplashDone] = useState(false)
-  useEffect(() => {
-    if (!isLoading && trip) {
-      const timer = setTimeout(() => setSplashDone(true), 1500)
-      return () => clearTimeout(timer)
-    }
-  }, [isLoading, trip])
 
   return {
     tripId, navigate, toast, t, language, settings, placesPhotosEnabled,
@@ -951,11 +959,11 @@ export function useTripPlanner() {
     isMobile, isTouch,
     expandedDayIds, setExpandedDayIds, mapPlaces,
     route, routeSegments, routeInfo, setRoute, setRouteInfo, updateRouteForDay,
-    handleSelectDay, handlePlaceClick, handleMarkerClick, handleMapClick, handleMapContextMenu, openAddPlaceFromPoi,
+    handleSelectDay, handlePlaceClick, handleMarkerClick, handleMapClick, handleMapContextMenu, openPoiInGoogleMaps,
     handleSavePlace, openPlaceEditor, handleDeletePlace, confirmDeletePlace, confirmDeletePlaces, confirmChangeCategory,
     handleAssignToDay, handleRemoveAssignment, handleReorder, handleReorderDays, handleAddDay, handleUpdateDayTitle,
     handleSaveReservation, handleSaveTransport, handleDeleteReservation,
     selectedPlace, dayOrderMap, dayPlaces,
-    mapTileUrl, fontStyle, splashDone,
+    mapTileUrl, fontStyle,
   }
 }

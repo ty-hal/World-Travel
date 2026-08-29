@@ -35,7 +35,12 @@ interface OverpassElement {
 }
 
 interface WikiCommonsPage {
-  imageinfo?: { url?: string; thumburl?: string; extmetadata?: { Artist?: { value?: string } } }[];
+  title?: string;
+  coordinates?: { lat: number; lon: number }[];
+  imageinfo?: {
+    url?: string; thumburl?: string; mime?: string; width?: number; height?: number;
+    extmetadata?: Record<string, { value?: string }>;
+  }[];
 }
 
 interface GooglePlaceResult {
@@ -271,6 +276,7 @@ export interface OverpassPoi {
   phone: string | null;
   opening_hours: string | null;
   cuisine: string | null;
+  business_status: 'open' | 'closed' | 'unknown';
   source: 'openstreetmap';
 }
 
@@ -482,6 +488,11 @@ export async function searchOverpassPois(
   const pois: OverpassPoi[] = [];
   for (const el of elements) {
     const tags = el.tags || {};
+    // OSM has no universal live business-status field, but these lifecycle tags
+    // are strong enough to keep known-defunct places out of recommendations.
+    const lifecycle = [tags.disused, tags.abandoned, tags.demolished, tags.closed, tags['amenity:status']]
+      .map(v => String(v || '').toLowerCase());
+    if (lifecycle.some(v => ['yes', 'true', 'closed', 'demolished', 'abandoned'].includes(v))) continue;
     const name = tags.name || tags['name:en'] || tags.brand || null;
     if (!name) continue; // unnamed POIs aren't useful to add to a plan
     const lat = el.lat ?? el.center?.lat;
@@ -508,6 +519,7 @@ export async function searchOverpassPois(
       phone: tags.phone || tags['contact:phone'] || null,
       opening_hours: tags.opening_hours || null,
       cuisine: tags.cuisine || null,
+      business_status: tags.opening_hours === 'closed' ? 'closed' : 'unknown',
       source: 'openstreetmap',
     });
   }
@@ -607,73 +619,86 @@ export async function fetchWikimediaPhoto(
   lng: number,
   name?: string,
 ): Promise<{ photoUrl: string; attribution: string | null } | null> {
-  // Strategy 1: Search Wikipedia for the place name -> get the article image
-  if (name) {
-    try {
-      const searchParams = new URLSearchParams({
-        action: 'query',
-        format: 'json',
-        titles: name,
-        prop: 'pageimages',
-        piprop: 'thumbnail',
-        pithumbsize: '400',
-        pilimit: '1',
-        redirects: '1',
-      });
-      const res = await fetch(`https://en.wikipedia.org/w/api.php?${searchParams}`, { headers: { 'User-Agent': UA } });
-      if (res.ok) {
-        const data = (await res.json()) as { query?: { pages?: Record<string, { thumbnail?: { source?: string } }> } };
-        const pages = data.query?.pages;
-        if (pages) {
-          for (const page of Object.values(pages)) {
-            if (page.thumbnail?.source) {
-              return { photoUrl: page.thumbnail.source, attribution: 'Wikipedia' };
-            }
-          }
-        }
-      }
-    } catch {
-      /* fall through to geosearch */
-    }
-  }
+  if (!name || Number.isNaN(lat) || Number.isNaN(lng)) return null;
 
-  // Strategy 2: Wikimedia Commons geosearch by coordinates
-  const params = new URLSearchParams({
-    action: 'query',
-    format: 'json',
-    generator: 'geosearch',
-    ggsprimary: 'all',
-    ggsnamespace: '6',
-    ggsradius: '300',
-    ggscoord: `${lat}|${lng}`,
-    ggslimit: '5',
-    prop: 'imageinfo',
-    iiprop: 'url|extmetadata|mime',
-    iiurlwidth: '400',
-  });
-  try {
-    const res = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, { headers: { 'User-Agent': UA } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      query?: { pages?: Record<string, WikiCommonsPage & { imageinfo?: { mime?: string }[] }> };
-    };
-    const pages = data.query?.pages;
-    if (!pages) return null;
-    for (const page of Object.values(pages)) {
+  const stripHtml = (value?: string) => value?.replace(/<[^>]+>/g, ' ').replace(/&\w+;/g, ' ').trim() || '';
+  const normalize = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const stopWords = new Set(['the', 'and', 'for', 'restaurant', 'hotel', 'cafe', 'bar', 'airport', 'museum', 'city', 'street', 'road', 'tour']);
+  const tokens = (value: string) => new Set(normalize(value).replace(/[^a-z0-9]+/g, ' ').split(' ').filter(t => t.length > 2 && !stopWords.has(t)));
+  const wanted = tokens(name);
+  const distance = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+    const r = Math.PI / 180;
+    const x = (bLng - aLng) * r * Math.cos((aLat + bLat) * r / 2);
+    const y = (bLat - aLat) * r;
+    return Math.sqrt(x * x + y * y) * 6371000;
+  };
+
+  type Candidate = { url: string; title: string; description: string; categories: string; attribution: string | null; lat?: number; lng?: number; width?: number; height?: number };
+  const candidates: Candidate[] = [];
+  const addPages = (pages: Record<string, WikiCommonsPage> | undefined) => {
+    for (const page of Object.values(pages || {})) {
       const info = page.imageinfo?.[0];
-      // Only use actual photos (JPEG/PNG), skip SVGs and PDFs
-      const mime = (info as { mime?: string })?.mime || '';
-      if (info?.url && (mime.startsWith('image/jpeg') || mime.startsWith('image/png'))) {
-        const attribution = info.extmetadata?.Artist?.value?.replace(/<[^>]+>/g, '').trim() || null;
-        // iiurlwidth=400 makes Commons also return a scaled thumburl. Prefer it —
-        // info.url is the full-resolution original (multi-megapixel camera exports).
-        return { photoUrl: info.thumburl ?? info.url, attribution };
+      const mime = info?.mime || '';
+      if (!info?.url || (!mime.startsWith('image/jpeg') && !mime.startsWith('image/png'))) continue;
+      const meta = info.extmetadata || {};
+      const coords = page.coordinates?.[0];
+      candidates.push({
+        url: info.thumburl ?? info.url,
+        title: page.title || '',
+        description: stripHtml(meta.ImageDescription?.value || meta.Caption?.value),
+        categories: stripHtml(meta.Categories?.value),
+        attribution: stripHtml(meta.Artist?.value) || null,
+        lat: coords?.lat, lng: coords?.lon, width: info.width, height: info.height,
+      });
+    }
+  };
+
+  // Exact Wikipedia article matches are useful, but they go through the same
+  // scoring as Commons results instead of being trusted solely because the
+  // title happened to match.
+  try {
+    const params = new URLSearchParams({ action: 'query', format: 'json', titles: name, redirects: '1', prop: 'pageimages|coordinates', piprop: 'thumbnail', pithumbsize: '400' });
+    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, { headers: { 'User-Agent': UA } });
+    if (res.ok) {
+      const pages = (await res.json() as { query?: { pages?: Record<string, WikiCommonsPage & { thumbnail?: { source?: string } }> } }).query?.pages;
+      for (const page of Object.values(pages || {})) {
+        const thumbnail = page.thumbnail?.source;
+        const coords = page.coordinates?.[0];
+        if (thumbnail) candidates.push({ url: thumbnail, title: page.title || name, description: '', categories: '', attribution: 'Wikipedia', lat: coords?.lat, lng: coords?.lon, width: 400, height: 300 });
       }
     }
-    return null;
-  } catch {
-    return null;
-  }
+  } catch { /* Commons search below is the primary path */ }
+
+  try {
+    // Search a deliberately wide radius: itinerary/OSM coordinates can be off by
+    // a few kilometres, so distance is a soft score rather than a hard filter.
+    const params = new URLSearchParams({ action: 'query', format: 'json', generator: 'geosearch', ggsprimary: 'all', ggsnamespace: '6', ggsradius: '5000', ggscoord: `${lat}|${lng}`, ggslimit: '20', prop: 'imageinfo|coordinates', iiprop: 'url|extmetadata|mime|dimensions', iiurlwidth: '400' });
+    const res = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, { headers: { 'User-Agent': UA } });
+    if (res.ok) addPages((await res.json() as { query?: { pages?: Record<string, WikiCommonsPage> } }).query?.pages);
+  } catch { /* text search below may still succeed */ }
+
+  try {
+    const params = new URLSearchParams({ action: 'query', format: 'json', generator: 'search', gsrsearch: name, gsrnamespace: '6', gsrlimit: '10', prop: 'imageinfo|coordinates', iiprop: 'url|extmetadata|mime|dimensions', iiurlwidth: '400' });
+    const res = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, { headers: { 'User-Agent': UA } });
+    if (res.ok) addPages((await res.json() as { query?: { pages?: Record<string, WikiCommonsPage> } }).query?.pages);
+  } catch { /* no image available from Commons */ }
+
+  const scored = candidates.map(candidate => {
+    const text = `${candidate.title} ${candidate.description} ${candidate.categories}`;
+    const textTokens = tokens(text);
+    const overlap = [...wanted].filter(token => textTokens.has(token)).length / Math.max(wanted.size, 1);
+    const meters = candidate.lat !== undefined && candidate.lng !== undefined ? distance(lat, lng, candidate.lat, candidate.lng) : null;
+    const geoScore = meters === null ? 0 : 35 * Math.exp(-meters / 2500);
+    const qualityScore = candidate.width && candidate.height ? Math.min(10, Math.log10(candidate.width * candidate.height) * 1.25) : 0;
+    const lower = normalize(text);
+    const mismatchPenalty = /\b(person|portrait|biography|selfie|author|actor|politician|flag|map|logo)\b/.test(lower) ? 35 : 0;
+    return { candidate, score: overlap * 50 + geoScore + qualityScore - mismatchPenalty, meters, overlap };
+  }).filter(item => item.overlap >= 0.35 && (item.meters === null ? item.overlap >= 0.75 : item.meters <= 8000))
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0];
+  if (!best || best.score < 35) return null;
+  return { photoUrl: best.candidate.url, attribution: best.candidate.attribution };
 }
 
 // ── Search places (Google or Nominatim fallback) ─────────────────────────────
@@ -1049,6 +1074,30 @@ export async function getPlacePhoto(
         }
       };
 
+      // Openverse is a free, openly licensed image index. Keep it last so the
+      // more precise Wikipedia/Commons match wins when one exists.
+      const fetchOpenverseFallback = async (): Promise<{ filePath: string; attribution: string | null } | null> => {
+        if (!name) return null;
+        try {
+          const params = new URLSearchParams({ q: name, page_size: '5', mature: 'false' });
+          const res = await fetch(`https://api.openverse.org/v1/images/?${params}`, { headers: { 'User-Agent': UA } });
+          if (!res.ok) return null;
+          const body = await res.json() as { results?: Array<{ thumbnail?: string; url?: string; creator?: string; license?: string }> };
+          const result = body.results?.find((item) => item.thumbnail || item.url);
+          const source = result?.thumbnail || result?.url;
+          if (!source) return null;
+          const imgRes = await safeFetchFollow(source, undefined, { bypassInternalIpAllowed: true });
+          if (!imgRes.ok) return null;
+          const bytes = Buffer.from(await imgRes.arrayBuffer());
+          if (!bytes.length) return null;
+          const attribution = [result?.creator, result?.license?.toUpperCase()].filter(Boolean).join(' · ') || 'Openverse';
+          const cached = await placePhotoCache.put(placeId, bytes, attribution);
+          return { filePath: cached.filePath, attribution: cached.attribution };
+        } catch {
+          return null;
+        }
+      };
+
       // Google Places photo for a Google place_id. Returns null (without marking an
       // error) on any miss — no key, URL-shaped id, request rejected, no photos, or
       // a failed media download — so the caller can fall back to Wikimedia.
@@ -1119,6 +1168,9 @@ export async function getPlacePhoto(
 
       const fallback = await fetchWikimediaFallback();
       if (fallback) return fallback;
+
+      const openverse = await fetchOpenverseFallback();
+      if (openverse) return openverse;
 
       placePhotoCache.markError(placeId);
       return null;

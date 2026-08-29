@@ -1,4 +1,5 @@
-import { Search, Plus, X, Upload, ChevronDown, Check, MapPin } from 'lucide-react'
+import { Plus, X, Upload, ChevronDown, Check, MapPin } from 'lucide-react'
+import AnimatedSearchIcon from '../shared/AnimatedSearchIcon'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import Tooltip from '../shared/Tooltip'
 import type { SidebarState } from './usePlacesSidebar'
@@ -127,7 +128,7 @@ export function PlacesHeader(S: SidebarState) {
 
       {/* Suchfeld */}
       <div style={{ position: 'relative' }}>
-        <Search size={13} strokeWidth={1.8} color="var(--text-faint)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        <AnimatedSearchIcon size={13} strokeWidth={1.8} color="var(--text-faint)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
         <input
           type="text"
           value={search}

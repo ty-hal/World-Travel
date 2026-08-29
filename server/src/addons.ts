@@ -6,7 +6,6 @@ export const ADDON_IDS = {
   VACAY: 'vacay',
   ATLAS: 'atlas',
   COLLAB: 'collab',
-  JOURNEY: 'journey',
   AIRTRAIL: 'airtrail',
   LLM_PARSING: 'llm_parsing',
   COLLECTIONS: 'collections',

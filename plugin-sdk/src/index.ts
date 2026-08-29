@@ -195,22 +195,6 @@ export interface PluginContext {
   };
   // The acting user's OWN subsystem data across all their trips (not one trip), each
   // gated on its addon being enabled — mirrors the addon's own REST/MCP readers.
-  journal: {
-    /** The acting user's journals. Needs `db:read:journal` + the journey addon. */
-    listMine(): Promise<unknown[]>;
-    /** The entries of one of the acting user's journeys (photos/story/checkins), access-checked. Needs `db:read:journal`. */
-    getEntries(journeyId: number): Promise<unknown[]>;
-    /** Create an entry on a journey the acting user can edit. Needs `db:write:journal`. */
-    createEntry(journeyId: number, input: { entry_date: string; [k: string]: unknown }): Promise<unknown>;
-    /** Create a journal owned by the acting user (importers bootstrap the journal they fill). Needs `db:write:journal`. */
-    createJourney(input: { title: string; subtitle?: string; trip_ids?: number[] }): Promise<unknown>;
-    /** Delete one of the acting user's journals. Needs `db:write:journal`. */
-    deleteJourney(journeyId: number): Promise<{ deleted: boolean }>;
-    /** Update an entry (owner/contributor-gated). Needs `db:write:journal`. */
-    updateEntry(entryId: number, input: Record<string, unknown>): Promise<unknown>;
-    /** Delete an entry (owner/contributor-gated). Needs `db:write:journal`. */
-    deleteEntry(entryId: number): Promise<{ deleted: boolean }>;
-  };
   atlas: {
     /** The acting user's visited countries + regions. Needs `db:read:atlas` + the atlas addon. */
     visited(): Promise<{ countries: unknown[]; regions: unknown[] }>;
@@ -538,15 +522,6 @@ export interface TripCardProvider {
   getCards(tripIds: number[], ctx: PluginContext): Promise<TripCardContribution[]>;
 }
 
-/** One row of extra info TREK renders under a journal entry (same shape as PlaceDetailItem). */
-export interface JournalEntryRow { label: string; value?: string; url?: string; }
-export interface JournalEntryProvider {
-  /** Return rows for a journal entry. Runs with the current user bound, on a short
-   * timeout; the host caps the row count and skips a failing call.
-   * Needs `hook:journal-entry-provider`. */
-  getRows(entryId: number, ctx: PluginContext): Promise<JournalEntryRow[]>;
-}
-
 /** A core-event subscription (#1429 eco). Handlers run with NO user (like a job).
  * Needs `events:subscribe`. */
 export interface PluginEventSubscription {
@@ -606,7 +581,6 @@ export interface PluginDefinition {
     mapMarkerProvider?: MapMarkerProvider;
     pdfSectionProvider?: PdfSectionProvider;
     atlasLayerProvider?: AtlasLayerProvider;
-    journalEntryProvider?: JournalEntryProvider;
     tripCardProvider?: TripCardProvider;
     notificationChannel?: NotificationChannel;
   };

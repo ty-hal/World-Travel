@@ -484,7 +484,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': '지출 추적 및 여행 예산 계획',
   'admin.addons.catalog.documents.name': '문서',
   'admin.addons.catalog.documents.description': '여행 서류 저장 및 관리',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': '캘린더 보기가 있는 개인 휴가 플래너',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': '방문한 나라와 여행 통계가 있는 세계 지도',

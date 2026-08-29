@@ -190,12 +190,10 @@ export const PERMISSION_FAMILIES: PermissionFamily[] = [
     ],
   },
   {
-    id: 'journal',
-    label: 'Journal, Atlas, Vacay & collections',
+    id: 'addons',
+    label: 'Atlas, Vacay & collections',
     hint: 'The cross-trip features — each needs its addon enabled',
     permissions: [
-      { value: 'db:read:journal', hint: 'Read journeys and their entries' },
-      { value: 'db:write:journal', hint: 'Create and edit journeys and journal entries' },
       { value: 'db:read:atlas', hint: 'Read visited countries/regions and the bucket list' },
       { value: 'db:write:atlas', hint: 'Mark places visited and edit the bucket list' },
       { value: 'db:read:vacay', hint: 'Read vacation-day plans and balances' },
@@ -217,7 +215,6 @@ export const PERMISSION_FAMILIES: PermissionFamily[] = [
       { value: 'hook:map-marker-provider', hint: 'Add your own markers to the map' },
       { value: 'hook:pdf-section-provider', hint: 'Add a section to the exported trip PDF' },
       { value: 'hook:atlas-layer-provider', hint: 'Add a layer to the Atlas map' },
-      { value: 'hook:journal-entry-provider', hint: 'Contribute entries to a journey' },
       { value: 'hook:trip-card-provider', hint: 'Add a badge/card to the trip list' },
       { value: 'hook:notification-channel', hint: 'Deliver TREK notifications over your own channel' },
       { value: 'hook:user-data', hint: 'Implement GDPR erasure/export of the data you hold for a user' },

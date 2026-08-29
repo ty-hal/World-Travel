@@ -1,5 +1,7 @@
 import React from 'react'
-import { List as ListIcon, Map as MapIcon, Search, Bookmark, CheckCheck, X, Trash2, Copy, CopyPlus, FolderInput, Plus, Tags } from 'lucide-react'
+import { List as ListIcon, Map as MapIcon, CheckCheck, X, Trash2, Copy, CopyPlus, FolderInput, Plus, Tags } from 'lucide-react'
+import AnimatedBookmarkIcon from '../components/shared/AnimatedBookmarkIcon'
+import AnimatedSearchIcon from '../components/shared/AnimatedSearchIcon'
 import Navbar from '../components/Layout/Navbar'
 import Modal from '../components/shared/Modal'
 import ListsRail from '../components/Collections/ListsRail'
@@ -124,7 +126,7 @@ export default function CollectionsPage(): React.ReactElement {
       {filterBar}
       {c.visiblePlaces.length > 0
         ? listEl
-        : <EmptyState icon={<Search size={26} />} title={t('collections.empty.noMatchTitle')} text={t('collections.empty.noMatchText')} />}
+        : <EmptyState icon={<AnimatedSearchIcon size={26} animate="always" />} title={t('collections.empty.noMatchTitle')} text={t('collections.empty.noMatchText')} />}
     </>
   )
 
@@ -132,7 +134,7 @@ export default function CollectionsPage(): React.ReactElement {
   if (c.placesLoading && !hasPlaces) {
     body = <div className="col-loading"><div className="col-spinner" /></div>
   } else if (!hasPlaces) {
-    body = <EmptyState icon={<Bookmark size={26} />} title={t('collections.empty.title')} text={t('collections.empty.text')} />
+    body = <EmptyState icon={<AnimatedBookmarkIcon size={26} animate="always" />} title={t('collections.empty.title')} text={t('collections.empty.text')} />
   } else if (desktopSplit) {
     body = (
       <div className={`col-split${c.view === 'map' ? ' map-full' : ''}`}>
@@ -170,12 +172,12 @@ export default function CollectionsPage(): React.ReactElement {
           <div className="col-body">
             {noLists ? (
               <EmptyState
-                icon={<Bookmark size={26} />}
+                icon={<AnimatedBookmarkIcon size={26} animate="always" />}
                 title={t('collections.empty.firstTitle')}
                 text={t('collections.empty.firstText')}
                 action={
                   <button type="button" onClick={() => c.setEditorTarget('new')} className="col-cta">
-                    <Bookmark size={16} /> {t('collections.newList')}
+                    <AnimatedBookmarkIcon size={16} /> {t('collections.newList')}
                   </button>
                 }
               />
@@ -203,7 +205,7 @@ export default function CollectionsPage(): React.ReactElement {
                 {(!mapOverlay || canAddPlace) && (
                   <div className="col-toolbar">
                     <button type="button" className="col-rail-toggle" onClick={() => c.setMobileRailOpen(true)}>
-                      <Bookmark size={15} /> {t('collections.title')}
+                      <AnimatedBookmarkIcon size={15} /> {t('collections.title')}
                     </button>
                     {!c.isWide && mappable.length > 0 && (
                       <div className="col-viewseg" role="group" aria-label={t('collections.title')}>
@@ -223,7 +225,7 @@ export default function CollectionsPage(): React.ReactElement {
                     <div className="col-toolbar-spacer" />
                     {!mapOverlay && (
                       <div className="col-search">
-                        <Search size={15} />
+                        <AnimatedSearchIcon size={15} />
                         <input
                           value={c.search}
                           onChange={e => c.setSearch(e.target.value)}

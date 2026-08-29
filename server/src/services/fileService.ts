@@ -5,7 +5,7 @@ import type { Request } from 'express';
 import { db } from '../db/database';
 import { consumeEphemeralToken } from './ephemeralTokens';
 import { verifyJwtAndLoadUser } from '../middleware/auth';
-import { TripFile } from '../types';
+import { TripFile, TripLink } from '../types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -157,6 +157,39 @@ export function getFileById(id: string | number, tripId: string | number): TripF
 
 export function getDeletedFile(id: string | number, tripId: string | number): TripFile | undefined {
   return db.prepare('SELECT * FROM trip_files WHERE id = ? AND trip_id = ? AND deleted_at IS NOT NULL').get(id, tripId) as TripFile | undefined;
+}
+
+const GOOGLE_HOSTS = new Set(['drive.google.com', 'docs.google.com', 'sheets.google.com']);
+
+export function validateGoogleLink(url: string): { url: string; provider: TripLink['provider'] } {
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { throw new Error('Enter a valid Google link'); }
+  if (parsed.protocol !== 'https:' || !GOOGLE_HOSTS.has(parsed.hostname.toLowerCase())) {
+    throw new Error('Only secure Google Drive, Docs, and Sheets links are supported');
+  }
+  const host = parsed.hostname.toLowerCase();
+  const provider: TripLink['provider'] = host === 'drive.google.com'
+    ? 'google-drive'
+    : parsed.pathname.startsWith('/spreadsheets/') ? 'google-sheets' : 'google-docs';
+  return { url: parsed.toString(), provider };
+}
+
+export function listTripLinks(tripId: string | number): TripLink[] {
+  return db.prepare('SELECT * FROM trip_links WHERE trip_id = ? ORDER BY created_at DESC, id DESC').all(tripId) as TripLink[];
+}
+
+export function createTripLink(tripId: string | number, userId: number, input: { title: string; url: string; description?: string }): TripLink {
+  const title = input.title.trim();
+  if (!title || title.length > 200) throw new Error('A title up to 200 characters is required');
+  const link = validateGoogleLink(input.url);
+  const result = db.prepare(
+    'INSERT INTO trip_links (trip_id, title, url, provider, description, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(tripId, title, link.url, link.provider, input.description?.trim() || null, userId);
+  return db.prepare('SELECT * FROM trip_links WHERE id = ?').get(result.lastInsertRowid) as TripLink;
+}
+
+export function deleteTripLink(id: string | number, tripId: string | number): boolean {
+  return db.prepare('DELETE FROM trip_links WHERE id = ? AND trip_id = ?').run(id, tripId).changes > 0;
 }
 
 export function listFiles(tripId: string | number, showTrash: boolean) {

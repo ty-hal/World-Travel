@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getCategoryIcon } from './categoryIcons'
+import { getPinColor } from '../Map/pinColors'
 import { getCached, isLoading, fetchPhoto, onThumbReady } from '../../services/photoService'
 import { useAuthStore } from '../../store/authStore'
 import type { Place } from '../../types'
 
 interface Category {
+  name?: string
   color?: string
   icon?: string
 }
@@ -66,7 +68,7 @@ export default React.memo(function PlaceAvatar({ place, size = 32, category }: P
     return onThumbReady(cacheKey, thumb => setPhotoSrc(thumb))
   }, [visible, place.id, place.image_url, place.google_place_id, place.osm_id])
 
-  const bgColor = category?.color || '#6366f1'
+  const bgColor = getPinColor(category?.name, category?.color || '#6366f1')
   const IconComp = getCategoryIcon(category?.icon)
   const iconSize = Math.round(size * 0.46)
 

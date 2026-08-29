@@ -945,7 +945,6 @@ export function updateAddon(id: string, data: { enabled?: boolean; config?: Reco
     ADDON_IDS.COLLAB,
     ADDON_IDS.ATLAS,
     ADDON_IDS.VACAY,
-    ADDON_IDS.JOURNEY,
   ]);
   const enabledChanged = !!addon && data.enabled !== undefined && (data.enabled ? 1 : 0) !== addon.enabled;
 

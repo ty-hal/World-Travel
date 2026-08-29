@@ -33,6 +33,14 @@ function channelLabel(ch: ChannelDescriptor, t: (k: string) => string): string {
   return ch.label || ch.id
 }
 
+function eventLabel(eventType: string, t: (k: string) => string): string {
+  const key = EVENT_LABEL_KEYS[eventType]
+  const translated = key ? t(key) : ''
+  return translated && translated !== key
+    ? translated
+    : eventType.replace(/[_-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
+
 const EVENT_LABEL_KEYS: Record<string, string> = {
   trip_invite: 'settings.notifyTripInvite',
   booking_change: 'settings.notifyBookingChange',
@@ -357,7 +365,7 @@ export default function NotificationsTab(): React.ReactElement {
           return (
             <div key={eventType} style={{ display: 'grid', gridTemplateColumns: `1fr ${visibleChannels.map(() => '64px').join(' ')}`, gap: 4, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-primary)' }}>
               <span style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', color: 'var(--text-primary)' }}>
-                {t(EVENT_LABEL_KEYS[eventType]) || eventType}
+                {eventLabel(eventType, t)}
               </span>
               {visibleChannels.map(ch => {
                 if (!implementedForEvent.includes(ch.id)) {

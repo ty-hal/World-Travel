@@ -471,7 +471,7 @@ const admin: TranslationStrings = {
   'admin.addons.catalog.budget.description': '跟蹤支出並規劃旅行預算',
   'admin.addons.catalog.documents.name': '文件',
   'admin.addons.catalog.documents.description': '儲存和管理旅行文件',
-  'admin.addons.catalog.vacay.name': 'Vacay',
+  'admin.addons.catalog.vacay.name': 'Calendar',
   'admin.addons.catalog.vacay.description': '帶日曆檢視的個人假期規劃器',
   'admin.addons.catalog.atlas.name': 'Atlas',
   'admin.addons.catalog.atlas.description': '標記已訪問國家和旅行統計的世界地圖',

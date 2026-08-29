@@ -54,5 +54,16 @@ const atlas: TranslationStrings = {
   'atlas.tripPlural': 'Trips',
   'atlas.placeVisited': 'Place visited',
   'atlas.placesVisited': 'Places visited',
+  'atlas.wondersTab': 'Wonders',
+  'atlas.searchWonders': 'Search wonders',
+  'atlas.wondersFilterAll': 'All',
+  'atlas.wondersFilterVisited': 'Visited',
+  'atlas.wondersFilterUnvisited': 'Not visited',
+  'atlas.wondersVisited': 'Visited',
+  'atlas.mapLegend': 'Map legend',
+  'atlas.legendVisited': 'Visited country',
+  'atlas.legendUnvisited': 'Not visited',
+  'atlas.legendWonderVisited': 'Wonder visited',
+  'atlas.legendWonderUnvisited': 'Wonder not visited',
 };
 export default atlas;

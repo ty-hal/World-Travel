@@ -65,13 +65,13 @@ describe('BottomNav', () => {
       addons: [
         { id: 'vacay', name: 'Vacay', type: 'global', icon: 'calendar', enabled: true },
         { id: 'atlas', name: 'Atlas', type: 'global', icon: 'globe', enabled: true },
-        { id: 'journey', name: 'Journey', type: 'global', icon: 'compass', enabled: true },
+        { id: 'collections', name: 'Collections', type: 'global', icon: 'bookmark', enabled: true },
       ],
     });
     render(<BottomNav />);
     expect(await screen.findByText('Vacances')).toBeInTheDocument();
     expect(await screen.findByText('Atlas')).toBeInTheDocument();
-    expect(await screen.findByText('Journal de voyage')).toBeInTheDocument();
+    expect(await screen.findByText('Collections')).toBeInTheDocument();
   });
 
   it('FE-COMP-BOTTOMNAV-006: unknown addon id is not rendered', () => {

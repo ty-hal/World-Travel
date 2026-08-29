@@ -2,6 +2,7 @@ import { Fragment } from 'react'
 import { MemoPlaceRow } from './PlacesSidebarRow'
 import type { SidebarState } from './usePlacesSidebar'
 import { usePluginViewContributions, PluginCardFooter } from '../Plugins/PluginContributions'
+import AnimatedMapPinPlusIcon from '../shared/AnimatedMapPinPlusIcon'
 
 export function PlacesList(S: SidebarState) {
   const {
@@ -15,6 +16,7 @@ export function PlacesList(S: SidebarState) {
     <div className="trek-stagger" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }} ref={scrollContainerRef} onScroll={(e) => onScrollTopChange?.((e.currentTarget as HTMLElement).scrollTop)}>
       {filtered.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 16px', gap: 8 }}>
+          <AnimatedMapPinPlusIcon size={28} animate="always" className="text-content-faint" style={{ opacity: 0.55 }} />
           <span className="text-content-faint" style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}>
             {filter === 'unplanned' ? t('places.allPlanned') : t('places.noneFound')}
           </span>
