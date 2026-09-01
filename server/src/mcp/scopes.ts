@@ -101,6 +101,12 @@ export function canShareTrips(scopes: string[] | null): boolean {
   return scopes.includes('trips:share');
 }
 
+/** journey:share OR journey:write grant journey share-link management */
+export function canShareJourneys(scopes: string[] | null): boolean {
+  if (!scopes) return true;
+  return scopes.some(s => s === 'journey:share' || s === 'journey:write');
+}
+
 export function validateScopes(requestedScopes: string[]): { valid: boolean; invalid: string[] } {
   const invalid = requestedScopes.filter(s => !ALL_SCOPES.includes(s as Scope));
   return { valid: invalid.length === 0, invalid };

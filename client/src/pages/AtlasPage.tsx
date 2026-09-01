@@ -11,7 +11,7 @@ import { A2_TO_A3, countryCodeToFlag, type AtlasCountry, type AtlasStats, type A
 import { continentForCountry } from '@trek/shared'
 import { useAtlas } from './atlas/useAtlas'
 import { atlasMapBackground } from '../components/Map/leafletTiles'
-import AtlasCountrySearch from './atlas/AtlasCountrySearch'
+import WonderDetailDrawer from './atlas/WonderDetailDrawer'
 import { useToast } from '../components/shared/Toast'
 import { getApiErrorMessage } from '../types'
 
@@ -79,7 +79,7 @@ export default function AtlasPage(): React.ReactElement {
     atlas_country_open, set_atlas_country_open, atlas_country_options,
     confirmAction, setConfirmAction, executeConfirmAction,
     bucketMonth, setBucketMonth, bucketYear, setBucketYear,
-    bucketList, setBucketList, bucketTab, setBucketTab, wonders,
+    bucketList, setBucketList, bucketTab, setBucketTab, wonders, visitHeatmap,
     focusWonder,
     showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm,
     handleAddBucketItem, handleDeleteBucketItem, handleBucketPoiSearch, handleSelectBucketPoi,
@@ -88,6 +88,11 @@ export default function AtlasPage(): React.ReactElement {
     bucketSearching, bucketSearch, setBucketSearch,
   } = useAtlas()
   const toast = useToast()
+  const [detailWonder, setDetailWonder] = useState<any | null>(null)
+  const handleWonderClick = (wonder: any) => {
+    focusWonder(wonder)
+    setDetailWonder(wonder)
+  }
   if (loading) {
     return (
       <div className="min-h-screen bg-surface">
@@ -174,7 +179,7 @@ export default function AtlasPage(): React.ReactElement {
             data={data} stats={stats} countries={countries} selectedCountry={selectedCountry}
             countryDetail={countryDetail} resolveName={resolveName}
             onCountryClick={loadCountryDetail} onTripClick={(id) => navigate(`/trips/${id}`)} onUnmarkCountry={handleUnmarkCountry}
-            bucketList={bucketList} bucketTab={bucketTab} setBucketTab={setBucketTab} wonders={wonders} onWonderClick={focusWonder}
+            bucketList={bucketList} bucketTab={bucketTab} setBucketTab={setBucketTab} wonders={wonders} visitHeatmap={visitHeatmap} onWonderClick={handleWonderClick}
             showBucketAdd={showBucketAdd} setShowBucketAdd={setShowBucketAdd}
             bucketForm={bucketForm} setBucketForm={setBucketForm}
             onAddBucket={handleAddBucketItem} onDeleteBucket={handleDeleteBucketItem}
@@ -187,6 +192,14 @@ export default function AtlasPage(): React.ReactElement {
         </div>
 
       </div>
+
+      <WonderDetailDrawer
+        wonder={detailWonder}
+        onClose={() => setDetailWonder(null)}
+        onFocusMap={w => { focusWonder(w); setDetailWonder(w) }}
+        t={t}
+        dark={dark}
+      />
 
       {/* Country action popup */}
       {confirmAction && (
@@ -456,6 +469,7 @@ interface SidebarContentProps {
   bucketTab: 'stats' | 'bucket' | 'wonders'
   setBucketTab: (tab: 'stats' | 'bucket' | 'wonders') => void
   wonders: any[]
+  visitHeatmap?: Array<{ year: string; trips: number }>
   onWonderClick: (wonder: any) => void
   showBucketAdd: boolean
   setShowBucketAdd: (v: boolean) => void
@@ -478,7 +492,7 @@ interface SidebarContentProps {
   dark: boolean
 }
 
-function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, wonders, onWonderClick, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, setBucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
+function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, wonders, visitHeatmap = [], onWonderClick, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, setBucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
   const { language } = useTranslation()
   const statsContentRef = useRef<HTMLDivElement>(null)
   const [statsWidth, setStatsWidth] = useState<number | undefined>(undefined)
@@ -761,6 +775,24 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
           </div>
         )}
       </div>
+
+      {visitHeatmap.length > 1 ? (
+        <div style={{ padding: '8px 16px 12px' }}>
+          <p style={{ color: tf, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 8px' }}>{t('atlas.visitHeatmap')}</p>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 48 }}>
+            {visitHeatmap.slice(-8).map(row => {
+              const max = Math.max(...visitHeatmap.map(r => r.trips), 1)
+              const h = Math.max(6, Math.round((row.trips / max) * 40))
+              return (
+                <div key={row.year} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: '100%', height: h, borderRadius: 4, background: 'linear-gradient(180deg, #818cf8, #6366f1)' }} title={`${row.trips} trips`} />
+                  <span style={{ fontSize: 9, color: tf }}>{row.year.slice(-2)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {/* ═══ Country detail overlay ═══ */}
       {selectedCountry && countryDetail && (

@@ -17,6 +17,10 @@ import VacayPage from './pages/VacayPage'
 import HelpPage from './pages/HelpPage'
 import AtlasPage from './pages/AtlasPage'
 import CollectionsPage from './pages/CollectionsPage'
+import JourneyPage from './pages/JourneyPage'
+import JourneyDetailPage from './pages/JourneyDetailPage'
+import JourneyPublicPage from './pages/JourneyPublicPage'
+import TravelTimelinePage from './pages/TravelTimelinePage'
 import SharedTripPage from './pages/SharedTripPage'
 import JoinTripPage from './pages/JoinTripPage'
 import InAppNotificationsPage from './pages/InAppNotificationsPage.tsx'
@@ -223,6 +227,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={useDevAutoLogin ? <DevLoginRedirect /> : <LoginPage />} />
+        <Route path="/public/journey/:token" element={<JourneyPublicPage />} />
         <Route path="/shared/:token" element={<SharedTripPage />} />
         <Route path="/register" element={useDevAutoLogin ? <DevLoginRedirect /> : <LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -316,6 +321,30 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AtlasPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/journey"
+          element={
+            <ProtectedRoute addonId="journey">
+              <JourneyPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/journey/:id"
+          element={
+            <ProtectedRoute addonId="journey">
+              <JourneyDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/timeline"
+          element={
+            <ProtectedRoute>
+              <TravelTimelinePage />
             </ProtectedRoute>
           }
         />

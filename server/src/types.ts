@@ -369,3 +369,89 @@ export interface TrekPhoto {
   duration_ms?: number | null;
   created_at: string;
 }
+
+// ── Journey addon ─────────────────────────────────────────────────────────
+
+export interface Journey {
+  id: number;
+  user_id: number;
+  title: string;
+  subtitle?: string | null;
+  cover_gradient?: string | null;
+  cover_image?: string | null;
+  status: 'draft' | 'active' | 'completed' | 'archived';
+  created_at: number;
+  updated_at: number;
+}
+
+export interface JourneyEntry {
+  id: number;
+  journey_id: number;
+  source_trip_id?: number | null;
+  source_place_id?: number | null;
+  author_id: number;
+  type: 'entry' | 'checkin' | 'skeleton';
+  title?: string | null;
+  story?: string | null;
+  entry_date: string;
+  entry_time?: string | null;
+  location_name?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  mood?: string | null;
+  weather?: string | null;
+  tags?: string | null;
+  pros_cons?: string | null;
+  visibility: 'private' | 'shared' | 'public';
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface JourneyPhoto {
+  id: number;
+  entry_id?: number;
+  journey_id?: number;
+  photo_id: number;
+  caption?: string | null;
+  sort_order: number;
+  shared: number;
+  created_at: number;
+  provider?: string;
+  asset_id?: string | null;
+  owner_id?: number | null;
+  file_path?: string | null;
+  thumbnail_path?: string | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+export interface GalleryPhoto {
+  id: number;
+  journey_id: number;
+  photo_id: number;
+  caption?: string | null;
+  shared: number;
+  sort_order: number;
+  created_at: number;
+  provider?: string;
+  asset_id?: string | null;
+  owner_id?: number | null;
+  file_path?: string | null;
+  thumbnail_path?: string | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+export interface JourneyTrip {
+  journey_id: number;
+  trip_id: number;
+  added_at: number;
+}
+
+export interface JourneyContributor {
+  journey_id: number;
+  user_id: number;
+  role: 'owner' | 'editor' | 'viewer';
+  added_at: number;
+}

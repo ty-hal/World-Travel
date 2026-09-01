@@ -155,9 +155,43 @@ const EXTRA_TRIPS = [
     ],
     transports: [],
   },
+  {
+    title: 'India Temple Circuit',
+    description: 'Rock-cut marvels and Mughal architecture across Maharashtra and Uttar Pradesh.',
+    start_date: '2027-11-08',
+    end_date: '2027-11-14',
+    currency: 'INR',
+    reminder_days: 14,
+    places: [
+      { name: 'Kailasa Temple', lat: 20.024, lng: 75.1793, address: 'Ellora Caves, Maharashtra',
+        description: 'Monolithic rock-cut temple dedicated to Shiva — Cave 16 at Ellora.',
+        duration_minutes: 180, price: 600, currency: 'INR', day: 0 },
+      { name: 'Taj Mahal', lat: 27.1751, lng: 78.0421, address: 'Agra, Uttar Pradesh',
+        description: 'Mughal mausoleum at dawn before the tour buses arrive.', duration_minutes: 150, price: 1100, currency: 'INR', day: 3 },
+    ],
+    expenses: [
+      { name: 'Aurangabad guesthouse', category: 'accommodation', total_price: 18500, currency: 'INR', expense_date: '2027-11-08' },
+      { name: 'Agra hotel', category: 'accommodation', total_price: 22000, currency: 'INR', expense_date: '2027-11-11' },
+    ],
+    bookings: [
+      { title: 'Ellora guided tour', type: 'activity', reservation_time: '2027-11-09T08:30:00', location: 'Ellora',
+        confirmation_number: 'ELL-1609', status: 'confirmed', day: 0 },
+      { title: 'Taj Mahal sunrise entry', type: 'activity', reservation_time: '2027-11-12T06:00:00', location: 'Agra',
+        confirmation_number: 'TAJ-0600', status: 'confirmed', day: 3 },
+    ],
+    transports: [
+      { title: 'AI 644 BOM → IXU', type: 'flight', reservation_time: '2027-11-08T07:15:00',
+        reservation_end_time: '2027-11-08T08:20:00', confirmation_number: 'AI644', status: 'confirmed',
+        location: 'Mumbai', metadata: { airline: 'Air India', flight_number: '644' },
+        endpoints: [
+          { role: 'from', sequence: 0, name: 'Mumbai', code: 'BOM', lat: 19.0896, lng: 72.8656, timezone: 'Asia/Kolkata', local_date: '2027-11-08', local_time: '07:15' },
+          { role: 'to', sequence: 1, name: 'Aurangabad', code: 'IXU', lat: 19.8627, lng: 75.3981, timezone: 'Asia/Kolkata', local_date: '2027-11-08', local_time: '08:20' },
+        ] },
+    ],
+  },
 ]
 
-const ATLAS_COUNTRIES = ['JP', 'DE', 'FR', 'IT', 'ES', 'US', 'GB', 'GR', 'PT', 'NL', 'AT', 'CH', 'MX', 'EG', 'JO']
+const ATLAS_COUNTRIES = ['JP', 'DE', 'FR', 'IT', 'ES', 'US', 'GB', 'GR', 'PT', 'NL', 'AT', 'CH', 'MX', 'EG', 'JO', 'IN']
 
 const ATLAS_REGIONS = [
   { code: 'DE-BY', name: 'Bavaria', country_code: 'DE' },

@@ -56,6 +56,31 @@ export class AtlasController {
     return { wonders: this.atlas.wonders(user.id) };
   }
 
+  @Get('wonders/near')
+  wondersNear(
+    @CurrentUser() user: User,
+    @Query('minLat') minLat: string,
+    @Query('maxLat') maxLat: string,
+    @Query('minLng') minLng: string,
+    @Query('maxLng') maxLng: string,
+    @Query('limit') limit?: string,
+  ) {
+    const wonders = this.atlas.wondersNear(
+      user.id,
+      Number(minLat),
+      Number(maxLat),
+      Number(minLng),
+      Number(maxLng),
+      Number(limit) || 12,
+    );
+    return { wonders };
+  }
+
+  @Get('visit-heatmap')
+  visitHeatmap(@CurrentUser() user: User) {
+    return { years: this.atlas.visitHeatmap(user.id) };
+  }
+
   @Get('regions/geo')
   async regionGeo(
     @Query('countries') countries: string | undefined,

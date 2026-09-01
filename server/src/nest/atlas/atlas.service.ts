@@ -15,6 +15,8 @@ import {
   deleteBucketItem,
   getImportedAtlasData,
   getAtlasWonders,
+  getAtlasWondersNearBBox,
+  getVisitHeatmap,
 } from '../../services/atlasService';
 
 type CreateBucketData = Parameters<typeof createBucketItem>[1];
@@ -86,5 +88,13 @@ export class AtlasService {
 
   wonders(userId: number) {
     return getAtlasWonders(userId);
+  }
+
+  wondersNear(userId: number, minLat: number, maxLat: number, minLng: number, maxLng: number, limit?: number) {
+    return getAtlasWondersNearBBox(userId, minLat, maxLat, minLng, maxLng, limit);
+  }
+
+  visitHeatmap(userId: number) {
+    return getVisitHeatmap(userId);
   }
 }

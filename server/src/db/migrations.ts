@@ -3995,6 +3995,118 @@ function runMigrations(db: Database.Database): void {
       DROP TABLE IF EXISTS journeys;
       DELETE FROM addons WHERE id = 'journey';
     `),
+    // Migration: restore Journey addon (tables dropped above on prior migration)
+    () => {
+      const hasJourneys = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='journeys'").get();
+      if (hasJourneys) return;
+
+      db.exec(`
+        CREATE TABLE journeys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          subtitle TEXT,
+          cover_gradient TEXT,
+          cover_image TEXT,
+          status TEXT DEFAULT 'draft',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE journey_trips (
+          journey_id INTEGER NOT NULL,
+          trip_id INTEGER NOT NULL,
+          added_at INTEGER NOT NULL,
+          PRIMARY KEY (journey_id, trip_id),
+          FOREIGN KEY (journey_id) REFERENCES journeys(id) ON DELETE CASCADE,
+          FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE
+        );
+        CREATE TABLE journey_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          journey_id INTEGER NOT NULL,
+          source_trip_id INTEGER,
+          source_place_id INTEGER,
+          author_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          title TEXT,
+          story TEXT,
+          entry_date TEXT NOT NULL,
+          entry_time TEXT,
+          location_name TEXT,
+          location_lat REAL,
+          location_lng REAL,
+          mood TEXT,
+          weather TEXT,
+          tags TEXT,
+          visibility TEXT DEFAULT 'private',
+          pros_cons TEXT,
+          sort_order INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (journey_id) REFERENCES journeys(id) ON DELETE CASCADE,
+          FOREIGN KEY (source_trip_id) REFERENCES trips(id) ON DELETE SET NULL,
+          FOREIGN KEY (source_place_id) REFERENCES places(id) ON DELETE SET NULL,
+          FOREIGN KEY (author_id) REFERENCES users(id)
+        );
+        CREATE TABLE journey_photos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+          photo_id INTEGER NOT NULL REFERENCES trek_photos(id) ON DELETE CASCADE,
+          caption TEXT,
+          shared INTEGER DEFAULT 0,
+          sort_order INTEGER DEFAULT 0,
+          provider TEXT,
+          asset_id TEXT,
+          owner_id INTEGER,
+          created_at INTEGER NOT NULL,
+          UNIQUE(journey_id, photo_id)
+        );
+        CREATE TABLE journey_entry_photos (
+          entry_id INTEGER NOT NULL REFERENCES journey_entries(id) ON DELETE CASCADE,
+          journey_photo_id INTEGER NOT NULL REFERENCES journey_photos(id) ON DELETE CASCADE,
+          sort_order INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(entry_id, journey_photo_id)
+        );
+        CREATE TABLE journey_contributors (
+          journey_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          role TEXT NOT NULL,
+          hide_skeletons INTEGER NOT NULL DEFAULT 0,
+          added_at INTEGER NOT NULL,
+          PRIMARY KEY (journey_id, user_id),
+          FOREIGN KEY (journey_id) REFERENCES journeys(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE journey_share_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          journey_id INTEGER NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          created_by INTEGER NOT NULL,
+          share_timeline INTEGER DEFAULT 1,
+          share_gallery INTEGER DEFAULT 1,
+          share_map INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (journey_id) REFERENCES journeys(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES users(id)
+        );
+        CREATE INDEX idx_journeys_user ON journeys(user_id);
+        CREATE INDEX idx_journey_entries_journey ON journey_entries(journey_id, entry_date);
+        CREATE INDEX idx_journey_entries_source ON journey_entries(source_place_id);
+        CREATE INDEX idx_journey_photos_journey ON journey_photos(journey_id);
+        CREATE INDEX idx_journey_photos_entry ON journey_photos(journey_id);
+        CREATE INDEX idx_journey_trips_journey ON journey_trips(journey_id);
+        CREATE INDEX idx_journey_contributors_user ON journey_contributors(user_id);
+        CREATE UNIQUE INDEX idx_journey_share_journey ON journey_share_tokens(journey_id);
+        CREATE INDEX idx_journey_entry_photos_entry ON journey_entry_photos(entry_id);
+        CREATE INDEX idx_journey_entry_photos_photo ON journey_entry_photos(journey_photo_id);
+      `);
+
+      db.prepare(
+        `INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, config, sort_order)
+         VALUES ('journey', 'Journey', 'Trip tracking & travel journal — check-ins, photos, daily stories', 'global', 'Compass', 0, '{}', 35)`,
+      ).run();
+    },
   ];
 
   if (currentVersion < migrations.length) {

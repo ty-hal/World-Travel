@@ -21,6 +21,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useAddonStore } from '../../store/addonStore'
 import { useSaveToCollectionStore } from '../../store/saveToCollectionStore'
 import { placeToSaveTarget } from '../Collections/saveTarget'
+import RouteWondersHint from './RouteWondersHint'
 import { useTranslation } from '../../i18n'
 import { isDayInAccommodationRange, getAccommodationAnchors, getDayBookendHotels, shouldDrawMorningLeg, shouldDrawEveningLeg } from '../../utils/dayOrder'
 import {
@@ -2486,6 +2487,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                           <span>{routeInfo.duration}</span>
                         </div>
                       )}
+                      {isSelected ? <RouteWondersHint places={assignments.map(a => a.place).filter(Boolean)} /> : null}
                     </div>
                   )}
 

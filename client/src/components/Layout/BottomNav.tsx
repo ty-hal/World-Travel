@@ -9,12 +9,14 @@ import { resolvePluginIcon } from '../shared/PluginIcon'
 import AnimatedCalendarDaysIcon from '../shared/AnimatedCalendarDaysIcon'
 import AnimatedGlobeIcon from '../shared/AnimatedGlobeIcon'
 import AnimatedBookmarkIcon from '../shared/AnimatedBookmarkIcon'
+import AnimatedCompassIcon from '../shared/AnimatedCompassIcon'
 
 type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number }>
 
 const ADDON_NAV: Record<string, { icon: NavIcon; labelKey: string }> = {
   vacay:       { icon: AnimatedCalendarDaysIcon, labelKey: 'admin.addons.catalog.vacay.name' },
   atlas:       { icon: AnimatedGlobeIcon,        labelKey: 'admin.addons.catalog.atlas.name' },
+  journey:     { icon: AnimatedCompassIcon,    labelKey: 'admin.addons.catalog.journey.name' },
   collections: { icon: AnimatedBookmarkIcon,     labelKey: 'admin.addons.catalog.collections.name' },
 }
 

@@ -1,5 +1,7 @@
 import Database from 'better-sqlite3';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 // bcrypt cost factor for the seeded admin password — kept in sync with authService.
 const BCRYPT_COST = 12;
@@ -115,6 +117,7 @@ function seedAddons(db: Database.Database): void {
       { id: 'documents', name: 'Documents', description: 'Store and manage travel documents', type: 'trip', icon: 'FileText', enabled: 1, sort_order: 2 },
       { id: 'vacay', name: 'Vacay', description: 'Personal vacation day planner with calendar view', type: 'global', icon: 'CalendarDays', enabled: 1, sort_order: 10 },
       { id: 'atlas', name: 'Atlas', description: 'World map of your visited countries with travel stats', type: 'global', icon: 'Globe', enabled: 1, sort_order: 11 },
+      { id: 'journey', name: 'Journey', description: 'Trip tracking & travel journal — check-ins, photos, daily stories', type: 'global', icon: 'Compass', enabled: 0, sort_order: 35 },
       { id: 'mcp', name: 'MCP', description: 'Model Context Protocol for AI assistant integration', type: 'integration', icon: 'Terminal', enabled: 0, sort_order: 12 },
       { id: 'naver_list_import', name: 'Naver List Import', description: 'Import places from shared Naver Maps lists', type: 'trip', icon: 'Link2', enabled: 1, sort_order: 13 },
       { id: 'collab', name: 'Collab', description: 'Notes, polls, and live chat for trip collaboration', type: 'trip', icon: 'Users', enabled: 1, sort_order: 6 },
@@ -165,10 +168,37 @@ function seedAddons(db: Database.Database): void {
   }
 }
 
+function seedAtlasWonders(db: Database.Database): void {
+  try {
+    const count = (db.prepare('SELECT COUNT(*) as count FROM atlas_wonders').get() as { count: number }).count;
+    if (count > 0) return;
+    const file = path.join(__dirname, 'seeds', 'atlas-wonders.json');
+    if (!fs.existsSync(file)) {
+      console.warn('[seeds] atlas-wonders.json missing — skipping wonder catalog seed');
+      return;
+    }
+    const wonders = JSON.parse(fs.readFileSync(file, 'utf8')) as Array<Record<string, unknown>>;
+    const insert = db.prepare(`
+      INSERT INTO atlas_wonders (source_id, label, country, map_country, region, significance, lat, lng, source_url, image_urls_json)
+      VALUES (@source_id, @label, @country, @map_country, @region, @significance, @lat, @lng, NULL, '[]')
+    `);
+    const tx = db.transaction((rows: Array<Record<string, unknown>>) => {
+      for (const row of rows) {
+        insert.run({ ...row, significance: row.significance ?? 'notable' });
+      }
+    });
+    tx(wonders);
+    console.log(`Atlas wonders catalog seeded (${wonders.length} sites)`);
+  } catch (err: unknown) {
+    console.error('Error seeding atlas wonders:', err instanceof Error ? err.message : err);
+  }
+}
+
 function runSeeds(db: Database.Database): void {
   seedAdminAccount(db);
   seedCategories(db);
   seedAddons(db);
+  seedAtlasWonders(db);
 }
 
 export { runSeeds, seedAdminAccount };

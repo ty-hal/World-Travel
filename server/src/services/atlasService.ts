@@ -1575,6 +1575,49 @@ export function getAtlasWonders(userId: number) {
     .map((row: any) => ({ ...row, image_urls: parseJson(row.image_urls_json, []) }));
 }
 
+export function getAtlasWondersNearBBox(
+  userId: number,
+  minLat: number,
+  maxLat: number,
+  minLng: number,
+  maxLng: number,
+  limit = 12,
+) {
+  const loLat = Math.min(minLat, maxLat);
+  const hiLat = Math.max(minLat, maxLat);
+  const loLng = Math.min(minLng, maxLng);
+  const hiLng = Math.max(minLng, maxLng);
+  return db.prepare(`
+    SELECT w.*,
+      EXISTS (
+        SELECT 1 FROM places p
+        JOIN trips t ON t.id = p.trip_id
+        WHERE (t.user_id = ? OR EXISTS (
+          SELECT 1 FROM trip_members tm WHERE tm.trip_id = t.id AND tm.user_id = ?
+        ))
+          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          AND ABS(p.lat - w.lat) < 0.02 AND ABS(p.lng - w.lng) < 0.02
+      ) AS visited
+    FROM atlas_wonders w
+    WHERE w.lat BETWEEN ? AND ? AND w.lng BETWEEN ? AND ?
+    ORDER BY CASE w.significance WHEN 'iconic' THEN 0 ELSE 1 END, w.label
+    LIMIT ?
+  `).all(userId, userId, loLat, hiLat, loLng, hiLng, limit)
+    .map((row: any) => ({ ...row, image_urls: parseJson(row.image_urls_json, []) }));
+}
+
+export function getVisitHeatmap(userId: number) {
+  return db.prepare(`
+    SELECT substr(COALESCE(t.start_date, t.end_date), 1, 4) AS year, COUNT(*) AS trips
+    FROM trips t
+    WHERE (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_members tm WHERE tm.trip_id = t.id AND tm.user_id = ?))
+      AND COALESCE(t.start_date, t.end_date) IS NOT NULL
+    GROUP BY year
+    HAVING year GLOB '[0-9][0-9][0-9][0-9]'
+    ORDER BY year
+  `).all(userId, userId) as Array<{ year: string; trips: number }>;
+}
+
 export function createBucketItem(
   userId: number,
   data: {

@@ -35,6 +35,7 @@ import shared from './shared';
 import stats from './stats';
 import system_notice from './system_notice';
 import todo from './todo';
+import timeline from './timeline';
 import transport from './transport';
 import trip from './trip';
 import trips from './trips';
@@ -56,6 +57,7 @@ const locale = {
   ...vacay,
   ...collection,
   ...atlas,
+  ...timeline,
   ...trip,
   ...places,
   ...inspector,

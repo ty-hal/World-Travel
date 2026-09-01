@@ -65,5 +65,9 @@ const atlas: TranslationStrings = {
   'atlas.legendUnvisited': 'Not visited',
   'atlas.legendWonderVisited': 'Wonder visited',
   'atlas.legendWonderUnvisited': 'Wonder not visited',
+  'atlas.showOnMap': 'Show on map',
+  'atlas.wonderSource': 'Learn more',
+  'atlas.wondersAlongRoute': 'Wonders along route',
+  'atlas.visitHeatmap': 'Visit activity by year',
 };
 export default atlas;

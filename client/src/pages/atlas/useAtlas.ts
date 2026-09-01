@@ -75,6 +75,7 @@ export function useAtlas() {
   const [bucketPoiYear, setBucketPoiYear] = useState(0)
   const [bucketTab, setBucketTab] = useState<'stats' | 'bucket' | 'wonders'>('stats')
   const [wonders, setWonders] = useState<any[]>([])
+  const [visitHeatmap, setVisitHeatmap] = useState<Array<{ year: string; trips: number }>>([])
   const bucketMarkersRef = useRef<any>(null)
   const wonderMarkersRef = useRef<any>(null)
   const wonderMarkerByIdRef = useRef<Record<string, L.Marker>>({})
@@ -126,6 +127,10 @@ export function useAtlas() {
     apiClient.get('/addons/atlas/wonders')
       .then(res => { if (!cancelled) setWonders(res.data.wonders || []) })
       .catch(() => { if (!cancelled) setWonders([]) })
+
+    apiClient.get('/addons/atlas/visit-heatmap')
+      .then(res => { if (!cancelled) setVisitHeatmap(res.data.years || []) })
+      .catch(() => { if (!cancelled) setVisitHeatmap([]) })
 
     return () => { cancelled = true }
   }, [])
@@ -794,7 +799,7 @@ export function useAtlas() {
     confirmAction, setConfirmAction, executeConfirmAction,
     bucketMonth, setBucketMonth, bucketYear, setBucketYear,
     bucketList, setBucketList, bucketTab, setBucketTab,
-    wonders, focusWonder,
+    wonders, focusWonder, visitHeatmap,
     showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm,
     handleAddBucketItem, handleDeleteBucketItem, handleBucketPoiSearch, handleSelectBucketPoi,
     bucketSearchResults, setBucketSearchResults,

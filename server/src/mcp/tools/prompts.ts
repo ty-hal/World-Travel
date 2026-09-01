@@ -136,4 +136,40 @@ ${days?.map((d: any, i: number) => `Day ${i + 1} (${d.date}): ${d.assignments?.l
       };
     }
   );
+
+  server.registerPrompt(
+    'plan-my-day',
+    {
+      title: 'Plan My Day',
+      description: 'Load a single day itinerary with places, times, and route context for agent planning',
+      argsSchema: {
+        tripId: z.number().int().positive().describe('Trip ID'),
+        dayId: z.number().int().positive().describe('Day ID within the trip'),
+      },
+    },
+    async ({ tripId, dayId }) => {
+      if (!canAccessTrip(tripId, userId)) {
+        return { messages: [{ role: 'user', content: { type: 'text', text: 'Trip not found or access denied.' } }] };
+      }
+      const summary = getTripSummary(tripId, userId);
+      const day = summary?.days?.find((d: any) => d.id === dayId);
+      if (!day) {
+        return { messages: [{ role: 'user', content: { type: 'text', text: 'Day not found on this trip.' } }] };
+      }
+      const places = (day.assignments || [])
+        .map((a: any, i: number) => `${i + 1}. ${a.place?.name || 'Place'}${a.start_time ? ` (${a.start_time})` : ''}${a.place?.address ? ` — ${a.place.address}` : ''}`)
+        .join('\n');
+      const text = `# Plan day: ${day.date}${day.title ? ` — ${day.title}` : ''}
+Trip: ${summary?.trip?.title || tripId}
+
+## Stops
+${places || 'No places assigned yet.'}
+
+Suggest a realistic order, travel buffers, meal breaks, and one backup option if weather or crowds are an issue.`;
+      return {
+        description: `Day plan for ${day.date}`,
+        messages: [{ role: 'user', content: { type: 'text', text } }],
+      };
+    },
+  );
 }

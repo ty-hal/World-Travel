@@ -36,6 +36,7 @@ import stats from './stats';
 import system_notice from './system_notice';
 import todo from './todo';
 import transport from './transport';
+import timeline from './timeline';
 import trip from './trip';
 import trips from './trips';
 import undo from './undo';
@@ -57,6 +58,7 @@ const locale = {
   ...collection,
   ...help,
   ...atlas,
+  ...timeline,
   ...trip,
   ...places,
   ...inspector,

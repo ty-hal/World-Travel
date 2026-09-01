@@ -315,5 +315,42 @@ export function registerBudgetTools(server: McpServer, userId: number, scopes: s
       return ok({ success: true });
     }
   );
+
+  if (W) server.registerTool(
+    'parse_expense_text',
+    {
+      description: 'Parse natural-language expense text (e.g. "Alice and Bob split $84 dinner") into amount and member IDs for add_budget_item.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+        text: z.string().min(3).describe('Free-form expense description with amount and participant names'),
+      },
+      annotations: TOOL_ANNOTATIONS_READONLY,
+    },
+    async ({ tripId, text }) => {
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+      const owner = getTripOwner(tripId);
+      if (!owner) return noAccess();
+      const members = listMembers(tripId, owner.user_id);
+      const roster = [
+        members.owner,
+        ...members.members,
+      ].map((m: any) => ({ id: m.id, name: String(m.username || m.email || '') }));
+      const amountMatch = text.match(/(?:\$|€|£)\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s*(?:usd|eur|dollars?)/i);
+      const raw = amountMatch?.[1] || amountMatch?.[2];
+      const amount = raw ? Number(raw.replace(/,/g, '')) : null;
+      const lower = text.toLowerCase();
+      const mentioned = roster.filter(m => m.name && lower.includes(m.name.toLowerCase()));
+      const member_ids = mentioned.length ? mentioned.map(m => m.id) : roster.map(m => m.id);
+      return ok({
+        draft: {
+          description: text.trim(),
+          total_price: amount,
+          member_ids,
+          split: member_ids.length ? 'equal' : 'trip',
+        },
+        roster,
+      });
+    },
+  );
   } // isAddonEnabled(BUDGET)
 }
