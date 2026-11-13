@@ -4,6 +4,7 @@ import { mutationQueue, generateUUID, nextTempId } from '../sync/mutationQueue'
 import { isEffectivelyOffline } from '../sync/networkMode'
 import { onlineThenCache } from './withOfflineFallback'
 import type { BudgetItem } from '../types'
+import type { BudgetCreateItemRequest } from '@trek/shared'
 
 export const budgetRepo = {
   async list(tripId: number | string): Promise<{ items: BudgetItem[] }> {
@@ -20,7 +21,7 @@ export const budgetRepo = {
     )
   },
 
-  async create(tripId: number | string, data: Record<string, unknown>): Promise<{ item: BudgetItem }> {
+  async create(tripId: number | string, data: BudgetCreateItemRequest): Promise<{ item: BudgetItem }> {
     if (isEffectivelyOffline()) {
       const tempId = nextTempId()
       const tempItem = {

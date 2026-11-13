@@ -44,6 +44,8 @@ export function useAtlas() {
 
   const [data, setData] = useState<AtlasData | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
+  const [loadError, setLoadError] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false)
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
@@ -75,40 +77,19 @@ export function useAtlas() {
   const [bucketPoiYear, setBucketPoiYear] = useState(0)
   const [bucketTab, setBucketTab] = useState<'stats' | 'bucket' | 'wonders'>('stats')
   const [wonders, setWonders] = useState<any[]>([])
+  const [wonderSearch, setWonderSearch] = useState('')
+  const [wonderFilter, setWonderFilter] = useState<'all' | 'visited' | 'unvisited'>('all')
+  const matchingWonders = useMemo(() => wonders.filter(w =>
+    `${w.label} ${w.country} ${w.region}`.toLowerCase().includes(wonderSearch.trim().toLowerCase()) &&
+    (wonderFilter === 'all' || Boolean(w.visited) === (wonderFilter === 'visited'))
+  ), [wonders, wonderSearch, wonderFilter])
+  const [detailPlace, setDetailPlace] = useState<{ type: 'wonder' | 'bucket'; item: any } | null>(null)
   const [visitHeatmap, setVisitHeatmap] = useState<Array<{ year: string; trips: number }>>([])
   const bucketMarkersRef = useRef<any>(null)
+  const bucketMarkerByIdRef = useRef<Record<string, L.Marker>>({})
   const wonderMarkersRef = useRef<any>(null)
   const wonderMarkerByIdRef = useRef<Record<string, L.Marker>>({})
   const activeWonderMarkerRef = useRef<L.Marker | null>(null)
-
-  const [atlas_country_search, set_atlas_country_search] = useState('')
-  const [atlas_country_results, set_atlas_country_results] = useState<{ code: string; label: string }[]>([])
-  const [atlas_country_open, set_atlas_country_open] = useState(false)
-
-  const atlas_country_options = useMemo(() => {
-    if (!geoData) return []
-    // Precompute A3 → A2 reverse lookup once per geoData change instead of
-    // scanning A2_TO_A3 for every feature that needs the fallback.
-    const a3ToA2 = new Map<string, string>()
-    for (const [a2Key, a3Val] of Object.entries(A2_TO_A3)) a3ToA2.set(a3Val, a2Key)
-
-    const opts: { code: string; label: string }[] = []
-    const seen = new Set<string>()
-    for (const f of (geoData as any).features || []) {
-      const rawA2 = f?.properties?.ISO_A2
-      let resolvedA2: string | null = (typeof rawA2 === 'string' && rawA2.length === 2 && rawA2 !== '-99') ? rawA2 : null
-      if (!resolvedA2) {
-        const a3 = f?.properties?.ADM0_A3 || f?.properties?.ISO_A3 || f?.properties?.['ISO3166-1-Alpha-3'] || null
-        if (a3 && a3 !== '-99') resolvedA2 = a3ToA2.get(a3) ?? null
-      }
-      if (!resolvedA2 || seen.has(resolvedA2)) continue
-      seen.add(resolvedA2)
-      const label = String(resolveName(resolvedA2) || f?.properties?.NAME || f?.properties?.ADMIN || resolvedA2)
-      opts.push({ code: resolvedA2, label })
-    }
-    opts.sort((a, b) => a.label.localeCompare(b.label))
-    return opts
-  }, [geoData, resolveName])
 
   // Load atlas data + bucket list. Wonders are optional — a missing/failed
   // wonders endpoint must not blank the main stats panel.
@@ -121,8 +102,13 @@ export function useAtlas() {
       if (cancelled) return
       setData(statsRes.data)
       setBucketList(bucketRes.data.items || [])
+      setLoadError(false)
       setLoading(false)
-    }).catch(() => { if (!cancelled) setLoading(false) })
+    }).catch(() => {
+      if (cancelled) return
+      setLoadError(true)
+      setLoading(false)
+    })
 
     apiClient.get('/addons/atlas/wonders')
       .then(res => { if (!cancelled) setWonders(res.data.wonders || []) })
@@ -133,7 +119,13 @@ export function useAtlas() {
       .catch(() => { if (!cancelled) setVisitHeatmap([]) })
 
     return () => { cancelled = true }
-  }, [])
+  }, [loadAttempt])
+
+  const retryLoad = () => {
+    setLoading(true)
+    setLoadError(false)
+    setLoadAttempt(attempt => attempt + 1)
+  }
 
   // Load country-border GeoJSON from our API (geoBoundaries, served server-side —
   // no third-party fetch from the browser). Even gzipped the payload is a few MB, so
@@ -225,6 +217,9 @@ export function useAtlas() {
       fadeAnimation: false,
       preferCanvas: true,
     })
+
+    L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map)
+      .addAttribution('Country boundaries: <a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer" aria-label="Boundary data from geoBoundaries">geoBoundaries</a>')
 
     L.control.zoom({ position: 'bottomright' }).addTo(map)
 
@@ -598,37 +593,6 @@ export function useAtlas() {
     setConfirmAction({ type: 'unmark', code, name: resolveName(code) })
   }
 
-  const select_country_from_search = (country_code: string): void => {
-    const country_label = resolveName(country_code)
-    set_atlas_country_search(country_label)
-    set_atlas_country_open(false)
-    set_atlas_country_results([])
-
-    const layer = country_layer_by_a2_ref.current[country_code]
-    try {
-      if (layer?.getBounds && mapInstance.current) {
-        mapInstance.current.fitBounds(layer.getBounds(), { padding: [24, 24], animate: true, maxZoom: 6 })
-      }
-    } catch (e ) {
-      console.error('Error fitting bounds', e)
-     }
-
-    // Mirror the map-click behaviour so an already-visited country can be removed
-    // straight from search. Tiny countries (Vatican City, Singapore) are hard to
-    // hit on the map, so search was the only way in — but it always opened the
-    // "Mark / Bucket" dialog with no Remove option.
-    const visited = data?.countries.find(c => c.code === country_code)
-    if (visited) {
-      if (visited.placeCount === 0 && visited.tripCount === 0) {
-        handleUnmarkCountry(country_code)
-      } else {
-        loadCountryDetailRef.current(country_code)
-      }
-      return
-    }
-    setConfirmAction({ type: 'choose', code: country_code, name: country_label })
-  }
-
   const executeConfirmAction = async (): Promise<void> => {
     if (!confirmAction) return
     const { type, code } = confirmAction
@@ -723,6 +687,7 @@ export function useAtlas() {
     if (bucketMarkersRef.current) {
       mapInstance.current.removeLayer(bucketMarkersRef.current)
     }
+    bucketMarkerByIdRef.current = {}
     if (bucketList.length === 0) return
     const markers = bucketList.filter(b => b.lat && b.lng).map(b => {
       const icon = L.divIcon({
@@ -731,10 +696,13 @@ export function useAtlas() {
         iconSize: [28, 28],
         iconAnchor: [14, 14],
       })
-      return L.marker([b.lat!, b.lng!], { icon }).bindTooltip(
+      const marker = L.marker([b.lat!, b.lng!], { icon, title: b.name, alt: b.name }).bindTooltip(
         `<div style="font-size:12px;font-weight:600">${b.name}</div>${b.notes ? `<div style="font-size:10px;opacity:0.7;margin-top:2px">${b.notes}</div>` : ''}`,
         { className: 'atlas-tooltip', direction: 'top', offset: [0, -14] }
       )
+      bucketMarkerByIdRef.current[String(b.id)] = marker
+      marker.on('click', () => setDetailPlace({ type: 'bucket', item: b }))
+      return marker
     })
     bucketMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
   }, [bucketList])
@@ -747,21 +715,22 @@ export function useAtlas() {
     wonderMarkerByIdRef.current = {}
     activeWonderMarkerRef.current = null
     if (bucketTab !== 'wonders') return
-    const markers = wonders.filter(w => Number.isFinite(w.lat) && Number.isFinite(w.lng)).map(w => {
+    const markers = matchingWonders.filter(w => Number.isFinite(w.lat) && Number.isFinite(w.lng)).map(w => {
       const icon = L.divIcon({
         className: '',
         html: `<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${w.visited ? '#22c55e' : '#818cf8'};border:2px solid white;box-shadow:0 2px 7px rgba(0,0,0,.35)"><span style="display:block;width:5px;height:5px;margin:4.5px;background:white;border-radius:50%"></span></div>`,
         iconSize: [18, 18],
         iconAnchor: [9, 18],
       })
-      const marker = L.marker([w.lat, w.lng], { icon }).bindTooltip(`${w.label}${w.country ? ` · ${w.country}` : ''}`, {
+      const marker = L.marker([w.lat, w.lng], { icon, title: w.label, alt: w.label }).bindTooltip(`${w.label}${w.country ? ` · ${w.country}` : ''}`, {
         className: 'atlas-tooltip', direction: 'top', offset: [0, -16],
       })
       wonderMarkerByIdRef.current[String(w.source_id)] = marker
+      marker.on('click', () => setDetailPlace({ type: 'wonder', item: w }))
       return marker
     })
     wonderMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
-  }, [bucketTab, wonders])
+  }, [bucketTab, matchingWonders])
 
   const focusWonder = (wonder: any): void => {
     const map = mapInstance.current
@@ -772,6 +741,14 @@ export function useAtlas() {
     marker.openTooltip()
     marker.setZIndexOffset(1000)
     activeWonderMarkerRef.current = marker
+  }
+
+  const focusBucket = (item: any): void => {
+    const map = mapInstance.current
+    const marker = bucketMarkerByIdRef.current[String(item.id)]
+    if (!map || !marker || !Number.isFinite(item.lat) || !Number.isFinite(item.lng)) return
+    map.setView([item.lat, item.lng], Math.max(map.getZoom(), 8), { animate: true })
+    marker.openTooltip()
   }
 
   const loadCountryDetail = async (code: string): Promise<void> => {
@@ -787,19 +764,17 @@ export function useAtlas() {
   const countries = data?.countries || []
 
   return {
-    t, language, navigate, resolveName, dark, loading,
+    t, language, navigate, resolveName, dark, loading, loadError, retryLoad,
     mapRef, regionTooltipRef, panelRef,
     data, setData, stats, countries, selectedCountry, countryDetail,
     geoData,
-    loadCountryDetail, handleUnmarkCountry, select_country_from_search,
+    loadCountryDetail, handleUnmarkCountry,
     visitedRegions, setVisitedRegions,
-    atlas_country_search, set_atlas_country_search,
-    atlas_country_results, set_atlas_country_results,
-    atlas_country_open, set_atlas_country_open, atlas_country_options,
     confirmAction, setConfirmAction, executeConfirmAction,
     bucketMonth, setBucketMonth, bucketYear, setBucketYear,
     bucketList, setBucketList, bucketTab, setBucketTab,
-    wonders, focusWonder, visitHeatmap,
+    wonders, wonderSearch, setWonderSearch, wonderFilter, setWonderFilter, matchingWonders,
+    focusWonder, focusBucket, detailPlace, setDetailPlace, visitHeatmap,
     showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm,
     handleAddBucketItem, handleDeleteBucketItem, handleBucketPoiSearch, handleSelectBucketPoi,
     bucketSearchResults, setBucketSearchResults,

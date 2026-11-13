@@ -21,6 +21,9 @@ const tmpDir = path.join(__dirname, '../data/tmp');
 
 import * as scheduler from './scheduler';
 import { getAppUrl, getMcpSafeUrl } from './services/notifications';
+import { db } from './db/database';
+import { scheduleMonthlyClimateWarm } from './services/weatherService';
+import { warmNaturalHazardCatalog } from './services/naturalHazardsService';
 
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = process.env.HOST;
@@ -81,11 +84,18 @@ const onListen = () => {
   scheduler.startTrekPhotoCacheCleanup();
   scheduler.startPlacePhotoCacheCleanup();
   scheduler.startAirTrailSync();
+  try {
+    const climateLocations = db.prepare(`SELECT p.lat, p.lng FROM places p JOIN trips t ON t.id = p.trip_id
+      WHERE t.is_archived = 0 AND p.lat IS NOT NULL AND p.lng IS NOT NULL`).all() as Array<{ lat: number; lng: number }>;
+    scheduleMonthlyClimateWarm(climateLocations);
+    sLogInfo(`Queued selective historical climate cache warm from ${climateLocations.length} saved place(s); at most two representatives per country will be fetched`);
+  } catch (err: unknown) {
+    sLogWarn(`Could not queue historical climate cache warm: ${err instanceof Error ? err.message : 'database query failed'}`);
+  }
+  warmNaturalHazardCatalog();
+  sLogInfo('Queued natural hazard catalog cache warm');
   const { startTokenCleanup } = require('./services/ephemeralTokens');
   startTokenCleanup();
-  import('./websocket').then(({ setupWebSocket }) => {
-    setupWebSocket(server);
-  });
 };
 
 let server: http.Server;
@@ -99,6 +109,8 @@ async function bootstrap(): Promise<void> {
   // order; it is shared with the integration-test harness so they can't drift.
   nestApp = await buildApp();
   server = http.createServer(nestApp.getHttpAdapter().getInstance());
+  const { setupWebSocket } = await import('./websocket');
+  setupWebSocket(server);
   if (HOST) server.listen(PORT, HOST, onListen);
   else server.listen(PORT, onListen);
 }

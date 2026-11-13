@@ -15,7 +15,7 @@ import {
   type TripAddMemberRequest, type TripTransferOwnershipRequest,
   type TripCreateGuestRequest, type TripRenameGuestRequest, type AssignmentReorderRequest,
   type PackingReorderRequest, type PackingCreateBagRequest, type TodoReorderRequest,
-  type TripCreateRequest, type TripUpdateRequest, type TripCopyRequest,
+  type TripCreateRequest, type TripUpdateRequest, type TripCopyRequest, type TripReorderRequest,
   type DayCreateRequest, type DayUpdateRequest, type DayReorderRequest,
   type PlaceCreateRequest, type PlaceUpdateRequest,
   type ReservationCreateRequest, type ReservationUpdateRequest,
@@ -41,6 +41,10 @@ import {
   type BookingImportPreviewResponse,
   type BookingImportConfirmResponse,
   type BookingImportMode,
+  type JourneyCreateRequest, type JourneyAddTripRequest, type JourneyTracksResponse,
+  type JourneyStats, type BookRecord, type BookSaveRequest,
+  type JourneyReorderEntriesRequest, type JourneyProviderPhotosRequest,
+  type JourneyShareLinkRequest,
 } from '@trek/shared'
 import { getSocketId } from './websocket'
 import { probeNow } from '../sync/connectivity'
@@ -123,6 +127,7 @@ export const apiClient: AxiosInstance = axios.create({
 })
 
 const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+const GET_RETRY_DELAYS = [300, 900]
 
 // Request interceptor - add socket ID + idempotency key for mutating requests
 apiClient.interceptors.request.use(
@@ -170,6 +175,16 @@ apiClient.interceptors.response.use(
       return response
     },
     async (error) => {
+      const config = error.config as (typeof error.config & { startupRetryCount?: number }) | undefined
+      const retryable = !error.response || [502, 503, 504].includes(error.response.status)
+      if (config && !axios.isCancel(error) && ['get', 'head'].includes((config.method || '').toLowerCase())
+        && !config.url?.includes('/files/media') && retryable && navigator.onLine
+        && (config.startupRetryCount || 0) < GET_RETRY_DELAYS.length) {
+        const attempt = config.startupRetryCount || 0
+        config.startupRetryCount = attempt + 1
+        await new Promise(resolve => setTimeout(resolve, GET_RETRY_DELAYS[attempt]))
+        return apiClient.request(config)
+      }
       // CF Access / Pangolin / similar: cross-origin redirect from /api/* surfaces
       // as a CORS error with no response object. Probe the health endpoint to
       // distinguish a proxy auth challenge from a genuine outage. If the server
@@ -362,6 +377,7 @@ export const oauthApi = {
 
 export const tripsApi = {
   list: (params?: Record<string, unknown>) => apiClient.get('/trips', { params }).then(r => r.data),
+  recentActivity: () => apiClient.get('/trips/recent-activity').then(r => r.data as { items: { entity_type: 'trip' | 'trip_updated' | 'place_added' | 'place_updated'; entity_id: number; trip_id: number; trip_title: string; item_title: string; activity_at: string }[] }),
   create: (data: TripCreateRequest) => apiClient.post('/trips', data).then(r => r.data),
   get: (id: number | string) => apiClient.get(`/trips/${id}`).then(r => r.data),
   update: (id: number | string, data: TripUpdateRequest) => apiClient.put(`/trips/${id}`, data).then(r => r.data),
@@ -378,9 +394,22 @@ export const tripsApi = {
   renameGuest: (id: number | string, userId: number, name: string) => apiClient.put(`/trips/${id}/guests/${userId}`, { name } satisfies TripRenameGuestRequest).then(r => r.data),
   deleteGuest: (id: number | string, userId: number) => apiClient.delete(`/trips/${id}/guests/${userId}`).then(r => r.data),
   copy: (id: number | string, data?: TripCopyRequest) => apiClient.post(`/trips/${id}/copy`, data || {}).then(r => r.data),
+  reorder: (orderedIds: number[]) => apiClient.post('/trips/reorder', { orderedIds } satisfies TripReorderRequest).then(r => r.data),
   bundle: (id: number | string) => apiClient.get(`/trips/${id}/bundle`).then(r => r.data),
   history: (id: number | string, limit = 100) => apiClient.get(`/trips/${id}/history`, { params: { limit } }).then(r => r.data),
   recordHistory: (id: number | string, data: { action: string; entityType: string; entityId?: number | string; before?: unknown; after?: unknown }) => apiClient.post(`/trips/${id}/history`, data).then(r => r.data),
+  search: (id: number | string, q: string) => apiClient.get(`/trips/${id}/search`, { params: { q } }).then(r => r.data as {
+    results: Array<{
+      type: 'place' | 'day' | 'note' | 'reservation'
+      id: number
+      title: string
+      snippet?: string | null
+      dayId?: number | null
+      dayNumber?: number | null
+      date?: string | null
+      placeId?: number | null
+    }>
+  }),
 }
 
 export const daysApi = {
@@ -750,6 +779,62 @@ export const airtrailApi = {
     apiClient.post(`/trips/${tripId}/reservations/import/airtrail`, connections?.length ? { flightIds, connections } : { flightIds }).then(r => r.data),
 }
 
+export const journeyApi = {
+  list: () => apiClient.get('/journeys').then(r => r.data),
+  create: (data: JourneyCreateRequest) => apiClient.post('/journeys', data).then(r => r.data),
+  get: (id: number) => apiClient.get(`/journeys/${id}`).then(r => r.data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.patch(`/journeys/${id}`, data).then(r => r.data),
+  delete: (id: number) => apiClient.delete(`/journeys/${id}`).then(r => r.data),
+
+  suggestions: () => apiClient.get('/journeys/suggestions').then(r => r.data),
+  availableTrips: () => apiClient.get('/journeys/available-trips').then(r => r.data),
+
+  addTrip: (id: number, tripId: number) => apiClient.post(`/journeys/${id}/trips`, { trip_id: tripId } satisfies JourneyAddTripRequest).then(r => r.data),
+  removeTrip: (id: number, tripId: number) => apiClient.delete(`/journeys/${id}/trips/${tripId}`).then(r => r.data),
+
+  listEntries: (id: number) => apiClient.get(`/journeys/${id}/entries`).then(r => r.data),
+  listTracks: (id: number): Promise<JourneyTracksResponse> => apiClient.get(`/journeys/${id}/tracks`).then(r => r.data),
+  stats: (id: number): Promise<JourneyStats> => apiClient.get(`/journeys/${id}/stats`).then(r => r.data),
+
+  getBook: (id: number): Promise<{ book: BookRecord | null }> =>
+    apiClient.get(`/journeys/${id}/book`).then(r => r.data),
+  saveBook: (id: number, body: BookSaveRequest): Promise<BookRecord> =>
+    apiClient.put(`/journeys/${id}/book`, body).then(r => r.data),
+  deleteBook: (id: number): Promise<void> =>
+    apiClient.delete(`/journeys/${id}/book`).then(r => r.data),
+  createEntry: (id: number, data: Record<string, unknown>) => apiClient.post(`/journeys/${id}/entries`, data).then(r => r.data),
+  updateEntry: (entryId: number, data: Record<string, unknown>) => apiClient.patch(`/journeys/entries/${entryId}`, data).then(r => r.data),
+  deleteEntry: (entryId: number) => apiClient.delete(`/journeys/entries/${entryId}`).then(r => r.data),
+  reorderEntries: (journeyId: number, orderedIds: number[]) => apiClient.put(`/journeys/${journeyId}/entries/reorder`, { orderedIds } satisfies JourneyReorderEntriesRequest).then(r => r.data),
+
+  uploadPhotos: (entryId: number, formData: FormData, opts?: UploadOptions) =>
+    postMultipart(`/journeys/entries/${entryId}/photos`, formData, opts),
+  uploadGalleryPhotos: (journeyId: number, formData: FormData, opts?: UploadOptions) =>
+    postMultipart(`/journeys/${journeyId}/gallery/photos`, formData, opts),
+  uploadGalleryVideo: (journeyId: number, formData: FormData, opts?: UploadOptions) =>
+    postMultipart(`/journeys/${journeyId}/gallery/video`, formData, opts),
+  addProviderPhotosToGallery: (journeyId: number, provider: string, assetIds: string[], passphrase?: string, mediaTypes?: string[]) => apiClient.post(`/journeys/${journeyId}/gallery/provider-photos`, { provider, asset_ids: assetIds, ...(passphrase ? { passphrase } : {}), ...(mediaTypes ? { media_types: mediaTypes } : {}) } satisfies JourneyProviderPhotosRequest).then(r => r.data),
+  addProviderPhoto: (entryId: number, provider: string, assetId: string, caption?: string, passphrase?: string) => apiClient.post(`/journeys/entries/${entryId}/provider-photos`, { provider, asset_id: assetId, caption, ...(passphrase ? { passphrase } : {}) }).then(r => r.data),
+  addProviderPhotos: (entryId: number, provider: string, assetIds: string[], caption?: string, passphrase?: string, mediaTypes?: string[]) => apiClient.post(`/journeys/entries/${entryId}/provider-photos`, { provider, asset_ids: assetIds, caption, ...(passphrase ? { passphrase } : {}), ...(mediaTypes ? { media_types: mediaTypes } : {}) }).then(r => r.data),
+  linkPhoto: (entryId: number, journeyPhotoId: number) => apiClient.post(`/journeys/entries/${entryId}/link-photo`, { journey_photo_id: journeyPhotoId }).then(r => r.data),
+  unlinkPhoto: (entryId: number, journeyPhotoId: number) => apiClient.delete(`/journeys/entries/${entryId}/photos/${journeyPhotoId}`).then(r => r.data),
+  deleteGalleryPhoto: (journeyId: number, journeyPhotoId: number) => apiClient.delete(`/journeys/${journeyId}/gallery/${journeyPhotoId}`).then(r => r.data),
+  updatePhoto: (photoId: number, data: Record<string, unknown>) => apiClient.patch(`/journeys/photos/${photoId}`, data).then(r => r.data),
+  deletePhoto: (photoId: number) => apiClient.delete(`/journeys/photos/${photoId}`).then(r => r.data),
+
+  uploadCover: (id: number, formData: FormData) => postMultipart(`/journeys/${id}/cover`, formData),
+
+  addContributor: (id: number, userId: number, role: string) => apiClient.post(`/journeys/${id}/contributors`, { user_id: userId, role }).then(r => r.data),
+  updateContributor: (id: number, userId: number, role: string) => apiClient.patch(`/journeys/${id}/contributors/${userId}`, { role }).then(r => r.data),
+  removeContributor: (id: number, userId: number) => apiClient.delete(`/journeys/${id}/contributors/${userId}`).then(r => r.data),
+
+  updatePreferences: (id: number, data: { hide_skeletons?: boolean }) => apiClient.patch(`/journeys/${id}/preferences`, data).then(r => r.data),
+
+  getShareLink: (id: number) => apiClient.get(`/journeys/${id}/share-link`).then(r => r.data),
+  createShareLink: (id: number, perms: JourneyShareLinkRequest) => apiClient.post(`/journeys/${id}/share-link`, perms).then(r => r.data),
+  deleteShareLink: (id: number) => apiClient.delete(`/journeys/${id}/share-link`).then(r => r.data),
+  getPublicJourney: (token: string) => apiClient.get(`/public/journey/${token}`).then(r => r.data),
+}
 
 export const mapsApi = {
   search: (query: string, lang?: string) => apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query }).then(r => checkInDev(mapsSearchResultSchema, r.data, 'maps.search')),
@@ -790,6 +875,12 @@ export const budgetApi = {
 
 export const filesApi = {
   list: (tripId: number | string, trash?: boolean) => apiClient.get(`/trips/${tripId}/files`, { params: trash ? { trash: 'true' } : {} }).then(r => r.data),
+  listMedia: (tripId: number | string, cursor?: string) => apiClient.get(`/trips/${tripId}/files/media`, { params: cursor ? { cursor } : {} }).then(r => r.data),
+  uploadMedia: (tripId: number | string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return postMultipart(`/trips/${tripId}/files/media/upload`, formData)
+  },
   listLinks: (tripId: number | string) => apiClient.get(`/trips/${tripId}/files/links`).then(r => r.data),
   createLink: (tripId: number | string, data: { title: string; url: string; description?: string }) => apiClient.post(`/trips/${tripId}/files/links`, data).then(r => r.data),
   deleteLink: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/files/links/${id}`).then(r => r.data),
@@ -842,6 +933,27 @@ export const healthApi = {
 export const weatherApi = {
   get: (lat: number, lng: number, date: string): Promise<WeatherResult> => apiClient.get('/weather', { params: { lat, lng, date } }).then(r => parseInDev(weatherResultSchema, r.data, 'weather.get')),
   getDetailed: (lat: number, lng: number, date: string, lang?: string): Promise<WeatherResult> => apiClient.get('/weather/detailed', { params: { lat, lng, date, lang } }).then(r => parseInDev(weatherResultSchema, r.data, 'weather.getDetailed')),
+  getClimate: (lat: number, lng: number) => apiClient.get('/weather/climate', { params: { lat, lng } }).then(r => r.data as { source: string; period: string; months: Array<{ month: number; meanMaxC: number; meanMinC: number; precipitationMm: number; days: number }> }),
+  getClimateBatch: (locations: Array<{ key: string; lat: number; lng: number }>) => apiClient.post('/weather/climate/batch', { locations }, { timeout: 300_000 }).then(r => r.data as Array<{ key: string; source?: string; period?: string; months?: Array<{ month: number; meanMaxC: number; meanMinC: number; precipitationMm: number; days: number }>; error?: string }>),
+}
+
+export const seasonsApi = {
+  getGeographyBatch: (locations: Array<{ key: string; lat: number; lng: number }>) =>
+    apiClient.post('/seasons/geography/batch', { locations }, { timeout: 60_000 }).then(r => r.data as Array<{ key: string; region?: string; countryCode?: string; error?: string }>),
+  getCrowdBatch: (locations: Array<{ key: string; lat: number; lng: number }>) =>
+    apiClient.post('/seasons/crowd/batch', { locations }, { timeout: 60_000 }).then(r => r.data as Array<{
+      key: string; region?: string; countryCode?: string; error?: string;
+      data?: { period: string; years: number[]; provisional: boolean; months: Array<{ month: number; relativeDemand: number; samples: number }> };
+    }>),
+  getHolidays: (year: number, countryCodes: string[]) => apiClient.post('/seasons/holidays/batch', { year, countryCodes }, { timeout: 120_000 }).then(r => r.data as Array<{
+    countryCode: string; year: number; source: string; error?: string;
+    holidays?: Array<{ date: string; name?: string; localName?: string; global?: boolean }>;
+  }>),
+  getNaturalHazards: (locations: Array<{ key: string; lat: number; lng: number }>) => apiClient.post('/seasons/natural-hazards/batch', { locations }, { timeout: 180_000 }).then(r => r.data as Array<{
+    key: string; error?: string; cycloneCoverage: 'covered' | 'unsupported' | 'unavailable';
+    hazards: Partial<Record<'earthquakes' | 'tsunamis' | 'volcanoes', { source: string; period: string; radiusKm: number; events: number; months: Array<{ month: number; events: number; relativeActivity: number | null }> }>>;
+    cyclones?: { source: string; period: string; radiusNm: number; basins: string[]; events: number; months: Array<{ month: number; events: number; tracksPer100Years: number; relativeActivity: number | null }> };
+  }>),
 }
 
 export const configApi = {

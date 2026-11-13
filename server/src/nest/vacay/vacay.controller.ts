@@ -211,6 +211,16 @@ export class VacayController {
     return this.vacay.toggleCompanyHoliday(planId, body.date as string, body.note, socketId);
   }
 
+  @Post('entries/company-holidays/us-bank')
+  @HttpCode(200)
+  addUsBankHolidays(@CurrentUser() user: User, @Body() body: { year?: number }, @Headers('x-socket-id') socketId?: string) {
+    if (!Number.isInteger(body.year) || Number(body.year) < 1900 || Number(body.year) > 2200) {
+      throw new HttpException({ error: 'A valid year is required' }, 400);
+    }
+    const planId = this.vacay.getActivePlanId(user.id);
+    return this.vacay.addUsBankHolidays(planId, Number(body.year), socketId);
+  }
+
   @Get('stats/:year')
   stats(@CurrentUser() user: User, @Param('year') yearParam: string) {
     const year = parseInt(yearParam);

@@ -188,9 +188,17 @@ export function useTripPlanner() {
     setActiveTab(tabId)
     sessionStorage.setItem(`trip-tab-${tripId}`, tabId)
     navigate(`/trips/${tripId}/${routeForTab[tabId] || tabId}`)
-    if (tabId === 'finanzplan') tripActions.loadBudgetItems?.(tripId)
-    if (tabId === 'dateien' && (!files || files.length === 0)) tripActions.loadFiles?.(tripId)
   }
+
+  useEffect(() => {
+    if (!tripId || isLoading) return
+    if (activeTab === 'finanzplan') tripActions.loadBudgetItems?.(tripId)
+    if (activeTab === 'dateien' && (!files || files.length === 0)) tripActions.loadFiles?.(tripId)
+    if (activeTab === 'listen') {
+      tripActions.loadPackingItems?.(tripId).catch(() => {})
+      tripActions.loadTodoItems?.(tripId).catch(() => {})
+    }
+  }, [activeTab, tripId, isLoading, files, tripActions])
   const { leftWidth, rightWidth, leftCollapsed, rightCollapsed, setLeftCollapsed, setRightCollapsed, startResizeLeft, startResizeRight } = useResizablePanels()
   const { selectedPlaceId, selectedAssignmentId, setSelectedPlaceId, selectAssignment } = usePlaceSelection()
   const [showDayDetail, setShowDayDetail] = useState<Day | null>(null)
@@ -310,12 +318,32 @@ export function useTripPlanner() {
     [effectiveConnections, routableReservationIds]
   )
   const allConnectionsShown = effectiveConnections.mode === 'all-except'
+  /** When set, the next map fit frames these coords (booking-route endpoints). */
+  const [fitExtraCoords, setFitExtraCoords] = useState<[number, number][] | null>(null)
   const toggleConnection = useCallback((id: number) => {
     setStoredConnections(prev => toggleConnectionId(prev, alwaysShowRoutesDefault, id))
   }, [alwaysShowRoutesDefault])
   const toggleAllConnections = useCallback(() => {
-    setStoredConnections(prev => flipAllConnectionsMode(prev, alwaysShowRoutesDefault))
-  }, [alwaysShowRoutesDefault])
+    setStoredConnections(prev => {
+      const next = flipAllConnectionsMode(prev, alwaysShowRoutesDefault)
+      if (next.mode === 'all-except') {
+        const ids = resolveVisibleConnectionIds(next, routableReservationIds)
+        const idSet = new Set(ids)
+        const coords: [number, number][] = []
+        for (const r of reservations) {
+          if (!idSet.has(r.id)) continue
+          for (const ep of r.endpoints || []) {
+            if (ep.lat != null && ep.lng != null) coords.push([ep.lat, ep.lng])
+          }
+        }
+        setFitExtraCoords(coords.length >= 2 ? coords : null)
+        queueMicrotask(() => setFitKey(k => k + 1))
+      } else {
+        setFitExtraCoords(null)
+      }
+      return next
+    })
+  }, [alwaysShowRoutesDefault, routableReservationIds, reservations])
   const [mapTransportDetail, setMapTransportDetail] = useState<Reservation | null>(null)
 
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
@@ -376,51 +404,84 @@ export function useTripPlanner() {
   const placesCategoryFilter = useTripStore((s) => s.placesCategoryFilter)
 
   const [expandedDayIds, setExpandedDayIds] = useState<Set<number> | null>(null)
+  /** Map chrome scope: all visible filters, only the selected day, or unscheduled only. */
+  const [mapScope, setMapScope] = useState<'all' | 'day' | 'unscheduled'>('all')
+  /** Bumped whenever camera should re-focus the selected place (select / Show it). */
+  const [focusKey, setFocusKey] = useState(0)
 
-  const mapPlaces = useMemo(() => {
-    // Build set of place IDs assigned to collapsed days
-    const hiddenPlaceIds = new Set<number>()
-    if (expandedDayIds) {
-      for (const [dayId, dayAssignments] of Object.entries(assignments)) {
-        if (!expandedDayIds.has(Number(dayId))) {
-          for (const a of dayAssignments) {
-            if (a.place?.id) hiddenPlaceIds.add(a.place.id)
-          }
-        }
-      }
-      // Don't hide places that are also assigned to an expanded day
-      for (const [dayId, dayAssignments] of Object.entries(assignments)) {
-        if (expandedDayIds.has(Number(dayId))) {
-          for (const a of dayAssignments) {
-            hiddenPlaceIds.delete(a.place?.id)
-          }
-        }
-      }
-    }
+  const plannedPlaceIds = useMemo(
+    () => new Set(Object.values(assignments).flatMap(da => da.map(a => a.place?.id).filter((id): id is number => id != null))),
+    [assignments],
+  )
 
-    // Build set of planned place IDs for unplanned filter
-    const plannedIds = placesFilter === 'unplanned'
-      ? new Set(Object.values(assignments).flatMap(da => da.map(a => a.place?.id).filter(Boolean)))
+  // Day expand/collapse is sidebar-only — does not hide map pins.
+  const mapPlacesFiltered = useMemo(() => {
+    const plannedIds = placesFilter === 'unplanned' ? plannedPlaceIds : null
+
+    // Day-scoped place ids when map chrome is "This day"
+    const dayScopedIds = mapScope === 'day' && selectedDayId
+      ? new Set((assignments[String(selectedDayId)] || []).map(a => a.place?.id).filter((id): id is number => id != null))
       : null
 
     return places.filter(p => {
       if (!p.lat || !p.lng) return false
+      if (mapScope === 'unscheduled' && plannedPlaceIds.has(p.id)) return false
+      if (dayScopedIds && !dayScopedIds.has(p.id)) return false
       if (placesFilter === 'tracks' && !p.route_geometry) return false
       if (placesCategoryFilter.size > 0) {
         if (p.category_id == null) {
           if (!placesCategoryFilter.has('uncategorized')) return false
         } else if (!placesCategoryFilter.has(String(p.category_id))) return false
       }
-      if (hiddenPlaceIds.has(p.id)) return false
       if (plannedIds && plannedIds.has(p.id)) return false
       return true
     })
-  }, [places, placesCategoryFilter, placesFilter, assignments, expandedDayIds])
+  }, [places, placesCategoryFilter, placesFilter, assignments, mapScope, selectedDayId, plannedPlaceIds])
+
+  // Keep the selected pin on the map even when filters would hide it — list→map
+  // must never lose the marker. The chrome banner explains why it's "outside".
+  const mapPlaces = useMemo(() => {
+    if (!selectedPlaceId) return mapPlacesFiltered
+    if (mapPlacesFiltered.some(p => p.id === selectedPlaceId)) return mapPlacesFiltered
+    const selected = places.find(p => p.id === selectedPlaceId)
+    if (!selected?.lat || !selected?.lng) return mapPlacesFiltered
+    return [...mapPlacesFiltered, selected]
+  }, [mapPlacesFiltered, selectedPlaceId, places])
+
+  const selectedOutsideMapFilter = !!selectedPlaceId
+    && !mapPlacesFiltered.some(p => p.id === selectedPlaceId)
+    && !!places.find(p => p.id === selectedPlaceId && p.lat != null && p.lng != null)
+
+  const selectedOutsideReason = useMemo((): 'scope-day' | 'scope-unscheduled' | 'unplanned' | 'category' | 'collapsed' | 'filter' | null => {
+    if (!selectedOutsideMapFilter || !selectedPlaceId) return null
+    const place = places.find(p => p.id === selectedPlaceId)
+    if (!place) return null
+    if (mapScope === 'day') return 'scope-day'
+    if (mapScope === 'unscheduled' && plannedPlaceIds.has(place.id)) return 'scope-unscheduled'
+    if (placesFilter === 'unplanned' && plannedPlaceIds.has(place.id)) return 'unplanned'
+    if (placesCategoryFilter.size > 0) {
+      const key = place.category_id == null ? 'uncategorized' : String(place.category_id)
+      if (!placesCategoryFilter.has(key)) return 'category'
+    }
+    return 'filter'
+  }, [selectedOutsideMapFilter, selectedPlaceId, places, mapScope, plannedPlaceIds, placesFilter, placesCategoryFilter])
+
+  const revealSelectedOnMap = useCallback(() => {
+    tripActions.setPlacesFilter('all')
+    tripActions.setPlacesCategoryFilter(new Set())
+    setExpandedDayIds(null)
+    setMapScope('all')
+    setFitKey(k => k + 1)
+    setFocusKey(k => k + 1)
+  }, [tripActions])
 
   const { route, routeSegments, routeInfo, setRoute, setRouteInfo, updateRouteForDay } = useRouteCalculation({ assignments } as any, selectedDayId, routeShown, routeProfile, tripAccommodations)
 
   const handleSelectDay = useCallback((dayId: number | null, skipFit?: boolean) => {
     tripActions.setSelectedDay(dayId)
+    setFitExtraCoords(null)
+    // Scope pins to the selected day so the map visually matches the sidebar focus.
+    setMapScope(dayId != null ? 'day' : 'all')
     if (!skipFit) setFitKey(k => k + 1)
     setMobileSidebarOpen(null)
     updateRouteForDay(dayId)
@@ -432,7 +493,12 @@ export function useTripPlanner() {
     } else {
       setSelectedPlaceId(placeId)
     }
-    if (placeId) { setShowDayDetail(null); setLeftCollapsed(false); setRightCollapsed(false) }
+    if (placeId) {
+      setShowDayDetail(null)
+      setLeftCollapsed(false)
+      // Keep the places sidebar as-is — the bottom inspector is enough context.
+      setFocusKey(k => k + 1)
+    }
   }, [selectAssignment, setSelectedPlaceId])
 
   const handleMarkerClick = useCallback((placeId?: number) => {
@@ -467,11 +533,18 @@ export function useTripPlanner() {
         selectAssignment(matching[nextIdx].id, placeId)
       }
     }
-    setLeftCollapsed(false); setRightCollapsed(false)
+    setLeftCollapsed(false)
+    // Don't auto-open the places sidebar — bottom inspector covers selection.
+    setFocusKey(k => k + 1)
   }, [selectAssignment, selectedAssignmentId, selectedPlaceId, setSelectedPlaceId])
 
   const handleMapClick = useCallback(() => {
     setSelectedPlaceId(null)
+  }, [])
+
+  const handleMapScopeChange = useCallback((next: 'all' | 'day' | 'unscheduled') => {
+    setMapScope(next)
+    setFitKey(k => k + 1)
   }, [])
 
   const handleMapContextMenu = useCallback(async (e) => {
@@ -952,12 +1025,13 @@ export function useTripPlanner() {
     transportModalDayId, setTransportModalDayId,
     transportModalAutomated, setTransportModalAutomated, transitPrefill, setTransitPrefill, transitJourney, setTransitJourney,
     reservationPrefill, transportPrefill, importReviewActive, startImportReview, advanceImportReview,
-    routeShown, setRouteShown, routeProfile, setRouteProfile, fitKey, setFitKey,
+    routeShown, setRouteShown, routeProfile, setRouteProfile, fitKey, setFitKey, fitExtraCoords,
     mobileSidebarOpen, setMobileSidebarOpen, mobilePlanScrollTopRef, mobilePlacesScrollTopRef,
     deletePlaceId, setDeletePlaceId, deletePlaceIds, setDeletePlaceIds,
     visibleConnections, toggleConnection, allConnectionsShown, toggleAllConnections, mapTransportDetail, setMapTransportDetail,
     isMobile, isTouch,
-    expandedDayIds, setExpandedDayIds, mapPlaces,
+    expandedDayIds, setExpandedDayIds, mapPlaces, mapScope, handleMapScopeChange,
+    selectedOutsideMapFilter, selectedOutsideReason, revealSelectedOnMap, focusKey,
     route, routeSegments, routeInfo, setRoute, setRouteInfo, updateRouteForDay,
     handleSelectDay, handlePlaceClick, handleMarkerClick, handleMapClick, handleMapContextMenu, openPoiInGoogleMaps,
     handleSavePlace, openPlaceEditor, handleDeletePlace, confirmDeletePlace, confirmDeletePlaces, confirmChangeCategory,

@@ -374,7 +374,7 @@ export default function NotificationsTab(): React.ReactElement {
                 const isOn = matrix.preferences[eventType]?.[ch.id] ?? true
                 return (
                   <div key={ch.id} style={{ display: 'flex', justifyContent: 'center' }}>
-                    <ToggleSwitch on={isOn} onToggle={() => toggle(eventType, ch.id)} />
+                    <ToggleSwitch on={isOn} onToggle={() => toggle(eventType, ch.id)} label={`${eventLabel(eventType, t)} — ${channelLabel(ch, t)}`} />
                   </div>
                 )
               })}

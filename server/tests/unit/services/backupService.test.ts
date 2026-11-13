@@ -26,6 +26,7 @@ const fsMock = vi.hoisted(() => ({
 }));
 
 const archiverInstanceMock = vi.hoisted(() => ({
+  abort: vi.fn(),
   pipe: vi.fn(),
   file: vi.fn(),
   directory: vi.fn(),
@@ -56,6 +57,7 @@ const dbMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../src/db/database', () => dbMock);
+vi.mock('../../../src/db/beliSchema', () => ({ omitBeliFromBackup: vi.fn() }));
 vi.mock('../../../src/config', () => ({
   JWT_SECRET: 'test-secret',
   ENCRYPTION_KEY: 'a'.repeat(64),
@@ -93,6 +95,7 @@ import {
   listBackups,
   updateAutoSettings,
 } from '../../../src/services/backupService';
+import { omitBeliFromBackup } from '../../../src/db/beliSchema';
 
 // ---------------------------------------------------------------------------
 // formatSize
@@ -473,6 +476,12 @@ describe('BACKUP-036 createBackup', () => {
       expect.any(String),
       { name: 'travel.db' }
     );
+    expect(omitBeliFromBackup).toHaveBeenCalledWith(expect.stringContaining('.travel-snap-'));
+    vi.mocked(omitBeliFromBackup).mockImplementationOnce(() => { throw new Error('synthetic redaction failure'); });
+    archiverInstanceMock.file.mockClear();
+    await expect(createBackup()).rejects.toThrow('Could not create a private database backup snapshot.');
+    expect(archiverInstanceMock.abort).toHaveBeenCalled();
+    expect(archiverInstanceMock.file).not.toHaveBeenCalledWith(expect.any(String), { name: 'travel.db' });
   });
 
   it('BACKUP-036e — includes uploads but excludes the re-derivable photo caches', async () => {

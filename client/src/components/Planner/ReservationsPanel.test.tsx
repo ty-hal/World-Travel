@@ -56,15 +56,14 @@ describe('ReservationsPanel', () => {
 
   it('FE-COMP-RES-005: shows Manual Booking add button', () => {
     render(<ReservationsPanel {...defaultProps} />);
-    // Button text is reservations.addManual = "Manual Booking"
-    expect(screen.getByText('Manual Booking')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manual Booking' })).toBeInTheDocument();
   });
 
   it('FE-COMP-RES-006: clicking Manual Booking button calls onAdd', async () => {
     const user = userEvent.setup();
     const onAdd = vi.fn();
     render(<ReservationsPanel {...defaultProps} onAdd={onAdd} />);
-    await user.click(screen.getByText('Manual Booking'));
+    await user.click(screen.getByRole('button', { name: 'Manual Booking' }));
     expect(onAdd).toHaveBeenCalled();
   });
 

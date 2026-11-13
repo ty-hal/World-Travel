@@ -48,6 +48,13 @@ vi.mock('../../../src/services/placePhotoCache', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../src/services/placePhotoCache')>()),
   removeIfUnreferenced: removeIfUnreferencedSpy,
 }));
+const { scheduleClimateWarmSpy } = vi.hoisted(() => ({ scheduleClimateWarmSpy: vi.fn() }));
+vi.mock('../../../src/services/weatherService', () => ({ scheduleMonthlyClimateWarm: scheduleClimateWarmSpy }));
+const { checkSsrfSpy } = vi.hoisted(() => ({ checkSsrfSpy: vi.fn() }));
+vi.mock('../../../src/utils/ssrfGuard', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/utils/ssrfGuard')>()),
+  checkSsrf: checkSsrfSpy,
+}));
 
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
@@ -67,6 +74,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   resetTestDb(testDb);
+  scheduleClimateWarmSpy.mockClear();
+  checkSsrfSpy.mockReset().mockResolvedValue({ allowed: true });
 });
 
 afterAll(() => {
@@ -144,6 +153,15 @@ describe('createPlace (service)', () => {
     expect(place).toBeDefined();
     expect(place.name).toBe('New Place');
     expect(Array.isArray(place.tags)).toBe(true);
+    expect(scheduleClimateWarmSpy).toHaveBeenCalledWith([place]);
+  });
+
+  it('preserves zero latitude and longitude so equatorial places can warm climate', () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const place = svcCreatePlace(String(trip.id), { name: 'Null Island', lat: 0, lng: 0 }) as any;
+    expect(place).toMatchObject({ lat: 0, lng: 0 });
+    expect(scheduleClimateWarmSpy).toHaveBeenCalledWith([place]);
   });
 
   it('PLACE-SVC-008 — creates a place with tags', () => {
@@ -202,6 +220,7 @@ describe('updatePlace', () => {
     expect(updated.name).toBe('New');
     expect(updated.lat).toBe(48.8);
     expect(updated.lng).toBe(2.3);
+    expect(scheduleClimateWarmSpy).toHaveBeenCalledWith([updated]);
   });
 
   it('PLACE-SVC-014 — returns null for non-existent place', () => {
@@ -338,6 +357,7 @@ describe('importGpx', () => {
     expect(result.places).toHaveLength(2);
     expect(result.places[0].name).toBe('Paris');
     expect(result.places[1].name).toBe('London');
+    expect(scheduleClimateWarmSpy).toHaveBeenCalledWith(result.places);
   });
 
   it('PLACE-SVC-022 — imports <rte> as a single polyline-place with routeGeometry', () => {
@@ -499,6 +519,7 @@ describe('importGoogleList', () => {
     expect(result.places).toHaveLength(2);
     expect(result.places[0].name).toBe('Paris');
     expect(result.places[1].name).toBe('London');
+    expect(scheduleClimateWarmSpy).toHaveBeenCalledWith(result.places);
   });
 
   it('PLACE-SVC-028b — stores a Google Maps ftid separately from google_place_id', async () => {
@@ -675,6 +696,7 @@ describe('importKmlPlaces deduplication', () => {
 
     const first = importKmlPlaces(String(trip.id), buf);
     expect(first.count).toBeGreaterThan(0);
+    expect(scheduleClimateWarmSpy).toHaveBeenCalledWith(first.places);
 
     const second = importKmlPlaces(String(trip.id), buf);
     expect(second.count).toBe(0);

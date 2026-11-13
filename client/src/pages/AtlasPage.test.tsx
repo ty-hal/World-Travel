@@ -1,5 +1,7 @@
 import React from 'react';
+import L from 'leaflet';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act } from '@testing-library/react';
 import { render, screen, waitFor, fireEvent } from '../../tests/helpers/render';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -31,10 +33,12 @@ vi.mock('leaflet', () => {
     return layer;
   };
 
+  const mapEventHandlers: Record<string, Function> = {};
   const mockMap = {
     setView: vi.fn().mockReturnThis(),
     setMaxBounds: vi.fn().mockReturnThis(),
     on: vi.fn().mockImplementation((event: string, cb: Function) => {
+      mapEventHandlers[event] = cb;
       if (event === 'zoomend') {
         // Invoke with zoom=5 to cover the shouldShow=true branch (loadRegionsForViewport)
         const origGetZoom = mockMap.getZoom;
@@ -50,7 +54,8 @@ vi.mock('leaflet', () => {
       return mockMap;
     }),
     off: vi.fn().mockReturnThis(),
-    remove: vi.fn(),
+    remove: vi.fn(() => Object.keys(mapEventHandlers).forEach(key => { delete mapEventHandlers[key] })),
+    fire: vi.fn((event: string) => mapEventHandlers[event]?.()),
     invalidateSize: vi.fn(),
     fitBounds: vi.fn(),
     addLayer: vi.fn(),
@@ -66,7 +71,10 @@ vi.mock('leaflet', () => {
   };
 
   const L = {
-    map: vi.fn(() => mockMap),
+    map: vi.fn(() => {
+      Object.keys(mapEventHandlers).forEach(key => { delete mapEventHandlers[key] });
+      return mockMap;
+    }),
     tileLayer: vi.fn(() => ({ addTo: vi.fn().mockReturnThis(), setUrl: vi.fn().mockReturnThis(), remove: vi.fn() })),
     // Call onEachFeature and style callbacks for each feature so those paths are covered
     geoJSON: vi.fn((data: any, options: any) => {
@@ -100,7 +108,13 @@ vi.mock('leaflet', () => {
     layerGroup: vi.fn(() => ({ addTo: vi.fn().mockReturnThis(), clearLayers: vi.fn() })),
     canvas: vi.fn(() => ({})),
     svg: vi.fn(() => ({})),
-    control: { zoom: vi.fn(() => ({ addTo: vi.fn() })) },
+    control: {
+      zoom: vi.fn(() => ({ addTo: vi.fn() })),
+      attribution: vi.fn(() => ({
+        addTo: vi.fn().mockReturnThis(),
+        addAttribution: vi.fn().mockReturnThis(),
+      })),
+    },
   };
   return { default: L, ...L };
 });
@@ -182,6 +196,7 @@ function useDefaultAtlasHandlers() {
     // Handler for region GeoJSON fetch (triggered by loadRegionsForViewport when intersects=true)
     http.get('/api/addons/atlas/regions/geo', () => HttpResponse.json({ features: [] })),
     http.get('/api/addons/atlas/wonders', () => HttpResponse.json({ wonders: [] })),
+    http.get('/api/addons/atlas/visit-heatmap', () => HttpResponse.json({ years: [] })),
     http.get('/api/atlas-layers', () => HttpResponse.json({ layers: [] })),
   );
 }
@@ -201,6 +216,44 @@ afterEach(() => {
 });
 
 describe('AtlasPage', () => {
+  it('filters wonder map pins by the selected status and search, and collapses the panel', async () => {
+    const user = userEvent.setup();
+    server.use(http.get('/api/addons/atlas/wonders', () => HttpResponse.json({ wonders: [
+      { source_id: 'karnak', label: 'Karnak Temple', country: 'Egypt', region: 'Luxor', visited: true, lat: 25.7, lng: 32.6 },
+      { source_id: 'petra', label: 'Petra', country: 'Jordan', region: null, visited: false, lat: 30.3, lng: 35.4 },
+    ] })),
+    http.get('/api/trips/cover-images/search', () => HttpResponse.json({ photos: [] })),
+    http.get('/api/maps/place-photo/:key', () => HttpResponse.json({ photoUrl: null })));
+
+    render(<AtlasPage />);
+    await user.click(await screen.findByRole('button', { name: 'Wonders' }));
+    await screen.findByText('2 / 2');
+    await user.click(screen.getByRole('button', { name: /^Visited$/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('1 / 2')).toBeInTheDocument();
+      expect((L.layerGroup as any).mock.calls.at(-1)?.[0]).toHaveLength(1);
+    });
+
+    await user.click(screen.getByRole('button', { name: /^Not visited$/ }));
+    await waitFor(() => {
+      expect(screen.getByText('Petra')).toBeInTheDocument();
+      expect((L.layerGroup as any).mock.calls.at(-1)?.[0]).toHaveLength(1);
+    });
+
+    await user.click(screen.getByRole('button', { name: /^All$/ }));
+    await user.type(screen.getByRole('textbox', { name: 'Search wonders' }), 'Karnak');
+    await waitFor(() => {
+      expect(screen.getByText('1 / 2')).toBeInTheDocument();
+      expect((L.layerGroup as any).mock.calls.at(-1)?.[0]).toHaveLength(1);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Collapse Atlas panel' }));
+    expect(screen.queryByRole('textbox', { name: 'Search wonders' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Expand Atlas panel' }));
+    expect(screen.getByRole('textbox', { name: 'Search wonders' })).toHaveValue('Karnak');
+  });
+
   describe('FE-PAGE-ATLAS-001: loading spinner shown on initial render', () => {
     it('displays a spinner while atlas data is being fetched', async () => {
       server.use(
@@ -308,28 +361,12 @@ describe('AtlasPage', () => {
     });
   });
 
-  describe('FE-PAGE-ATLAS-008: empty atlas data shows zero stats', () => {
-    it('renders zero counts when API returns no data', async () => {
-      server.use(
-        http.get('/api/addons/atlas/stats', () => HttpResponse.json(emptyAtlasResponse)),
-      );
-
+  describe('FE-PAGE-ATLAS-009: mobile Atlas panel is present', () => {
+    it('renders the mobile bottom panel with country and trip stats', async () => {
       render(<AtlasPage />);
 
       await waitFor(() => {
-        // Multiple zeros should be present (totalCountries=0, totalTrips=0, etc.)
-        const zeros = screen.getAllByText('0');
-        expect(zeros.length).toBeGreaterThan(0);
-      });
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-009: mobile stats bar is present in DOM', () => {
-    it('renders the mobile bottom stats bar with country and trip counts', async () => {
-      render(<AtlasPage />);
-
-      await waitFor(() => {
-        // Mobile bar always renders; check for the stats labels
+        // The responsive panel keeps the stats visible alongside feature tabs.
         const countryLabels = screen.getAllByText(/countries/i);
         expect(countryLabels.length).toBeGreaterThan(0);
       });
@@ -398,6 +435,8 @@ describe('AtlasPage', () => {
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/name \(country, city, place\.\.\.\)/i)).toBeInTheDocument();
       });
+      expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Year' })).toBeInTheDocument();
     });
   });
 
@@ -449,101 +488,6 @@ describe('AtlasPage', () => {
     });
   });
 
-  describe('FE-PAGE-ATLAS-016: country search input renders on page', () => {
-    it('renders the country search input field after data loads', async () => {
-      render(<AtlasPage />);
-
-      // Search input is in the main render (only after loading completes)
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/search a country/i)).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-017: country search filters options from GeoJSON', () => {
-    it('typing in search updates the input value', async () => {
-      // Override fetch to return GeoJSON with FR feature
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      // Wait for data to load so geoData is set and search input is rendered
-      await waitFor(() => expect(screen.getAllByText(/countries/i).length).toBeGreaterThan(0));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-
-      expect(searchInput).toHaveValue('fr');
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-018: search clear button resets input', () => {
-    it('clicking the X button clears the search input', async () => {
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      // Wait for data to load so main render (with search input) is shown
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/search a country/i)).toBeInTheDocument();
-      });
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'Paris');
-
-      // Clear button appears when there is input
-      await waitFor(() => {
-        expect(screen.getByLabelText(/clear/i)).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByLabelText(/clear/i));
-
-      expect(searchInput).toHaveValue('');
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-019: confirm popup shows via Enter on search with GeoJSON', () => {
-    it('pressing Enter in search with matching GeoJSON result triggers confirm popup', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      server.use(
-        http.post('/api/addons/atlas/country/:code/mark', () => HttpResponse.json({ success: true })),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      // Wait for both atlas data and geoData to load (search input renders after load)
-      await waitFor(() => expect(screen.getAllByText(/countries/i).length).toBeGreaterThan(0));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-
-      // Type search term
-      await user.type(searchInput, 'fr');
-
-      // Press Enter to select first result (if options populated)
-      fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-      // If options populated, confirm popup should appear
-      await waitFor(
-        () => {
-          const popup = screen.queryByText(/mark as visited/i);
-          if (popup) {
-            expect(popup).toBeInTheDocument();
-          } else {
-            // No popup if search results were empty — search input still present
-            expect(searchInput).toBeInTheDocument();
-          }
-        },
-        { timeout: 2000 },
-      );
-    });
-  });
-
   describe('FE-PAGE-ATLAS-020: dark mode variant renders correctly', () => {
     it('renders page without errors in dark mode', async () => {
       seedStore(useSettingsStore, { settings: buildSettings({ dark_mode: true }) });
@@ -578,147 +522,6 @@ describe('AtlasPage', () => {
     });
   });
 
-  describe('FE-PAGE-ATLAS-022: confirm popup for bucket type shows month/year selects', () => {
-    it('selecting Add to bucket list in confirm popup shows month/year pickers', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      // Wait for data and search input to be ready
-      await waitFor(() => expect(screen.getAllByText(/countries/i).length).toBeGreaterThan(0));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-      fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-      // If confirm popup appears, click "Add to bucket list"
-      await waitFor(
-        async () => {
-          const addToBucketBtns = screen.queryAllByText(/add to bucket list/i);
-          if (addToBucketBtns.length > 0) {
-            await user.click(addToBucketBtns[0]);
-            await waitFor(() => {
-              expect(screen.queryByText(/when do you plan to visit/i)).toBeInTheDocument();
-            });
-          } else {
-            // No popup if search had no results — that's acceptable
-            expect(searchInput).toBeInTheDocument();
-          }
-        },
-        { timeout: 2000 },
-      );
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-031: confirm popup opens and mark-visited action works', () => {
-    it('opens confirm popup via search and clicking Mark as visited closes it', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      server.use(
-        http.post('/api/addons/atlas/country/:code/mark', () => HttpResponse.json({ success: true })),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      // Wait for search input to appear (loading done AND geoData loaded)
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-
-      // Wait until atlas_country_results is populated — the dropdown button should appear
-      await waitFor(
-        () => {
-          const dropdownBtns = screen.queryAllByRole('button').filter(
-            (b) => b.textContent?.includes('France') || b.textContent?.includes('FR'),
-          );
-          expect(dropdownBtns.length).toBeGreaterThan(0);
-        },
-        { timeout: 3000 },
-      ).catch(() => {
-        // If no dropdown appeared, fall back to Enter key
-      });
-
-      // Press Enter to select first result
-      fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-      // Strictly wait for popup — if it appears, test it; otherwise skip gracefully
-      try {
-        await waitFor(
-          () => {
-            expect(screen.getByText(/mark as visited/i)).toBeInTheDocument();
-          },
-          { timeout: 3000 },
-        );
-
-        // Popup appeared — verify its content
-        expect(screen.getAllByText(/add to bucket list/i).length).toBeGreaterThan(0);
-
-        // Click Mark as visited (inline handler on the choose type button)
-        const markBtn = screen.getByText(/mark as visited/i);
-        await user.click(markBtn);
-
-        await waitFor(() => {
-          expect(screen.queryByText(/mark as visited/i)).not.toBeInTheDocument();
-        });
-      } catch {
-        // Popup didn't appear — search had no matching results
-        expect(searchInput).toBeInTheDocument();
-      }
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-032: confirm popup Add to Bucket opens bucket type', () => {
-    it('clicking Add to bucket list in choose popup switches to bucket type', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-      fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-      try {
-        await waitFor(
-          () => {
-            expect(screen.getByText(/mark as visited/i)).toBeInTheDocument();
-          },
-          { timeout: 3000 },
-        );
-
-        // Click "Add to bucket list" in choose popup
-        const addToBucketBtns = screen.getAllByText(/add to bucket list/i);
-        await user.click(addToBucketBtns[0]);
-
-        // Popup switches to bucket type showing month/year
-        await waitFor(() => {
-          expect(screen.getByText(/when do you plan to visit/i)).toBeInTheDocument();
-        });
-
-        // Back button returns to choose
-        await user.click(screen.getByText(/back/i));
-
-        await waitFor(() => {
-          expect(screen.getByText(/mark as visited/i)).toBeInTheDocument();
-        });
-      } catch {
-        // Popup didn't appear — acceptable fallback
-        expect(searchInput).toBeInTheDocument();
-      }
-    });
-  });
-
   describe('FE-PAGE-ATLAS-025: delete bucket item via X button', () => {
     it('clicking the X button on a bucket item removes it', async () => {
       server.use(
@@ -735,22 +538,21 @@ describe('AtlasPage', () => {
       const user = userEvent.setup();
       render(<AtlasPage />);
 
-      // Wait for Santorini to appear in the bucket list
-      await waitFor(() => expect(screen.getByText('Santorini')).toBeInTheDocument());
-
-      // Find the delete button inside the Santorini container
-      const santoriniEl = screen.getByText('Santorini');
-      const container = santoriniEl.closest('div[style*="position: relative"]') as HTMLElement | null;
-      const deleteBtn = container?.querySelector('button') ?? null;
+      // The label is now a map-focus button, so scope the delete action to its card.
+      await waitFor(() => expect(screen.getAllByText(/countries/i).length).toBeGreaterThan(0));
+      await user.click(screen.getByRole('button', { name: 'Bucket List' }));
+      const santoriniLabel = await screen.findByRole('button', { name: 'Show Santorini on map' });
+      const container = santoriniLabel.closest('div[style*="position: relative"]') as HTMLElement | null;
+      const deleteBtn = Array.from(container?.querySelectorAll('button') ?? []).find(button => button !== santoriniLabel) ?? null;
 
       if (deleteBtn) {
         await user.click(deleteBtn);
         await waitFor(() => {
-          expect(screen.queryByText('Santorini')).not.toBeInTheDocument();
+          expect(screen.queryByRole('button', { name: 'Show Santorini on map' })).not.toBeInTheDocument();
         });
       } else {
         // Fallback: verify Santorini is rendered
-        expect(screen.getByText('Santorini')).toBeInTheDocument();
+        expect(santoriniLabel).toBeInTheDocument();
       }
     });
   });
@@ -770,134 +572,6 @@ describe('AtlasPage', () => {
         // Navigation would happen; verify no error thrown
         expect(screen.queryByText('Paris Trip')).toBeDefined();
       }
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-027: search clear via backspace triggers empty onChange branch', () => {
-    it('clearing the search input by backspace covers the empty-query onChange branch', async () => {
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-
-      // Type then clear
-      await user.type(searchInput, 'x');
-      await user.clear(searchInput);
-
-      expect(searchInput).toHaveValue('');
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-028: Escape key in search closes dropdown', () => {
-    it('pressing Escape in the search input covers the Escape handler branch', async () => {
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'ger');
-
-      // Press Escape
-      fireEvent.keyDown(searchInput, { key: 'Escape' });
-
-      // Search input is still present after Escape
-      expect(searchInput).toBeInTheDocument();
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-029: confirm popup opens via search dropdown click', () => {
-    it('clicking a country in the search dropdown opens the confirm action popup', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      server.use(
-        http.post('/api/addons/atlas/country/:code/mark', () => HttpResponse.json({ success: true })),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      // Wait for data to load AND geoData (search input visible)
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-
-      // Wait for a dropdown item to appear (France or FR)
-      let foundDropdownItem = false;
-      await waitFor(
-        () => {
-          const allButtons = screen.getAllByRole('button');
-          // Dropdown buttons have no aria-label but have text with country name
-          const franceBtn = allButtons.find(
-            (b) => b.textContent?.includes('France') || b.textContent?.includes('FR'),
-          );
-          if (franceBtn && !franceBtn.getAttribute('data-testid')) {
-            foundDropdownItem = true;
-          }
-          // Either found item or search worked fine
-          expect(searchInput).toHaveValue('fr');
-        },
-        { timeout: 2000 },
-      );
-
-      if (foundDropdownItem) {
-        // Try pressing Enter to select
-        fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-        await waitFor(
-          () => {
-            const popup = screen.queryByText(/mark as visited/i);
-            if (popup) {
-              expect(popup).toBeInTheDocument();
-            } else {
-              expect(searchInput).toBeInTheDocument();
-            }
-          },
-          { timeout: 2000 },
-        );
-      }
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-030: confirm popup overlay click closes it', () => {
-    it('clicking the overlay backdrop closes the confirm popup', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-      fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-      // If popup appears, click backdrop to close it
-      await waitFor(
-        async () => {
-          const popup = screen.queryByText(/mark as visited/i);
-          if (popup) {
-            // Click the backdrop (fixed overlay div)
-            const backdrop = document.querySelector('[style*="position: fixed"][style*="inset: 0"]') as HTMLElement | null;
-            if (backdrop) {
-              await user.click(backdrop);
-              await waitFor(() => {
-                expect(screen.queryByText(/mark as visited/i)).not.toBeInTheDocument();
-              });
-            }
-          } else {
-            expect(searchInput).toBeInTheDocument();
-          }
-        },
-        { timeout: 2000 },
-      );
     });
   });
 
@@ -959,188 +633,6 @@ describe('AtlasPage', () => {
 
       // Both branches covered via Leaflet mock calling onEachFeature for each feature
       expect(screen.getAllByText(/countries/i).length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-034: dropdown button click + mouse events', () => {
-    it('clicking France dropdown button covers onClick and mouse event handlers', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      server.use(
-        http.post('/api/addons/atlas/country/:code/mark', () => HttpResponse.json({ success: true })),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-
-      // Type character by character and check after each
-      await user.type(searchInput, 'fr');
-
-      // After user.type completes, React state is flushed — check for dropdown
-      // The dropdown renders when atlas_country_open && atlas_country_results.length > 0
-      let franceBtn: HTMLElement | null = null;
-
-      // Poll for France button to appear in the dropdown
-      await waitFor(() => {
-        const btns = Array.from(document.querySelectorAll('button'));
-        const btn = btns.find(
-          (b) => b.textContent?.toLowerCase().includes('france') && b.style.width === '100%',
-        );
-        if (btn) {
-          franceBtn = btn;
-          return;
-        }
-        throw new Error('France dropdown button not found yet');
-      }, { timeout: 3000 }).catch(() => {
-        // France button not found — fall back to Enter key
-      });
-
-      if (franceBtn) {
-        // Fire mouse events on dropdown button (covers onMouseEnter/Leave on button)
-        fireEvent.mouseEnter(franceBtn);
-        fireEvent.mouseLeave(franceBtn);
-
-        // Fire mouse leave on the dropdown wrapper div (closes it — covers onMouseLeave)
-        const parent = (franceBtn as HTMLElement).parentElement;
-        if (parent) {
-          fireEvent.mouseLeave(parent);
-        }
-
-        // Click the France button → select_country_from_search → setConfirmAction (covers onClick)
-        fireEvent.click(franceBtn);
-
-        await waitFor(() => {
-          const popup = screen.queryByText(/mark as visited/i);
-          if (popup) {
-            expect(popup).toBeInTheDocument();
-          } else {
-            expect(searchInput).toBeInTheDocument();
-          }
-        });
-      } else {
-        // Dropdown not available — use Enter fallback
-        fireEvent.keyDown(searchInput, { key: 'Enter' });
-        expect(searchInput).toBeInTheDocument();
-      }
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-035: mark unvisited country + popup mouse events', () => {
-    it('marks an unvisited country covering line 983 and popup mouse events', async () => {
-      server.use(
-        http.get('/api/addons/atlas/stats', () => HttpResponse.json(emptyAtlasResponse)),
-        http.post('/api/addons/atlas/country/:code/mark', () => HttpResponse.json({ success: true })),
-      );
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-
-      // Press Enter to select (or wait for dropdown click)
-      fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-      try {
-        await waitFor(
-          () => { expect(screen.getByText(/mark as visited/i)).toBeInTheDocument(); },
-          { timeout: 3000 },
-        );
-
-        // Fire mouse events on the "Mark as visited" button (covers onMouseEnter/Leave)
-        const markBtn = screen.getByText(/mark as visited/i);
-        const markButton = markBtn.closest('button') as HTMLButtonElement;
-        if (markButton) {
-          fireEvent.mouseEnter(markButton);
-          fireEvent.mouseLeave(markButton);
-        }
-
-        // Fire mouse events on "Add to bucket list" button
-        const addToBucketBtns = screen.queryAllByText(/add to bucket list/i);
-        if (addToBucketBtns.length > 0) {
-          const bucketButton = addToBucketBtns[0].closest('button') as HTMLButtonElement;
-          if (bucketButton) {
-            fireEvent.mouseEnter(bucketButton);
-            fireEvent.mouseLeave(bucketButton);
-          }
-        }
-
-        // Click "Mark as visited" — covers lines 979-986 and line 983 (country not in empty list)
-        await user.click(markButton || screen.getByText(/mark as visited/i));
-
-        await waitFor(() => {
-          expect(screen.queryByText(/mark as visited/i)).not.toBeInTheDocument();
-        });
-      } catch {
-        // Popup didn't appear — acceptable
-        expect(searchInput).toBeInTheDocument();
-      }
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-036: bucket popup submit action', () => {
-    it('submits a bucket list item from the confirm popup', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      server.use(
-        http.post('/api/addons/atlas/bucket-list', () =>
-          HttpResponse.json({ item: { id: 99, name: 'France', country_code: 'FR', lat: null, lng: null, notes: null, target_date: null } }),
-        ),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
-      fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-      try {
-        await waitFor(
-          () => { expect(screen.getByText(/mark as visited/i)).toBeInTheDocument(); },
-          { timeout: 3000 },
-        );
-
-        // Switch to 'bucket' type by clicking "Add to bucket list"
-        const addToBucketBtns = screen.getAllByText(/add to bucket list/i);
-        await user.click(addToBucketBtns[0]);
-
-        // 'bucket' type renders with "when do you plan to visit" + submit button
-        await waitFor(() => {
-          expect(screen.getByText(/when do you plan to visit/i)).toBeInTheDocument();
-        });
-
-        // Click the "Add to Bucket" / save button (covers lines 1149-1156)
-        const addBtn = screen.queryAllByText(/add to bucket/i).find(
-          (el) => el.tagName === 'BUTTON' || el.closest('button'),
-        );
-        if (addBtn) {
-          const btn = addBtn.tagName === 'BUTTON' ? addBtn as HTMLButtonElement : addBtn.closest('button') as HTMLButtonElement;
-          await user.click(btn);
-          // Popup closes after submit
-          await waitFor(() => {
-            expect(screen.queryByText(/when do you plan to visit/i)).not.toBeInTheDocument();
-          });
-        }
-      } catch {
-        // Popup or bucket switch didn't work — acceptable
-        expect(searchInput).toBeInTheDocument();
-      }
     });
   });
 
@@ -1265,32 +757,6 @@ describe('AtlasPage', () => {
     });
   });
 
-  describe('FE-PAGE-ATLAS-041: country search falls back from A3 when ISO_A2 is invalid', () => {
-    it.each([
-      { a3: 'FRA', name: 'France', query: 'france' },
-      { a3: 'NOR', name: 'Norway', query: 'norway' },
-    ])('returns $name in search results when GeoJSON provides ADM0_A3=$a3 but ISO_A2 is -99', async ({ a3, name, query }) => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(makeGeoJsonWithA3Fallback(a3, name))),
-      );
-
-      const user = userEvent.setup();
-      render(<AtlasPage />);
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText(/search a country/i)).toBeInTheDocument();
-      });
-
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, query);
-
-      await waitFor(() => {
-        const countryButton = screen.getAllByRole('button').find((button) => button.textContent?.includes(name));
-        expect(countryButton).toBeTruthy();
-      });
-    });
-  });
-
   describe('FE-PAGE-ATLAS-042: bucket form submit with actual name value', () => {
     it('submitting bucket form with a non-empty name covers handleAddBucketItem', async () => {
       server.use(
@@ -1360,75 +826,37 @@ describe('AtlasPage', () => {
     });
   });
 
-  describe('FE-PAGE-ATLAS-043: API error in Promise.all covers catch branch', () => {
-    it('when stats API fails, loading is set to false via catch handler', async () => {
+  describe('FE-PAGE-ATLAS-043: Atlas load failure is distinct from empty data', () => {
+    it('shows an accessible retry state and recovers when the stats request succeeds', async () => {
+      let statsRequests = 0;
       server.use(
-        http.get('/api/addons/atlas/stats', () => HttpResponse.error()),
-      );
-
-      render(<AtlasPage />);
-
-      // Spinner shows briefly while data loads
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument();
-
-      // After error, setLoading(false) runs in catch → loading spinner disappears
-      await waitFor(() => {
-        expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('FE-PAGE-ATLAS-044: direct France dropdown button click', () => {
-    it('directly finds and clicks the France button in the dropdown to cover onClick', async () => {
-      server.use(
-        http.get('/api/addons/atlas/countries/geo', () => HttpResponse.json(geoJsonWithFR)),
-      );
-
-      server.use(
-        http.post('/api/addons/atlas/country/:code/mark', () => HttpResponse.json({ success: true })),
+        http.get('/api/addons/atlas/stats', () => {
+          statsRequests += 1;
+          return statsRequests === 1
+            ? HttpResponse.json({ error: 'Unavailable' }, { status: 500 })
+            : HttpResponse.json(atlasStatsResponse);
+        }),
       );
 
       const user = userEvent.setup();
       render(<AtlasPage />);
 
-      await waitFor(() => screen.getByPlaceholderText(/search a country/i));
+      expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+      const error = await screen.findByRole('alert');
+      expect(error).toHaveTextContent(/atlas data could not be loaded/i);
+      expect(screen.queryByText(/no travel data yet/i)).not.toBeInTheDocument();
 
-      const searchInput = screen.getByPlaceholderText(/search a country/i);
-      await user.type(searchInput, 'fr');
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+      await waitFor(() => expect(screen.getAllByText(/countries/i).length).toBeGreaterThan(0));
+      expect(statsRequests).toBe(2);
+    });
+  });
 
-      // After typing, look for any span/button that contains France text (dropdown renders)
-      // Use direct DOM query since the dropdown is in the document
-      let clicked = false;
-      await waitFor(() => {
-        // Find all elements containing 'France' in text
-        const allElements = Array.from(document.querySelectorAll('button, span'));
-        const franceElements = allElements.filter(
-          (el) => el.textContent?.trim() === 'France' || el.textContent?.includes('France'),
-        );
-        // Try to find a button that's a dropdown item (not the main search area)
-        for (const el of franceElements) {
-          const btn = el.tagName === 'BUTTON' ? el : el.closest('button');
-          if (btn && (btn as HTMLButtonElement).style?.width === '100%') {
-            fireEvent.click(btn);
-            clicked = true;
-            return;
-          }
-        }
-        throw new Error('France dropdown button not found');
-      }, { timeout: 3000 }).catch(() => {
-        // Not found — use Enter key as fallback to at minimum cover select_country_from_search
-        fireEvent.keyDown(searchInput, { key: 'Enter' });
-      });
-
-      // Verify popup or search input is still visible
-      await waitFor(() => {
-        const popup = screen.queryByText(/mark as visited/i);
-        if (popup) {
-          expect(popup).toBeInTheDocument();
-        } else {
-          expect(searchInput).toBeInTheDocument();
-        }
-      });
+  describe('FE-PAGE-ATLAS-044: country search removal', () => {
+    it('does not render the country search overlay', async () => {
+      render(<AtlasPage />);
+      await waitFor(() => expect(screen.getByRole('button', { name: /stats/i })).toBeInTheDocument());
+      expect(screen.queryByPlaceholderText(/search a country/i)).not.toBeInTheDocument();
     });
   });
 
@@ -1605,15 +1033,13 @@ describe('AtlasPage', () => {
 
       render(<AtlasPage />);
 
-      // Wait for initial data to load before the region layer can build (loadRegionsForViewport
-      // needs country_layer_by_a2_ref already populated, which only happens once the country
-      // layer's own effect has run) — see FE-PAGE-ATLAS-045 for the same recipe. Toggling dark
-      // mode re-initializes the map, re-registers zoomend, and by then FR's country layer
-      // already exists, so loadRegionsForViewport actually fetches /regions/geo this time.
+      // Region boundaries are fetched when the user zooms after country layers load.
       await waitFor(() => {
         expect(screen.getAllByText(/countries/i).length).toBeGreaterThan(0);
       });
-      seedStore(useSettingsStore, { settings: buildSettings({ dark_mode: true }) });
+      const map = vi.mocked(L.map).mock.results[0]?.value as any;
+      map.getZoom.mockReturnValue(6);
+      act(() => map.fire('zoomend'));
 
       // The layer mock immediately invokes click callbacks once the region layer is built:
       // FR-IDF is visited (place-derived) → confirmAction becomes { type: 'unmark-region', ... }

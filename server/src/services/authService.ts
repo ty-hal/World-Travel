@@ -553,7 +553,7 @@ export function getCurrentUser(
   userId: number
 ): (Record<string, unknown> & Pick<User, 'id' | 'username' | 'email' | 'role'> & { avatar_url: string }) | null {
   const user = db.prepare(
-    'SELECT id, username, email, role, avatar, oidc_issuer, created_at, mfa_enabled, must_change_password FROM users WHERE id = ?'
+    'SELECT id, username, display_name, email, role, avatar, oidc_issuer, created_at, mfa_enabled, must_change_password FROM users WHERE id = ?'
   ).get(userId) as User | undefined;
   if (!user) return null;
   const base = stripUserForClient(user as User) as Record<string, unknown>;
@@ -997,20 +997,37 @@ export function getTravelStats(userId: number) {
   // Visited countries \u2014 same source the Atlas page uses: ISO-2 codes from
   // auto-resolved place regions plus countries the user marked manually.
   const countryCodes = new Set<string>();
+  const visitDates = new Map<string, string>();
+  const markedDates = new Map<string, string>();
   const manualCountries = db.prepare(
-    'SELECT country_code FROM visited_countries WHERE user_id = ?'
-  ).all(userId) as { country_code: string }[];
-  manualCountries.forEach(m => { if (m.country_code) countryCodes.add(m.country_code.toUpperCase()); });
+    'SELECT country_code, date(created_at) AS marked_date FROM visited_countries WHERE user_id = ?'
+  ).all(userId) as { country_code: string; marked_date: string | null }[];
+  manualCountries.forEach(m => {
+    if (!m.country_code) return;
+    const code = m.country_code.toUpperCase();
+    countryCodes.add(code);
+    if (m.marked_date) markedDates.set(code, m.marked_date);
+  });
 
   const placeRegionCodes = db.prepare(`
-    SELECT DISTINCT pr.country_code
+    SELECT UPPER(pr.country_code) AS country_code,
+           MAX(CASE WHEN date(COALESCE(d.date, t.end_date, t.start_date)) <= date('now')
+                    THEN date(COALESCE(d.date, t.end_date, t.start_date)) END) AS last_visit
     FROM place_regions pr
     JOIN places p ON p.id = pr.place_id
     JOIN trips t ON p.trip_id = t.id
+    LEFT JOIN day_assignments da ON da.place_id = p.id
+    LEFT JOIN days d ON d.id = da.day_id AND d.trip_id = t.id
     LEFT JOIN trip_members tm ON t.id = tm.trip_id
     WHERE (t.user_id = ? OR tm.user_id = ?) AND pr.country_code IS NOT NULL
-  `).all(userId, userId) as { country_code: string }[];
-  placeRegionCodes.forEach(r => { if (r.country_code) countryCodes.add(r.country_code.toUpperCase()); });
+      AND t.end_date IS NOT NULL AND date(t.end_date) <= date('now')
+    GROUP BY UPPER(pr.country_code)
+  `).all(userId, userId) as { country_code: string; last_visit: string | null }[];
+  placeRegionCodes.forEach(r => {
+    if (!r.country_code) return;
+    countryCodes.add(r.country_code);
+    if (r.last_visit) visitDates.set(r.country_code, r.last_visit);
+  });
 
   // Transport bookings don't create a place row, so their geocoded endpoints never
   // reached place_regions — a country reached only by a flight/train (no lodging or
@@ -1019,16 +1036,24 @@ export function getTravelStats(userId: number) {
   // Only 'from'/'to' legs count as actually reached — a 'stop' is an intermediate
   // connection/layover (e.g. a plane change) the traveler never really visited (#1486).
   const endpoints = db.prepare(`
-    SELECT DISTINCT e.lat, e.lng
+    SELECT e.lat, e.lng, t.end_date, t.start_date
     FROM reservation_endpoints e
     JOIN reservations r ON e.reservation_id = r.id
     JOIN trips t ON r.trip_id = t.id
     LEFT JOIN trip_members tm ON t.id = tm.trip_id
     WHERE (t.user_id = ? OR tm.user_id = ?) AND e.role IN ('from', 'to')
-  `).all(userId, userId) as { lat: number; lng: number }[];
+      AND t.end_date IS NOT NULL AND date(t.end_date) <= date('now')
+  `).all(userId, userId) as { lat: number; lng: number; end_date: string | null; start_date: string | null }[];
   for (const e of endpoints) {
     const code = getCountryFromCoords(e.lat, e.lng);
-    if (code) countryCodes.add(code.toUpperCase());
+    if (code) {
+      const countryCode = code.toUpperCase();
+      countryCodes.add(countryCode);
+      const date = e.end_date || e.start_date;
+      if (date && date <= new Date().toISOString().slice(0, 10) && date > (visitDates.get(countryCode) || '')) {
+        visitDates.set(countryCode, date);
+      }
+    }
   }
 
   // Countries the user removed in Atlas stay removed on the dashboard too, so the
@@ -1036,7 +1061,9 @@ export function getTravelStats(userId: number) {
   for (const code of getHiddenCountries(userId)) countryCodes.delete(code.toUpperCase());
 
   return {
-    countries: [...countryCodes],
+    countries: [...countryCodes].sort((a, b) =>
+      (visitDates.get(b) || markedDates.get(b) || '').localeCompare(visitDates.get(a) || markedDates.get(a) || '') || a.localeCompare(b)
+    ),
     cities: [...cities],
     coords,
     totalTrips: tripStats?.trips || 0,

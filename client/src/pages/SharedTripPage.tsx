@@ -157,6 +157,7 @@ export default function SharedTripPage() {
           padding: '32px 20px 28px',
           textAlign: 'center',
           position: 'relative',
+          overflowX: 'clip',
         }}
       >
         {/* Cover image background */}

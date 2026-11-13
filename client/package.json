@@ -22,7 +22,7 @@
     "e2e": "playwright test --project=public --project=setup --project=seed --project=member-setup --project=app --project=member --project=visual --project=mobile",
     "e2e:free-ports": "node e2e/free-ports.mjs",
     "e2e:update-snapshots": "playwright test --project=visual --update-snapshots",
-    "shots": "playwright test --project=screenshots",
+    "shots": "playwright test --project=screenshots --project=screenshots-mobile",
     "shots:promote": "node e2e/screenshots/promote.mjs",
     "e2e:report": "playwright show-report",
     "format": "prettier --write \"src/**/*.tsx\" \"src/**/*.css\"",

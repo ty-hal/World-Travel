@@ -3,6 +3,8 @@ import path from 'path';
 import { db, canAccessTrip } from '../db/database';
 import { broadcastToUser } from '../websocket';
 import { checkPermission } from './permissions';
+import { logError } from './auditLog';
+import { scheduleMonthlyClimateWarm } from './weatherService';
 import type {
   Collection,
   CollectionDetailResponse,
@@ -633,12 +635,14 @@ export function copyToTrip(userId: number, body: CollectionCopyToTripRequest): {
 
   const insertPlace = db.prepare(`
     INSERT INTO places (trip_id, name, description, lat, lng, address, category_id, price,
-      currency, notes, image_url, google_place_id, google_ftid, website, phone, osm_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      currency, notes, image_url, google_place_id, google_ftid, website, phone, osm_id,
+      source_collection_id, source_collection_place_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertTag = db.prepare('INSERT OR IGNORE INTO place_tags (place_id, tag_id) VALUES (?, ?)');
 
   let copied = 0;
+  const climateLocations: Array<{ lat: number | null; lng: number | null }> = [];
   const skipped: { id: number; name: string }[] = [];
   for (const s of sources) {
     if (!body.force && isCollectionPlaceDuplicate({ name: s.name, lat: s.lat, lng: s.lng }, dedup)) {
@@ -648,6 +652,7 @@ export function copyToTrip(userId: number, body: CollectionCopyToTripRequest): {
     const res = insertPlace.run(
       body.trip_id, s.name, s.description, s.lat, s.lng, s.address, s.category_id, s.price,
       s.currency, s.notes, s.image_url, s.google_place_id, s.google_ftid, s.website, s.phone, s.osm_id,
+      s.collection_id, s.id,
     );
     const newPlaceId = Number(res.lastInsertRowid);
     const tagIds = db.prepare('SELECT tag_id FROM collection_place_tags WHERE collection_place_id = ?').all(s.id) as { tag_id: number }[];
@@ -655,8 +660,10 @@ export function copyToTrip(userId: number, body: CollectionCopyToTripRequest): {
 
     if (s.name) dedup.names.add(s.name.trim().toLowerCase());
     else if (s.lat != null && s.lng != null) dedup.coords.push({ lat: s.lat, lng: s.lng });
+    climateLocations.push({ lat: s.lat, lng: s.lng });
     copied++;
   }
+  scheduleMonthlyClimateWarm(climateLocations);
   return { copied, skipped };
 }
 
@@ -835,8 +842,9 @@ export function sendInvite(
   broadcastToUser(targetUserId, { type: 'collections:invite', from: { id: inviterId, username: inviterUsername }, collectionId });
 
   import('../services/notificationService').then(({ send }) => {
-    send({ event: 'collection_invite', actorId: inviterId, scope: 'user', targetId: targetUserId, params: { actor: inviterEmail, collectionId: String(collectionId) } }).catch(() => {});
-  }).catch(() => {});
+    send({ event: 'collection_invite', actorId: inviterId, scope: 'user', targetId: targetUserId, params: { actor: inviterEmail, collectionId: String(collectionId) } }).catch((err: unknown) =>
+      logError(`Collection invite notification failed collection=${collectionId} recipient=${targetUserId}: ${err instanceof Error ? err.message : err}`));
+  }).catch((err: unknown) => logError(`Collection invite notification module failed collection=${collectionId}: ${err instanceof Error ? err.message : err}`));
 
   return {};
 }

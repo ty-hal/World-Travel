@@ -1,4 +1,4 @@
-import { render, waitFor, act } from '../../../tests/helpers/render';
+import { render, waitFor, act, screen } from '../../../tests/helpers/render';
 import SlidingTabs from './SlidingTabs';
 
 const TABS = [
@@ -72,6 +72,17 @@ describe('SlidingTabs', () => {
     // left = activeRect.left(20) - containerRect.left(0) + scrollLeft(0)
     expect(el!.style.left).toBe('20px');
     expect(el!.style.width).toBe('100px');
+  });
+
+  it('FE-COMP-TABS-004: names icon-only tabs and announces the active tab', () => {
+    const tabs = [
+      { id: 'a', label: <span className="hidden sm:inline">Plan</span>, title: 'Plan' },
+      { id: 'b', label: <span className="hidden sm:inline">Costs</span>, title: 'Costs' },
+    ] as const;
+    render(<SlidingTabs tabs={tabs} activeTab="a" onChange={onChange} />);
+
+    expect(screen.getByRole('button', { name: 'Plan' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Costs' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('FE-COMP-TABS-002: re-measures after document.fonts.ready resolves (reload font swap)', async () => {

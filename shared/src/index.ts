@@ -28,11 +28,13 @@ export * from './budget/budget.schema';
 export * from './reservation/reservation.schema';
 export * from './reservation/ki-reservation.schema';
 export * from './airtrail/airtrail.schema';
+export * from './beli/beli.schema';
 export * from './day/day.schema';
 export * from './assignment/assignment.schema';
 export * from './place/place.schema';
 export * from './collection/collection.schema';
 export * from './trip/trip.schema';
+export * from './trip/trip-search.schema';
 export * from './collab/collab.schema';
 export * from './file/file.schema';
 export * from './share/share.schema';
@@ -43,6 +45,10 @@ export * from './auth/auth.schema';
 export * from './oidc/oidc.schema';
 export * from './oauth/oauth.schema';
 export * from './admin/admin.schema';
+export * from './journey/journey.schema';
+export * from './book/journey-stats.schema';
+export * from './book/book.schema';
+export * from './book/book-store.schema';
 
 // Sanitisation helpers — used by the client today, scoped here so the server
 // has them ready if rich-text input ever ships.

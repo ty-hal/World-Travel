@@ -41,8 +41,9 @@ test('collab notes', async ({ page, shot }) => {
 })
 
 test('collab polls', async ({ page, shot }) => {
-  await expect(page.getByText('free for Nara', { exact: false })).toBeVisible()
-  await shot.element('CollabPolls', card(page, 'free for Nara'))
+  const pollQuestion = 'Which day should we plan our Nara visit?'
+  await expect(page.getByText(pollQuestion, { exact: false })).toBeVisible()
+  await shot.element('CollabPolls', card(page, pollQuestion))
 })
 
 test("what's next widget", async ({ page, shot }) => {

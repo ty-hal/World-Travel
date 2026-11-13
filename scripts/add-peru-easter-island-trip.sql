@@ -2,7 +2,7 @@ BEGIN;
 
 INSERT INTO trips (user_id,title,description,start_date,end_date,currency,source_id,date_precision,date_label)
 SELECT 2,
-  'Peru & Easter Island',
+  'Peru & Easter Island: Andes to Rapa Nui',
   '18 days; 11 days PTO. Late-April/early-May shoulder-season plan: Lima, Caral, Cusco, Sacred Valley, Machu Picchu, Rainbow Mountain, Humantay Lake, Santiago, and Rapa Nui. Keep Cusco Day 5 easy for acclimatization; hydrate, limit alcohol, and book Machu Picchu circuits/trains 4–6 months ahead. Rapa Nui requires the FUI, registered accommodation proof, and onward/return flight confirmation. Food targets: ceviche, picarones, anticuchos, chifa, cuy, alpaca, choclo con queso, lomo saltado, pastel de choclo, chorrillana, completos, tuna empanadas, and po’e. Estimated costs are planning estimates.',
   '2027-04-23','2027-05-10','USD','peru-easter-island-2027','day','Apr 23 – May 10, 2027'
 WHERE NOT EXISTS (SELECT 1 FROM trips WHERE user_id=2 AND source_id='peru-easter-island-2027');

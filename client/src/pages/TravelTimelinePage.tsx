@@ -19,14 +19,41 @@ export default function TravelTimelinePage(): React.ReactElement {
   const navigate = useNavigate()
   const [items, setItems] = useState<TimelineItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [nextOffset, setNextOffset] = useState<number | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    apiClient.get('/timeline', { params: { limit: 200 } })
-      .then(res => { if (!cancelled) setItems(res.data.items || []) })
+    setLoading(true)
+    apiClient.get('/timeline', { params: { limit: 50, offset: 0 } })
+      .then(res => {
+        if (cancelled) return
+        setLoadError(false)
+        setItems(res.data.items || [])
+        setNextOffset(res.data.nextOffset ?? null)
+      })
+      .catch(() => { if (!cancelled) setLoadError(true) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [])
+  }, [loadAttempt])
+
+  const loadMore = async () => {
+    if (nextOffset == null || loadingMore) return
+    setLoadingMore(true)
+    setLoadMoreError(false)
+    try {
+      const res = await apiClient.get('/timeline', { params: { limit: 50, offset: nextOffset } })
+      setItems(current => [...current, ...(res.data.items || [])])
+      setNextOffset(res.data.nextOffset ?? null)
+    } catch {
+      setLoadMoreError(true)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const iconFor = (kind: TimelineItem['kind']) => {
     if (kind === 'country') return MapPin
@@ -42,38 +69,64 @@ export default function TravelTimelinePage(): React.ReactElement {
         <p className="text-sm text-content-muted mb-6">{t('timeline.subtitle')}</p>
 
         {loading ? (
-          <div className="flex justify-center py-16">
-            <div className="w-8 h-8 border-2 rounded-full animate-spin border-edge border-t-content" />
+          <div role="status" className="flex justify-center py-16">
+            <span className="sr-only">{t('common.loading')}</span>
+            <div aria-hidden="true" className="w-8 h-8 border-2 rounded-full animate-spin border-edge border-t-content" />
+          </div>
+        ) : loadError ? (
+          <div role="alert" className="rounded-xl border border-edge bg-surface-card p-4 text-sm text-content-muted">
+            <p>{t('timeline.loadError')}</p>
+            <button type="button" onClick={() => setLoadAttempt(attempt => attempt + 1)} className="mt-3 rounded-lg border border-edge px-3 py-2 font-semibold text-content hover:bg-surface-hover">
+              {t('timeline.retry')}
+            </button>
           </div>
         ) : items.length === 0 ? (
           <p className="text-content-muted text-sm">{t('timeline.empty')}</p>
         ) : (
+          <>
           <ol className="space-y-3">
             {items.map(item => {
               const Icon = iconFor(item.kind)
+              const content = (
+                <div className="flex items-start gap-3">
+                  <Icon size={16} className="text-content-muted mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-semibold text-content truncate">{item.title}</span>
+                      <span className="text-[11px] text-content-faint shrink-0 tabular-nums">{item.date}</span>
+                    </div>
+                    {item.subtitle ? <p className="text-xs text-content-muted mt-0.5">{item.subtitle}</p> : null}
+                  </div>
+                </div>
+              )
               return (
                 <li key={item.id}>
-                  <button
-                    type="button"
-                    className="w-full text-left rounded-xl border border-edge bg-surface-card px-4 py-3 hover:bg-surface-hover transition-colors"
-                    onClick={() => item.trip_id && navigate(`/trips/${item.trip_id}`)}
-                    disabled={!item.trip_id}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Icon size={16} className="text-content-muted mt-0.5 shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className="font-semibold text-content truncate">{item.title}</span>
-                          <span className="text-[11px] text-content-faint shrink-0 tabular-nums">{item.date}</span>
-                        </div>
-                        {item.subtitle ? <p className="text-xs text-content-muted mt-0.5">{item.subtitle}</p> : null}
-                      </div>
+                  {item.trip_id ? (
+                    <button
+                      type="button"
+                      className="w-full text-left rounded-xl border border-edge bg-surface-card px-4 py-3 hover:bg-surface-hover transition-colors"
+                      onClick={() => navigate(`/trips/${item.trip_id}`)}
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    <div className="w-full rounded-xl border border-edge bg-surface-card px-4 py-3">
+                      {content}
                     </div>
-                  </button>
+                  )}
                 </li>
               )
             })}
           </ol>
+          {nextOffset != null && (
+            <div className="mt-5">
+              {loadMoreError && <p role="alert" className="mb-2 text-center text-sm text-content-muted">{t('timeline.loadMoreError')}</p>}
+              <button type="button" onClick={loadMore} disabled={loadingMore} className="w-full rounded-xl border border-edge bg-surface-card px-4 py-3 text-sm font-semibold text-content hover:bg-surface-hover disabled:opacity-60">
+                {loadingMore ? t('common.loading') : loadMoreError ? t('timeline.retry') : 'Load more'}
+              </button>
+            </div>
+          )}
+          </>
         )}
       </main>
     </div>

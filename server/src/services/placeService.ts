@@ -17,6 +17,7 @@ import { enrichImportedPlaces, type EnrichablePlace } from './placeEnrichment';
 import * as placePhotoCache from './placePhotoCache';
 import { searchUnsplashPhotos, getUnsplashKey } from './unsplashService';
 import { type UpdateConflict, isUpdateConflict } from './conflictResult';
+import { scheduleMonthlyClimateWarm } from './weatherService';
 
 // Reclaim a deleted place's cached marker photo if nothing else references it.
 // The cache key is the Google place_id, or — for coordinate-only places — the
@@ -137,7 +138,7 @@ export function createPlace(
       duration_minutes, notes, image_url, google_place_id, google_ftid, osm_id, website, phone, transport_mode)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    tripId, name, description || null, lat || null, lng || null, address || null,
+    tripId, name, description || null, lat ?? null, lng ?? null, address || null,
     category_id || null, price || null, currency || null,
     place_time || null, end_time || null, duration_minutes || 60, notes || null, image_url || null,
     google_place_id || null, google_ftid || null, osm_id || null, website || null, phone || null, transport_mode || 'walking',
@@ -152,7 +153,9 @@ export function createPlace(
     }
   }
 
-  return getPlaceWithTags(Number(placeId));
+  const place = getPlaceWithTags(Number(placeId));
+  if (place) scheduleMonthlyClimateWarm([place]);
+  return place;
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +258,9 @@ export function updatePlace(
     }
   }
 
-  return getPlaceWithTags(placeId);
+  const place = getPlaceWithTags(placeId);
+  if (place) scheduleMonthlyClimateWarm([place]);
+  return place;
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +518,7 @@ export function importGpx(tripId: string, fileBuffer: Buffer, opts: GpxImportOpt
     }
   });
   insertAll();
+  scheduleMonthlyClimateWarm(created);
 
   return { places: created, count: created.length, skipped };
 }
@@ -608,6 +614,7 @@ export function importKmlPlaces(tripId: string, fileBuffer: Buffer, opts: KmlImp
   });
 
   insertAll();
+  scheduleMonthlyClimateWarm(created);
 
   if (dupCount > 0) {
     summary.warnings.push(`${dupCount} place${dupCount > 1 ? 's' : ''} skipped (already in trip).`);
@@ -831,6 +838,7 @@ export async function importGoogleList(tripId: string, url: string, opts?: ListI
     }
   });
   insertAll();
+  scheduleMonthlyClimateWarm(created);
 
   if (opts?.enrich && opts.userId && created.length) {
     void enrichImportedPlaces(tripId, opts.userId, created as EnrichablePlace[], opts.lang);
@@ -965,6 +973,7 @@ export async function importNaverList(
     }
   });
   insertAll();
+  scheduleMonthlyClimateWarm(created);
 
   if (opts?.enrich && opts.userId && created.length) {
     void enrichImportedPlaces(tripId, opts.userId, created as EnrichablePlace[], opts.lang);

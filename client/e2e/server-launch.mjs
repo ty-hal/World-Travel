@@ -11,7 +11,7 @@ import { spawn, execSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const PORT = 3001
+const PORT = Number(process.env.TREK_E2E_PORT || 3001)
 
 /** Kill anything still bound to our port from a prior aborted E2E or dev run. */
 function freePort(port) {
@@ -36,9 +36,12 @@ execSync('node scripts/build.mjs', { cwd: serverDir, stdio: 'inherit' })
 
 const env = {
   ...process.env,
+  TREK_E2E: '1',
   TREK_DB_FILE: dbFile,
   ADMIN_EMAIL: 'e2e@trek.local',
   ADMIN_PASSWORD: 'E2eTest12345!',
+  // The developer's server/.env may enforce SSO-only login; E2E uses its seeded local account.
+  OIDC_ONLY: 'false',
   PORT: String(PORT),
   NODE_ENV: 'development',
   // Prevent the admin update banner from polluting E2E screenshots when GitHub

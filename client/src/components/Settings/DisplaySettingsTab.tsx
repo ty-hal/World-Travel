@@ -61,10 +61,11 @@ export default function DisplaySettingsTab(): React.ReactElement {
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.language')}</label>
         {/* Desktop: Button grid */}
-        <div className="hidden sm:flex flex-wrap gap-3">
+        <div className="hidden sm:flex flex-wrap gap-3" role="group" aria-label={t('settings.language')}>
           {SUPPORTED_LANGUAGES.map(opt => (
             <button
               key={opt.value}
+              aria-pressed={settings.language === opt.value}
               onClick={async () => {
                 try { await updateSetting('language', opt.value) }
                 catch (e: unknown) { toast.error(e instanceof Error ? e.message : t('common.error')) }
@@ -91,6 +92,7 @@ export default function DisplaySettingsTab(): React.ReactElement {
               <button
                 type="button"
                 onClick={() => setLangOpen(v => !v)}
+                aria-expanded={langOpen}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '10px 14px', borderRadius: 10,
@@ -105,7 +107,7 @@ export default function DisplaySettingsTab(): React.ReactElement {
             )
           })()}
           {langOpen && (
-            <div style={{
+            <div role="group" aria-label={t('settings.language')} style={{
               position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50,
               background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
               boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: 4, maxHeight: 280, overflowY: 'auto',
@@ -116,6 +118,7 @@ export default function DisplaySettingsTab(): React.ReactElement {
                   <button
                     key={opt.value}
                     type="button"
+                    aria-pressed={active}
                     onClick={async () => {
                       setLangOpen(false)
                       try { await updateSetting('language', opt.value) }
@@ -142,13 +145,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Temperature */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.temperature')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.temperature')}>
           {[
             { value: 'celsius', label: '°C Celsius' },
             { value: 'fahrenheit', label: '°F Fahrenheit' },
           ].map(opt => (
             <button
               key={opt.value}
+              aria-pressed={tempUnit === opt.value}
               onClick={async () => {
                 setTempUnit(opt.value)
                 try { await updateSetting('temperature_unit', opt.value) }
@@ -173,13 +177,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Distance */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.distance')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.distance')}>
           {([
             { value: 'metric', label: 'km Metric' },
             { value: 'imperial', label: 'mi Imperial' },
           ] as const).map(opt => (
             <button
               key={opt.value}
+              aria-pressed={distanceUnit === opt.value}
               onClick={async () => {
                 setDistanceUnit(opt.value)
                 try { await updateSetting('distance_unit', opt.value) }
@@ -204,13 +209,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Time Format */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.timeFormat')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.timeFormat')}>
           {[
             { value: '24h', short: '24h', example: '14:30' },
             { value: '12h', short: '12h', example: '2:30 PM' },
           ].map(opt => (
             <button
               key={opt.value}
+              aria-pressed={settings.time_format === opt.value}
               onClick={async () => {
                 try { await updateSetting('time_format', opt.value) }
                 catch (e: unknown) { toast.error(e instanceof Error ? e.message : t('common.error')) }
@@ -237,13 +243,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Booking route labels */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.bookingLabels')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.bookingLabels')}>
           {[
             { value: true, label: t('settings.on') || 'On' },
             { value: false, label: t('settings.off') || 'Off' },
           ].map(opt => (
             <button
               key={String(opt.value)}
+              aria-pressed={(settings.map_booking_labels === true) === opt.value}
               onClick={async () => {
                 try { await updateSetting('map_booking_labels', opt.value) }
                 catch (e: unknown) { toast.error(e instanceof Error ? e.message : t('common.error')) }
@@ -268,13 +275,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Always show booking routes */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.alwaysShowRoutes')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.alwaysShowRoutes')}>
           {[
             { value: true, label: t('settings.on') || 'On' },
             { value: false, label: t('settings.off') || 'Off' },
           ].map(opt => (
             <button
               key={String(opt.value)}
+              aria-pressed={(settings.map_always_show_routes === true) === opt.value}
               onClick={async () => {
                 try { await updateSetting('map_always_show_routes', opt.value) }
                 catch (e: unknown) { toast.error(e instanceof Error ? e.message : t('common.error')) }
@@ -299,13 +307,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Explore places on the map (POI category pill) */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.mapPoiPill')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.mapPoiPill')}>
           {[
             { value: true, label: t('settings.on') || 'On' },
             { value: false, label: t('settings.off') || 'Off' },
           ].map(opt => (
             <button
               key={String(opt.value)}
+              aria-pressed={(settings.map_poi_pill_enabled !== false) === opt.value}
               onClick={async () => {
                 try { await updateSetting('map_poi_pill_enabled', opt.value) }
                 catch (e: unknown) { toast.error(e instanceof Error ? e.message : t('common.error')) }
@@ -330,13 +339,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Blur Booking Codes */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.blurBookingCodes')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.blurBookingCodes')}>
           {[
             { value: true, label: t('settings.on') || 'On' },
             { value: false, label: t('settings.off') || 'Off' },
           ].map(opt => (
             <button
               key={String(opt.value)}
+              aria-pressed={(!!settings.blur_booking_codes) === opt.value}
               onClick={async () => {
                 try { await updateSetting('blur_booking_codes', opt.value) }
                 catch (e: unknown) { toast.error(e instanceof Error ? e.message : t('common.error')) }
@@ -360,13 +370,14 @@ export default function DisplaySettingsTab(): React.ReactElement {
       {/* Optimize route from accommodation */}
       <div>
         <label className="block text-sm font-medium mb-2 text-content-secondary">{t('settings.optimizeFromAccommodation')}</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3" role="group" aria-label={t('settings.optimizeFromAccommodation')}>
           {[
             { value: true, label: t('settings.on') || 'On' },
             { value: false, label: t('settings.off') || 'Off' },
           ].map(opt => (
             <button
               key={String(opt.value)}
+              aria-pressed={(settings.optimize_from_accommodation !== false) === opt.value}
               onClick={async () => {
                 try { await updateSetting('optimize_from_accommodation', opt.value) }
                 catch (e: unknown) { toast.error(e instanceof Error ? e.message : t('common.error')) }

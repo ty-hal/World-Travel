@@ -54,6 +54,7 @@ export type {
 export interface User {
   id: number
   username: string
+  display_name?: string | null
   email: string
   role: 'admin' | 'user'
   avatar_url: string | null

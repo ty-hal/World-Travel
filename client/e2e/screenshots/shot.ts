@@ -26,14 +26,15 @@ export const test = base.extend<{ shot: Shot }>({
   // deliberate: fixtures initialise lazily, so a route registered in `shot`
   // lands AFTER any beforeEach hook has already navigated — too late to
   // intercept the config request.
-  page: async ({ page }, use) => {
-    await page.setViewportSize(VIEWPORT)
+  page: async ({ page }, use, testInfo) => {
+    if (testInfo.project.name === 'screenshots') await page.setViewportSize(VIEWPORT)
     await hideDevOnlyUi(page)
     await use(page)
   },
-  shot: async ({ page }, use) => {
-    mkdirSync(OUT_DIR, { recursive: true })
-    await use(new Shot(page))
+  shot: async ({ page }, use, testInfo) => {
+    const outDir = testInfo.project.name === 'screenshots-mobile' ? path.join(OUT_DIR, 'mobile') : OUT_DIR
+    mkdirSync(outDir, { recursive: true })
+    await use(new Shot(page, outDir))
   },
 })
 
@@ -57,14 +58,24 @@ async function hideDevOnlyUi(page: Page): Promise<void> {
 export { expect }
 
 /** Read seed ids at runtime — not module load — so collection works before seed project runs. */
-export function loadSeed(): { tripId: number; collectionId?: number } {
+export function loadSeed(): { tripId: number; journeyId: number; collectionId?: number } {
   return JSON.parse(
     readFileSync(path.join(process.cwd(), 'e2e', '.tmp', 'seed.json'), 'utf8'),
   )
 }
 
+export async function mockPagePlugin(page: Page) {
+  const plugin = { id: 'ui-audit-sample', name: 'Sample page plugin', type: 'page', icon: null }
+  await page.route('**/api/plugins', route => route.fulfill({ json: { plugins: [plugin] } }))
+  await page.route('**/plugin-frame/ui-audit-sample/index.html', route => route.fulfill({
+    contentType: 'text/html',
+    body: '<!doctype html><html><meta name="viewport" content="width=device-width, initial-scale=1"><body><main><h1>Sample plugin workspace</h1><p>Plugin content is hosted in a sandboxed frame.</p></main></body></html>',
+  }))
+  return plugin
+}
+
 export class Shot {
-  constructor(private readonly page: Page) {}
+  constructor(private readonly page: Page, private readonly outDir = OUT_DIR) {}
 
   /**
    * Capture the full viewport. `name` is the target filename in wiki/assets/
@@ -73,7 +84,7 @@ export class Shot {
   async page_(name: string): Promise<void> {
     await this.settle()
     await this.captureMarkup(name)
-    await this.page.screenshot({ path: path.join(OUT_DIR, `${name}.png`) })
+    await this.page.screenshot({ path: path.join(this.outDir, `${name}.png`) })
   }
 
   /** Capture one element — preferred for dialogs, panels and cards. */
@@ -81,7 +92,7 @@ export class Shot {
     await this.settle()
     await expect(target).toBeVisible()
     await this.captureMarkup(name, target)
-    await target.screenshot({ path: path.join(OUT_DIR, `${name}.png`) })
+    await target.screenshot({ path: path.join(this.outDir, `${name}.png`) })
   }
 
   private async captureMarkup(name: string, target?: Locator): Promise<void> {
@@ -96,8 +107,8 @@ export class Shot {
         computed: Object.fromEntries(['display', 'position', 'width', 'height', 'color', 'backgroundColor', 'fontFamily', 'fontSize'].map(key => [key, getComputedStyle(element).getPropertyValue(key)])),
       }
     })
-    writeFileSync(path.join(OUT_DIR, `${name}.html`), artifact.html)
-    writeFileSync(path.join(OUT_DIR, `${name}.css.json`), JSON.stringify({ css: artifact.css, computed: artifact.computed }, null, 2))
+    writeFileSync(path.join(this.outDir, `${name}.html`), artifact.html)
+    writeFileSync(path.join(this.outDir, `${name}.css.json`), JSON.stringify({ css: artifact.css, computed: artifact.computed }, null, 2))
   }
 
   /**

@@ -91,7 +91,7 @@ const EVENT_NOTIFICATION_CONFIG: Record<string, EventNotifConfig> = {
     titleKey: 'notif.vacay_invite.title',
     textKey: 'notif.vacay_invite.text',
     navigateTextKey: 'notif.action.view_vacay',
-    navigateTarget: p => (p.planId ? `/vacay/${p.planId}` : null),
+    navigateTarget: p => (p.planId ? '/calendar' : null),
   },
   collection_invite: {
     inAppType: 'navigate',

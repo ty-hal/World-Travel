@@ -1192,7 +1192,7 @@ export async function reverseGeocode(
   lat: string,
   lng: string,
   lang?: string,
-): Promise<{ name: string | null; address: string | null }> {
+): Promise<{ name: string | null; address: string | null; country_code?: string | null }> {
   const params = new URLSearchParams({
     lat,
     lon: lng,
@@ -1208,7 +1208,7 @@ export async function reverseGeocode(
   const data = (await response.json()) as { name?: string; display_name?: string; address?: Record<string, string> };
   const addr = data.address || {};
   const name = data.name || addr.tourism || addr.amenity || addr.shop || addr.building || addr.road || null;
-  return { name, address: data.display_name || null };
+  return { name, address: data.display_name || null, country_code: addr.country_code?.toUpperCase() || null };
 }
 
 // ── Resolve Google Maps URL ──────────────────────────────────────────────────

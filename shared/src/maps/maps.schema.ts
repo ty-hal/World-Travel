@@ -76,6 +76,7 @@ export type MapsPlacePhotoResult = z.infer<typeof mapsPlacePhotoResultSchema>;
 export const mapsReverseResultSchema = z.object({
   name: z.string().nullable(),
   address: z.string().nullable(),
+  country_code: z.string().nullable().optional(),
 });
 export type MapsReverseResult = z.infer<typeof mapsReverseResultSchema>;
 

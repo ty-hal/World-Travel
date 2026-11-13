@@ -1,5 +1,6 @@
 import { db } from '../db/database';
 import { Reservation } from '../types';
+import { logError } from './auditLog';
 
 export { verifyTripAccess } from './tripAccess';
 
@@ -43,12 +44,13 @@ export function notifyBookingChange(
             type: type || 'booking',
             tripId: String(tripId),
           },
-        }).catch(() => {});
-      } catch {
+        }).catch((err: unknown) => logError(`Booking notification failed trip=${tripId}: ${err instanceof Error ? err.message : err}`));
+      } catch (err) {
         // Notifications must never make the booking write fail.
+        logError(`Booking notification preparation failed trip=${tripId}: ${err instanceof Error ? err.message : err}`);
       }
     })
-    .catch(() => {});
+    .catch((err: unknown) => logError(`Booking notification module failed trip=${tripId}: ${err instanceof Error ? err.message : err}`));
 }
 
 export function loadEndpointsByTrip(tripId: string | number): Map<number, ReservationEndpoint[]> {

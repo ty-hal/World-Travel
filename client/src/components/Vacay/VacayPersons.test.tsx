@@ -92,8 +92,7 @@ describe('VacayPersons', () => {
 
     render(<VacayPersons />)
 
-    // With no users seeded the first (and only) button is the UserPlus
-    const [userPlusBtn] = screen.getAllByRole('button')
+    const userPlusBtn = screen.getByRole('button', { name: 'Invite User' })
     await user.click(userPlusBtn)
 
     expect(screen.getByRole('heading', { name: 'Invite User' })).toBeInTheDocument()

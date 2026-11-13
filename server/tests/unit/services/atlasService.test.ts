@@ -30,8 +30,11 @@ vi.mock('../../../src/db/database', () => dbMock);
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
 import { resetTestDb } from '../../helpers/test-db';
-import { createUser, createTrip, createReservation } from '../../helpers/factories';
-import { getStats, getCached, setCache, getCountryFromCoords, getCountryFromAddress, isPointInCountryBox, reverseGeocodeCountry, getRegionGeo, getCountryGeo, getCountryPlaces, getVisitedRegions, markCountryVisited, unmarkCountryVisited, markRegionVisited, unmarkRegionVisited } from '../../../src/services/atlasService';
+import { createUser, createTrip as createTripFixture, createReservation } from '../../helpers/factories';
+import { getStats, getCached, setCache, getCountryFromCoords, getCountryFromAddress, isPointInCountryBox, reverseGeocodeCountry, getRegionGeo, getCountryGeo, getCountryPlaces, getVisitedRegions, getAtlasWonders, markCountryVisited, unmarkCountryVisited, markRegionVisited, unmarkRegionVisited } from '../../../src/services/atlasService';
+
+const createTrip = (db: any, userId: number, data: Parameters<typeof createTripFixture>[2] = {}) =>
+  createTripFixture(db, userId, { start_date: '2020-01-01', end_date: '2020-01-02', ...data });
 
 function insertReservationEndpoint(
   db: any,
@@ -119,7 +122,7 @@ describe('getStats', () => {
     expect(stats.countries).toHaveLength(2);
     expect(stats.countries.map((c: { code: string }) => c.code).sort()).toEqual(['AU', 'JP']);
     expect(stats.stats.totalTrips).toBe(0);
-    expect(stats.stats.totalCountries).toBe(2);
+    expect(stats.stats.totalCountries).toBe(0);
   });
 
   it('ATLAS-UNIT-004: single country yields mostVisited equal to that country', async () => {
@@ -132,6 +135,56 @@ describe('getStats', () => {
     expect(stats.mostVisited).not.toBeNull();
     expect(stats.mostVisited!.code).toBe('IT');
     expect(stats.mostVisited!.placeCount).toBe(1);
+  });
+
+  it('counts only completed trips across visited countries, country details, regions, and wonders', async () => {
+    const { user } = createUser(testDb);
+    const completedTrip = createTrip(testDb, user.id, {
+      title: 'Completed France trip', start_date: '2020-04-01', end_date: '2020-04-02',
+    });
+    const plannedTrip = createTrip(testDb, user.id, {
+      title: 'Planned Japan trip', start_date: '2099-01-01', end_date: '2099-01-10',
+    });
+    const undatedTrip = createTrip(testDb, user.id, {
+      title: 'Unscheduled trip', start_date: null, end_date: null,
+    });
+    testDb.prepare('INSERT INTO visited_countries (user_id, country_code) VALUES (?, ?)').run(user.id, 'CA');
+    const completedPlace = insertPlaceWithCoords(testDb, completedTrip.id, 'Paris', 48.85, 2.35, 'Paris, France');
+    const plannedPlace = insertPlaceWithCoords(testDb, plannedTrip.id, 'Tokyo', 35.6762, 139.6503, 'Tokyo, Japan');
+    insertPlace(testDb, undatedTrip.id, 'Rome', 'Rome, Italy');
+    for (const [place, country, code, name] of [
+      [completedPlace, 'FR', 'FR-IDF', 'Île-de-France'],
+      [plannedPlace, 'JP', 'JP-13', 'Tokyo'],
+    ] as const) {
+      testDb.prepare(
+        'INSERT INTO place_regions (place_id, country_code, region_code, region_name) VALUES (?, ?, ?, ?)',
+      ).run(place.id, country, code, name);
+    }
+    testDb.prepare(
+      'INSERT INTO atlas_wonders (source_id, label, country, map_country, lat, lng) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('wonder-fr', 'France wonder', 'France', 'FR', 48.85, 2.35);
+    testDb.prepare(
+      'INSERT INTO atlas_wonders (source_id, label, country, map_country, lat, lng) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('wonder-jp', 'Japan wonder', 'Japan', 'JP', 35.6762, 139.6503);
+
+    const stats = await getStats(user.id);
+    const countryPlaces = getCountryPlaces(user.id, 'JP');
+    const regions = await getVisitedRegions(user.id);
+    const wonders = getAtlasWonders(user.id) as Array<{ source_id: string; visited: number }>;
+
+    expect(stats.countries.map((country: { code: string }) => country.code)).toContain('FR');
+    expect(stats.countries.map((country: { code: string }) => country.code)).not.toEqual(expect.arrayContaining(['JP', 'IT']));
+    expect(stats.stats.totalTrips).toBe(1);
+    expect(stats.stats.totalCountries).toBe(1);
+    expect(stats.stats.totalPlaces).toBe(1);
+    expect(stats.stats.totalCities).toBe(1);
+    expect(stats.stats.totalDays).toBe(2);
+    expect(stats.continents).toEqual({ Europe: 1 });
+    expect(countryPlaces.places).toEqual([]);
+    expect(regions.regions).toHaveProperty('FR');
+    expect(regions.regions).not.toHaveProperty('JP');
+    expect(wonders.find((wonder) => wonder.source_id === 'wonder-fr')?.visited).toBe(1);
+    expect(wonders.find((wonder) => wonder.source_id === 'wonder-jp')?.visited).toBe(0);
   });
 
   it('ATLAS-UNIT-022 (#1366): a country reached only via a real flight leg (from/to) counts as visited', async () => {
@@ -546,7 +599,7 @@ describe('getStats — extended', () => {
 
   it('ATLAS-UNIT-006: totalDays is 0 when trip has no dates', async () => {
     const { user } = createUser(testDb);
-    createTrip(testDb, user.id, { title: 'Dateless' });
+    createTrip(testDb, user.id, { title: 'Dateless', start_date: null, end_date: null });
 
     const stats = await getStats(user.id);
 
@@ -564,6 +617,7 @@ describe('getStats — extended', () => {
     expect(codes).toContain('JP');
     const jp = stats.countries.find((c: any) => c.code === 'JP');
     expect(jp?.placeCount).toBe(0);
+    expect(stats.stats.totalCountries).toBe(0);
   });
 
   it('ATLAS-UNIT-008: lastTrip is resolved with a country code when its places have an address', async () => {

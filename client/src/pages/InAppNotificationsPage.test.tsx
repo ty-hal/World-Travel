@@ -104,6 +104,8 @@ describe('InAppNotificationsPage', () => {
 
       // The unread filter button uses t('notifications.unreadOnly') = 'Unread'
       expect(screen.getByRole('button', { name: /^unread$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^all$/i })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^unread$/i })).toHaveAttribute('aria-pressed', 'false');
     });
   });
 
@@ -160,6 +162,8 @@ describe('InAppNotificationsPage', () => {
         expect(screen.getByTestId('notification-100')).toBeInTheDocument();
         expect(screen.queryByTestId('notification-101')).not.toBeInTheDocument();
       });
+      expect(screen.getByRole('button', { name: /^unread$/i })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^all$/i })).toHaveAttribute('aria-pressed', 'false');
     });
   });
 

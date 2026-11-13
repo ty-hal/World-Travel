@@ -12,6 +12,7 @@ import { listBudgetItems, rebaseTripCurrency } from '../../services/budgetServic
 import { listReservations } from '../../services/reservationService';
 import { listFiles } from '../../services/fileService';
 import { searchUnsplashPhotos, getUnsplashKey } from '../../services/unsplashService';
+import { logError } from '../../services/auditLog';
 
 /**
  * Thin Nest wrapper around the existing trip service + the per-domain list
@@ -36,6 +37,31 @@ export class TripsService {
 
   list(userId: number, archived: number) {
     return tripSvc.listTrips(userId, archived);
+  }
+
+  reorder(userId: number, orderedIds: number[]) {
+    return tripSvc.reorderTrips(userId, orderedIds);
+  }
+
+  recentActivity(userId: number) {
+    return db.prepare(`
+      SELECT * FROM (
+        SELECT CASE WHEN t.updated_at > t.created_at THEN 'trip_updated' ELSE 'trip' END AS entity_type,
+               t.id AS entity_id, t.id AS trip_id, t.title AS trip_title,
+               t.title AS item_title, COALESCE(t.updated_at, t.created_at) AS activity_at
+        FROM trips t
+        WHERE (t.user_id = ? OR EXISTS (
+          SELECT 1 FROM trip_members m WHERE m.trip_id = t.id AND m.user_id = ?
+        ))
+        UNION ALL
+        SELECT CASE WHEN p.updated_at > p.created_at THEN 'place_updated' ELSE 'place_added' END,
+               p.id, t.id, t.title, p.name, MAX(p.created_at, p.updated_at)
+        FROM places p JOIN trips t ON t.id = p.trip_id
+        WHERE (t.user_id = ? OR EXISTS (
+          SELECT 1 FROM trip_members m WHERE m.trip_id = t.id AND m.user_id = ?
+        ))
+      ) ORDER BY activity_at DESC LIMIT 5
+    `).all(userId, userId, userId, userId);
   }
 
   create(userId: number, data: Parameters<typeof tripSvc.createTrip>[1]) {
@@ -146,7 +172,11 @@ export class TripsService {
         scope: 'user',
         targetId: targetUserId,
         params: { trip: tripTitle, actor: actor.email, invitee: inviteeEmail, tripId: String(tripId) },
-      }).catch(() => {});
+      }).catch((err: unknown) => {
+        logError(`Trip invite notification failed trip=${tripId} recipient=${targetUserId}: ${err instanceof Error ? err.message : err}`);
+      });
+    }).catch((err: unknown) => {
+      logError(`Trip invite notification module failed trip=${tripId} recipient=${targetUserId}: ${err instanceof Error ? err.message : err}`);
     });
   }
 }

@@ -4,6 +4,7 @@ import { consumeEphemeralTokenWithMeta } from './services/ephemeralTokens';
 import { emitPluginEvent, pluginEventMeta } from './plugin-event-sink';
 import { User } from './types';
 import http from 'node:http';
+import { isLocalDevOrigin } from './utils/origin';
 
 interface NomadWebSocket extends WebSocket {
   isAlive: boolean;
@@ -32,7 +33,7 @@ const socketMsgCounts = new WeakMap<NomadWebSocket, { count: number; windowStart
 /** Attaches a WebSocket server with JWT auth, room-based trip channels, and heartbeat keep-alive. */
 function setupWebSocket(server: http.Server): void {
   const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
     : null;
 
   wss = new WebSocketServer({
@@ -41,7 +42,7 @@ function setupWebSocket(server: http.Server): void {
     maxPayload: 64 * 1024, // 64 KB max message size
     verifyClient: allowedOrigins
       ? ({ origin }, cb) => {
-          if (!origin || allowedOrigins.includes(origin)) cb(true);
+          if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin(origin)) cb(true);
           else cb(false, 403, 'Origin not allowed');
         }
       : undefined,

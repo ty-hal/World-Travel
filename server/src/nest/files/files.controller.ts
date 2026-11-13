@@ -11,6 +11,8 @@ import {
   Post,
   Put,
   Query,
+  Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -26,6 +28,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { MAX_FILE_SIZE, MAX_VIDEO_SIZE, BLOCKED_EXTENSIONS, filesDir, getAllowedExtensions, isVideoExtension } from '../../services/fileService';
 import { isDemoEmail } from '../../services/demo';
+import { getR2MediaThumbnail, getR2Object, listR2Media, uploadR2Media } from '../../services/r2MediaService';
+import type { Response } from 'express';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { db } from '../../db/database';
 
 const UPLOAD = {
   storage: diskStorage({
@@ -82,6 +89,89 @@ export class FilesController {
   private assertLinkTargets(tripId: string, body: { reservation_id?: string | null; assignment_id?: string | null; place_id?: string | null }) {
     if (this.files.findForeignLinkTarget(tripId, body)) {
       throw new HttpException({ error: 'Linked item does not belong to this trip' }, 400);
+    }
+  }
+
+  private mediaPrefix(tripId: string) {
+    const trip = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
+    const title = trip?.title || '';
+    const slug = title.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `trip-${tripId}`;
+    const folderByTrip = {
+      'grand-canyon-sedona': 'trips/grand-canyon-sedona-april-2026/',
+      'new-england': 'trips/new-england-spring-2025/',
+      'utah-las-vegas': 'trips/utah-vegas-summer-2024/',
+      'middle-east': 'trips/middle-east-fall-2026/',
+    } as Record<string, string>;
+    return folderByTrip[slug] || `trips/${slug}/`;
+  }
+
+  @Get('media')
+  async listMedia(@CurrentUser() user: User, @Param('tripId') tripId: string, @Query('cursor') cursor?: string) {
+    try {
+      this.requireTrip(tripId, user);
+      const prefix = this.mediaPrefix(tripId);
+      return { prefix, ...await listR2Media(prefix, cursor) };
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      throw new HttpException({ error: err instanceof Error ? err.message : 'R2 media is unavailable' }, 503);
+    }
+  }
+
+  @Post('media/upload')
+  @UseInterceptors(FileInterceptor('file', { ...UPLOAD, limits: { fileSize: 300 * 1024 * 1024 } }))
+  async uploadMedia(@CurrentUser() user: User, @Param('tripId') tripId: string, @UploadedFile() file?: Express.Multer.File) {
+    if (!file) throw new HttpException({ error: 'Choose a photo or video to upload' }, 400);
+    try {
+      const trip = this.requireTrip(tripId, user);
+      if (process.env.DEMO_MODE?.toLowerCase() === 'true' && isDemoEmail(user.email)) {
+        throw new HttpException({ error: 'Uploads are disabled in demo mode. Self-host TREK for full functionality.' }, 403);
+      }
+      if (!this.files.can('file_upload', trip, user)) throw new HttpException({ error: 'No permission to upload files' }, 403);
+      const prefix = this.mediaPrefix(tripId);
+      const filename = file.originalname.split(/[\\/]/).pop()?.replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 150);
+      const contentType = file.mimetype || '';
+      const sizeLimit = contentType.startsWith('video/') ? 300 * 1024 * 1024 : MAX_FILE_SIZE;
+      if (!filename || file.size <= 0 || file.size > sizeLimit || !/^(?:image\/(?!svg\+xml$)[a-z0-9.+-]+|video\/[a-z0-9.+-]+)$/i.test(contentType)) {
+        throw new HttpException({ error: 'Upload a supported photo or video within the file size limit (videos up to 300 MB)' }, 400);
+      }
+      // shortcut: Cloudflare REST uploads cap each object at 300 MB; use S3 multipart if larger videos are needed.
+      await uploadR2Media(`${prefix}${uuidv4()}-${filename}`, contentType, file.path);
+      return { success: true };
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      throw new HttpException({ error: err instanceof Error ? err.message : 'R2 media is unavailable' }, 503);
+    } finally {
+      await fs.promises.unlink(file.path).catch(() => undefined);
+    }
+  }
+
+  @Get('media/object')
+  async getMediaObject(@CurrentUser() user: User, @Param('tripId') tripId: string, @Query('key') key: string, @Query('thumbnail') thumbnail: string, @Query('version') version: string, @Req() req: Request, @Res() res: Response) {
+    this.requireTrip(tripId, user);
+    if (typeof key !== 'string' || !key.startsWith(this.mediaPrefix(tripId)) || (version && version.length > 512)) throw new HttpException({ error: 'Media not found' }, 404);
+    try {
+      const object = thumbnail === '1' ? await getR2MediaThumbnail(key, version || key) : await getR2Object(key, typeof req.headers['if-none-match'] === 'string' ? req.headers['if-none-match'] : undefined);
+      if (object.status === 304) {
+        res.setHeader('ETag', object.headers.get('etag') || req.headers['if-none-match'] as string);
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        return res.status(304).end();
+      }
+      const contentType = object.headers.get('content-type') || '';
+      if (!/^(?:image\/(?!svg\+xml$)[a-z0-9.+-]+|video\/[a-z0-9.+-]+)$/i.test(contentType)) throw new HttpException({ error: 'Media not found' }, 404);
+      res.setHeader('Content-Type', contentType);
+      const etag = object.headers.get('etag');
+      if (etag) {
+        res.setHeader('ETag', etag);
+        if (req.headers['if-none-match'] === etag) return res.status(304).end();
+      }
+      res.setHeader('Cache-Control', thumbnail === '1' ? 'private, max-age=31536000, immutable' : 'private, max-age=3600');
+      if (object.headers.get('content-length')) res.setHeader('Content-Length', object.headers.get('content-length')!);
+      if (!object.body) return res.status(502).end();
+      res.status(200);
+      return await pipeline(Readable.fromWeb(object.body as ReadableStream<Uint8Array>), res);
+    } catch (err) {
+      if (res.destroyed || res.headersSent) return;
+      throw new HttpException({ error: err instanceof Error ? err.message : 'R2 media is unavailable' }, 404);
     }
   }
 

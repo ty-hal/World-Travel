@@ -2,7 +2,7 @@ import React from 'react'
 import { Plus, Check, Route } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { getCategoryIcon } from '../shared/categoryIcons'
-import { getPinColor } from '../Map/pinColors'
+import { getUiCategoryColor } from '../Map/pinColors'
 import type { Place, Category } from '../../types'
 
 interface MemoPlaceRowProps {
@@ -85,7 +85,7 @@ export const MemoPlaceRow = React.memo(function MemoPlaceRow({
           {hasGeometry && <span title="Track / Route" style={{ display: 'inline-flex', flexShrink: 0 }}><Route size={11} strokeWidth={2} color="var(--text-faint)" /></span>}
           {cat && (() => {
             const CatIcon = getCategoryIcon(cat.icon)
-            return <span title={cat.name} style={{ display: 'inline-flex', flexShrink: 0 }}><CatIcon size={11} strokeWidth={2} color={getPinColor(cat.name, cat.color)} /></span>
+            return <span title={cat.name} style={{ display: 'inline-flex', flexShrink: 0 }}><CatIcon size={11} strokeWidth={2} color={getUiCategoryColor(cat.name, cat.color)} /></span>
           })()}
           <span className="text-content" style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
             {place.name}
@@ -93,7 +93,7 @@ export const MemoPlaceRow = React.memo(function MemoPlaceRow({
         </div>
         {(place.description || place.address || cat?.name) && (
           <div style={{ marginTop: 2 }}>
-            <span className="text-content-faint" style={{ fontSize: 'calc(11px * var(--fs-scale-caption, 1))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', lineHeight: 1.2 }}>
+            <span className="text-content-muted" style={{ fontSize: 'calc(12px * var(--fs-scale-caption, 1))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', lineHeight: 1.2 }}>
               {place.description || place.address || cat?.name}
             </span>
           </div>
@@ -103,16 +103,16 @@ export const MemoPlaceRow = React.memo(function MemoPlaceRow({
         {!selectMode && !inDay && selectedDayId && (
           <button
             onClick={e => { e.stopPropagation(); onAssignToDay(place.id) }}
-            className="bg-surface-hover text-content-faint"
+            className="bg-surface-hover text-content-muted"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 20, height: 20, borderRadius: 6,
+              width: 26, height: 26, borderRadius: 7,
               border: 'none', cursor: 'pointer',
               padding: 0, transition: 'background 0.15s, color 0.15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent-text)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-faint)' }}
-          ><Plus size={12} strokeWidth={2.5} /></button>
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)' }}
+          ><Plus size={14} strokeWidth={2.5} /></button>
         )}
       </div>
     </div>

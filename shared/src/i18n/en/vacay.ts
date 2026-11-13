@@ -28,7 +28,7 @@ const vacay: TranslationStrings = {
   'vacay.weekend': 'Weekend',
   'vacay.modeVacation': 'Vacation',
   'vacay.modeCompany': 'Company Holiday',
-  'vacay.entitlement': 'Entitlement',
+  'vacay.entitlement': 'PTO balance',
   'vacay.entitlementDays': 'Days',
   'vacay.used': 'Used',
   'vacay.remaining': 'Left',

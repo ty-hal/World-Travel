@@ -130,6 +130,8 @@ export function SlidingTabs<T extends string>({
             ref={el => { tabRefs.current.set(tab.id, el) }}
             onClick={() => onChange(tab.id)}
             style={btnStyle}
+            aria-label={tab.title ?? (typeof tab.label === 'string' ? tab.label : undefined)}
+            aria-pressed={isActive}
             title={tab.title ?? (typeof tab.label === 'string' ? tab.label : undefined)}
           >
             {Icon && <Icon size={size === 'sm' ? 13 : 15} />}

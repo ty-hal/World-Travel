@@ -13,7 +13,6 @@ const baseProps = {
   companyHolidaysEnabled: true,
   entryMap: {},
   onCellClick: vi.fn(),
-  companyMode: false,
   blockWeekends: true,
   weekendDays: [0, 6],
 }
@@ -46,6 +45,21 @@ describe('VacayMonthCard', () => {
     expect(baseProps.onCellClick).toHaveBeenCalledWith('2025-01-15')
   })
 
+  it('uses keyboard-operable date buttons with one tab stop per month', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<VacayMonthCard {...baseProps} />)
+    const day15 = container.querySelector<HTMLButtonElement>('[data-date="2025-01-15"]')!
+    const day16 = container.querySelector<HTMLButtonElement>('[data-date="2025-01-16"]')!
+
+    expect(day15).toHaveAccessibleName(/Wednesday, January 15, 2025/i)
+    expect(container.querySelectorAll('button[tabindex="0"]')).toHaveLength(1)
+    day15.focus()
+    await user.keyboard('{ArrowRight}{Enter}')
+
+    expect(day16).toHaveFocus()
+    expect(baseProps.onCellClick).toHaveBeenCalledWith('2025-01-16')
+  })
+
   it('FE-COMP-VACAYMONTHCARD-004: Holiday cell has tooltip with localName', () => {
     const props = {
       ...baseProps,
@@ -72,7 +86,7 @@ describe('VacayMonthCard', () => {
     // January 5, 2025 is a Sunday (getDay() === 0), which is in weekendDays [0, 6]
     // isBlocked = weekend && blockWeekends = true
     const daySpan = screen.getByText('5')
-    const cell = daySpan.closest('div') as HTMLElement
+    const cell = daySpan.closest('[data-date]') as HTMLElement
     expect(cell.style.cursor).toBe('default')
   })
 
@@ -85,10 +99,10 @@ describe('VacayMonthCard', () => {
     render(<VacayMonthCard {...props} />)
     // January 10, 2025 is a Friday (not a weekend)
     const daySpan = screen.getByText('10')
-    const cell = daySpan.closest('div') as HTMLElement
+    const cell = daySpan.closest('[data-date]') as HTMLElement
     // Company overlay is a direct child div with amber background
-    const overlayDivs = Array.from(cell.querySelectorAll(':scope > div')) as HTMLElement[]
-    const companyOverlay = overlayDivs.find(el => el.className.includes('bg-[rgba(245,158,11'))
+    const overlays = Array.from(cell.querySelectorAll(':scope > span')) as HTMLElement[]
+    const companyOverlay = overlays.find(el => el.style.background.includes('rgba(245, 158, 11'))
     expect(companyOverlay).toBeTruthy()
   })
 
@@ -99,10 +113,10 @@ describe('VacayMonthCard', () => {
     }
     render(<VacayMonthCard {...props} />)
     const daySpan = screen.getByText('15')
-    const cell = daySpan.closest('div') as HTMLElement
+    const cell = daySpan.closest('[data-date]') as HTMLElement
     // The overlay div should have opacity: 0.4 and a backgroundColor set
-    const overlayDivs = Array.from(cell.querySelectorAll(':scope > div')) as HTMLElement[]
-    const colorOverlay = overlayDivs.find(
+    const overlays = Array.from(cell.querySelectorAll(':scope > span')) as HTMLElement[]
+    const colorOverlay = overlays.find(
       el => el.style.opacity === '0.4' && el.style.backgroundColor !== '',
     )
     expect(colorOverlay).toBeTruthy()
@@ -153,9 +167,9 @@ describe('VacayMonthCard', () => {
     }
     render(<VacayMonthCard {...props} />)
     const daySpan = screen.getByText('15')
-    const cell = daySpan.closest('div') as HTMLElement
-    const overlayDivs = Array.from(cell.querySelectorAll(':scope > div')) as HTMLElement[]
-    const gradientOverlay = overlayDivs.find(
+    const cell = daySpan.closest('[data-date]') as HTMLElement
+    const overlays = Array.from(cell.querySelectorAll(':scope > span')) as HTMLElement[]
+    const gradientOverlay = overlays.find(
       el => el.style.opacity === '0.4' && el.style.background.includes('linear-gradient'),
     )
     expect(gradientOverlay).toBeTruthy()
@@ -175,11 +189,11 @@ describe('VacayMonthCard', () => {
     }
     render(<VacayMonthCard {...props} />)
     const daySpan = screen.getByText('15')
-    const cell = daySpan.closest('div') as HTMLElement
+    const cell = daySpan.closest('[data-date]') as HTMLElement
     // Quadrant overlay wrapper div (4 entries) has 4 sub-divs
-    const wrapperDiv = cell.querySelector(':scope > div') as HTMLElement
-    expect(wrapperDiv).toBeTruthy()
-    const quadrants = wrapperDiv.querySelectorAll(':scope > div')
+    const overlay = cell.querySelector(':scope > span') as HTMLElement
+    expect(overlay).toBeTruthy()
+    const quadrants = overlay.querySelectorAll(':scope > span')
     expect(quadrants).toHaveLength(4)
   })
 })

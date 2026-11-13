@@ -38,7 +38,8 @@ export const DEFAULT_SETTINGS: Settings = {
   time_format: '12h',
   show_place_description: false,
   optimize_from_accommodation: true,
-  map_provider: 'leaflet',
+  // MapLibre/OpenFreeMap can honor account language; Leaflet OSM raster cannot.
+  map_provider: 'maplibre-gl',
   map_poi_pill_enabled: true,
   mapbox_access_token: '',
   mapbox_style: 'mapbox://styles/mapbox/standard',

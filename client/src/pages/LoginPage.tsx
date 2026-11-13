@@ -79,6 +79,13 @@ export default function LoginPage(): React.ReactElement {
     !mfaStep &&
     !passwordChangeStep
   );
+  const loadingAnnouncement = passwordChangeStep
+    ? t('settings.updatePassword')
+    : mode === 'register'
+      ? t('login.creating')
+      : mode === 'login' && mfaStep
+        ? t('login.mfaVerify')
+        : t('login.signingIn');
 
   const inputBase: React.CSSProperties = {
     width: '100%',
@@ -697,6 +704,7 @@ export default function LoginPage(): React.ReactElement {
                 </p>
                 {error && (
                   <div
+                    role="alert"
                     style={{
                       padding: '10px 14px',
                       background: '#fef2f2',
@@ -774,9 +782,10 @@ export default function LoginPage(): React.ReactElement {
                         : t('login.subtitle')}
                 </p>
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <form onSubmit={handleSubmit} aria-busy={isLoading} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {error && (
                     <div
+                      role="alert"
                       style={{
                         padding: '10px 14px',
                         background: '#fef2f2',
@@ -836,6 +845,7 @@ export default function LoginPage(): React.ReactElement {
                       </div>
                       <div>
                         <label
+                          htmlFor="login-new-password"
                           style={{
                             display: 'block',
                             fontSize: 'calc(12.5px * var(--fs-scale-body, 1))',
@@ -859,6 +869,7 @@ export default function LoginPage(): React.ReactElement {
                             }}
                           />
                           <input
+                            id="login-new-password"
                             type="password"
                             value={newPassword}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
@@ -874,6 +885,7 @@ export default function LoginPage(): React.ReactElement {
                       </div>
                       <div>
                         <label
+                          htmlFor="login-confirm-password"
                           style={{
                             display: 'block',
                             fontSize: 'calc(12.5px * var(--fs-scale-body, 1))',
@@ -897,6 +909,7 @@ export default function LoginPage(): React.ReactElement {
                             }}
                           />
                           <input
+                            id="login-confirm-password"
                             type="password"
                             value={confirmPassword}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
@@ -916,6 +929,7 @@ export default function LoginPage(): React.ReactElement {
                   {mode === 'login' && mfaStep && !passwordChangeStep && (
                     <div>
                       <label
+                        htmlFor="login-mfa-code"
                         style={{
                           display: 'block',
                           fontSize: 'calc(12.5px * var(--fs-scale-body, 1))',
@@ -939,6 +953,7 @@ export default function LoginPage(): React.ReactElement {
                           }}
                         />
                         <input
+                          id="login-mfa-code"
                           type="text"
                           inputMode="text"
                           autoComplete="one-time-code"
@@ -985,6 +1000,7 @@ export default function LoginPage(): React.ReactElement {
                   {mode === 'register' && !passwordChangeStep && (
                     <div>
                       <label
+                        htmlFor="login-username"
                         style={{
                           display: 'block',
                           fontSize: 'calc(12.5px * var(--fs-scale-body, 1))',
@@ -1008,6 +1024,7 @@ export default function LoginPage(): React.ReactElement {
                           }}
                         />
                         <input
+                          id="login-username"
                           type="text"
                           value={username}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
@@ -1025,6 +1042,7 @@ export default function LoginPage(): React.ReactElement {
                   {!(mode === 'login' && mfaStep) && !passwordChangeStep && (
                     <div>
                       <label
+                        htmlFor="login-email"
                         style={{
                           display: 'block',
                           fontSize: 'calc(12.5px * var(--fs-scale-body, 1))',
@@ -1048,6 +1066,7 @@ export default function LoginPage(): React.ReactElement {
                           }}
                         />
                         <input
+                          id="login-email"
                           type="email"
                           value={email}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
@@ -1065,6 +1084,7 @@ export default function LoginPage(): React.ReactElement {
                   {!(mode === 'login' && mfaStep) && !passwordChangeStep && (
                     <div>
                       <label
+                        htmlFor="login-password"
                         style={{
                           display: 'block',
                           fontSize: 'calc(12.5px * var(--fs-scale-body, 1))',
@@ -1088,6 +1108,7 @@ export default function LoginPage(): React.ReactElement {
                           }}
                         />
                         <input
+                          id="login-password"
                           type={showPassword ? 'text' : 'password'}
                           value={password}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
@@ -1235,13 +1256,7 @@ export default function LoginPage(): React.ReactElement {
                             animation: 'spin 0.7s linear infinite',
                           }}
                         />
-                        {passwordChangeStep
-                          ? t('settings.updatePassword')
-                          : mode === 'register'
-                            ? t('login.creating')
-                            : mode === 'login' && mfaStep
-                              ? t('login.mfaVerify')
-                              : t('login.signingIn')}
+                        {loadingAnnouncement}
                       </>
                     ) : (
                       <>
@@ -1256,10 +1271,15 @@ export default function LoginPage(): React.ReactElement {
                       </>
                     )}
                   </button>
+                  <span role="status" className="sr-only">{isLoading ? loadingAnnouncement : ''}</span>
                 </form>
 
                 {/* Toggle login/register */}
-                {showRegisterOption && appConfig?.has_users && !appConfig?.demo_mode && !passwordChangeStep && (
+                {showRegisterOption &&
+                  appConfig?.has_users &&
+                  !appConfig?.demo_mode &&
+                  !passwordChangeStep &&
+                  !mfaStep && (
                   <p
                     style={{
                       textAlign: 'center',
@@ -1296,7 +1316,11 @@ export default function LoginPage(): React.ReactElement {
           </div>
 
           {/* OIDC / SSO login button (only when OIDC is configured, oidc_login enabled, not in oidc-only mode) */}
-          {appConfig?.oidc_configured && appConfig?.oidc_login && !oidcOnly && (
+          {appConfig?.oidc_configured &&
+            appConfig?.oidc_login &&
+            !oidcOnly &&
+            !mfaStep &&
+            !passwordChangeStep && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
                 <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
@@ -1344,7 +1368,7 @@ export default function LoginPage(): React.ReactElement {
           )}
 
           {/* Passkey login button (instance toggle on + a usable RP ID resolves) */}
-          {passkeyAvailable && (
+          {passkeyAvailable && !mfaStep && !passwordChangeStep && (
             <>
               {!oidcButtonShown && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>

@@ -79,6 +79,63 @@ describe('reorderDays', () => {
     expect(r.reservation_time).toBe('2026-03-01T19:00');
   });
 
+  it('preserves local time and offset when a booking moves across a DST boundary', () => {
+    const trip = createTrip(testDb, userId);
+    const d1 = createDay(testDb, trip.id, { date: '2026-03-08' });
+    const d2 = createDay(testDb, trip.id, { date: '2026-03-09' });
+    const d3 = createDay(testDb, trip.id, { date: '2026-03-10' });
+    const res = createReservation(testDb, trip.id, { day_id: d2.id, type: 'flight' });
+    testDb.prepare('UPDATE reservations SET reservation_time = ? WHERE id = ?')
+      .run('2026-03-09T01:30:00-05:00', res.id);
+
+    reorderDays(trip.id, [d2.id, d1.id, d3.id]);
+
+    const row = testDb.prepare('SELECT reservation_time FROM reservations WHERE id = ?').get(res.id) as { reservation_time: string };
+    expect(row.reservation_time).toBe('2026-03-08T01:30:00-05:00');
+  });
+
+  it('moves flight endpoint local dates by the same calendar delta without timezone conversion', () => {
+    const trip = createTrip(testDb, userId);
+    const d1 = createDay(testDb, trip.id, { date: '2026-12-30' });
+    const d2 = createDay(testDb, trip.id, { date: '2026-12-31' });
+    const d3 = createDay(testDb, trip.id, { date: '2027-01-01' });
+    const res = createReservation(testDb, trip.id, { day_id: d2.id, type: 'flight' });
+    testDb.prepare('UPDATE reservations SET reservation_time = ? WHERE id = ?').run('2026-12-31T23:30:00+14:00', res.id);
+    testDb.prepare(`INSERT INTO reservation_endpoints
+      (reservation_id, role, sequence, name, lat, lng, timezone, local_date)
+      VALUES (?, 'departure', 0, 'Apia', -13.83, -171.76, 'Pacific/Apia', '2026-12-31')`).run(res.id);
+    testDb.prepare(`INSERT INTO reservation_endpoints
+      (reservation_id, role, sequence, name, lat, lng, timezone, local_date)
+      VALUES (?, 'arrival', 1, 'Honolulu', 21.31, -157.86, 'Pacific/Honolulu', '2026-12-30')`).run(res.id);
+
+    reorderDays(trip.id, [d2.id, d1.id, d3.id]);
+
+    const dates = testDb.prepare('SELECT local_date FROM reservation_endpoints WHERE reservation_id = ? ORDER BY sequence').all(res.id) as { local_date: string }[];
+    expect(dates.map(row => row.local_date)).toEqual(['2026-12-30', '2026-12-29']);
+  });
+
+  it('keeps a cross-midnight activity and multiple-city assignments attached to their day row', () => {
+    const trip = createTrip(testDb, userId);
+    const d1 = createDay(testDb, trip.id, { date: '2026-06-01' });
+    const d2 = createDay(testDb, trip.id, { date: '2026-06-02' });
+    const overnight = createPlace(testDb, trip.id, { name: 'Overnight train' });
+    const nextCity = createPlace(testDb, trip.id, { name: 'Breakfast in next city' });
+    testDb.prepare('UPDATE places SET place_time = ?, end_time = ? WHERE id = ?').run('23:30', '00:30', overnight.id);
+    createDayAssignment(testDb, d1.id, overnight.id);
+    createDayAssignment(testDb, d1.id, nextCity.id);
+
+    reorderDays(trip.id, [d2.id, d1.id]);
+
+    const assignments = testDb.prepare(`
+      SELECT p.name, p.place_time, p.end_time FROM day_assignments da
+      JOIN places p ON p.id = da.place_id WHERE da.day_id = ? ORDER BY da.order_index
+    `).all(d1.id) as { name: string; place_time: string; end_time: string }[];
+    expect(assignments).toEqual([
+      { name: 'Overnight train', place_time: '23:30', end_time: '00:30' },
+      { name: 'Breakfast in next city', place_time: null, end_time: null },
+    ]);
+  });
+
   it('rejects an orderedIds list that is not a permutation of the trip days', () => {
     const trip = createTrip(testDb, userId, { start_date: '2026-03-01', end_date: '2026-03-03' });
     const [d1, d2] = orderedDays(trip.id);

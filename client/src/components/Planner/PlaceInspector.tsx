@@ -14,6 +14,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useAddonStore } from '../../store/addonStore'
 import { useSaveToCollectionStore } from '../../store/saveToCollectionStore'
 import { getCategoryIcon } from '../shared/categoryIcons'
+import { getUiCategoryColor } from '../Map/pinColors'
 import { useToast } from '../shared/Toast'
 import { useTranslation, translateApiError } from '../../i18n'
 import { usePluginStore } from '../../store/pluginStore'
@@ -383,7 +384,7 @@ export default function PlaceInspector({
                 <div key={`${p.pluginId}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, fontSize: 'calc(12.5px * var(--fs-scale-body, 1))' }}>
                   <span className="text-content-secondary" style={{ fontWeight: 500, flexShrink: 0 }}>{it.label}</span>
                   {it.url
-                    ? <a href={it.url} target="_blank" rel="noreferrer noopener" className="text-accent" style={{ textDecoration: 'none', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.value ?? '↗'}</a>
+                    ? <a href={it.url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--link, #2563eb)', textDecoration: 'underline', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.value ?? '↗'}</a>
                     : <span className="text-content-muted" style={{ textAlign: 'right' }}>{it.value}</span>}
                 </div>
               )))}
@@ -501,8 +502,8 @@ interface ActionButtonProps {
 export function ActionButton({ onClick, variant, icon, label }: ActionButtonProps) {
   const base = {
     primary: { background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', hoverBg: 'var(--text-secondary)' },
-    ghost: { background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: 'none', hoverBg: 'var(--bg-tertiary)' },
-    danger: { background: 'rgba(239,68,68,0.08)', color: '#dc2626', border: 'none', hoverBg: 'rgba(239,68,68,0.16)' },
+    ghost: { background: 'var(--bg-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)', hoverBg: 'var(--bg-tertiary)' },
+    danger: { background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid color-mix(in srgb, var(--danger) 40%, transparent)', hoverBg: 'color-mix(in srgb, var(--danger) 30%, transparent)' },
   }
   const s = base[variant] || base.ghost
   return (
@@ -694,16 +695,17 @@ function PlaceInspectorHeader({ openNow, place, category, t, editingName, nameIn
               )}
               {category && (() => {
                 const CatIcon = getCategoryIcon(category.icon)
+                const chipColor = getUiCategoryColor(category.name, category.color)
                 return (
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 500,
-                    color: category.color || '#6b7280',
-                    background: category.color ? `${category.color}18` : 'rgba(0,0,0,0.06)',
-                    border: `1px solid ${category.color ? `${category.color}30` : 'transparent'}`,
+                    fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    background: 'var(--bg-hover)',
+                    border: '1px solid var(--border-primary)',
                     padding: '2px 8px', borderRadius: 99,
                   }}>
-                    <CatIcon size={10} />
+                    <CatIcon size={11} color={chipColor} strokeWidth={2.2} />
                     <span className="hidden sm:inline">{category.name}</span>
                   </span>
                 )

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   OPENSTREETMAP_TILE_URL,
+  atlasMapBackground,
   atlasLeafletTileUrl,
   atlasMaxBounds,
   atlasUnvisitedLandFill,
@@ -11,6 +12,11 @@ import {
 } from './leafletTiles'
 
 describe('leafletTiles', () => {
+  it('matches Atlas ocean to the light trip-map water tone in both app themes', () => {
+    expect(atlasMapBackground(false)).toBe('#9fb4f5')
+    expect(atlasMapBackground(true)).toBe('#9fb4f5')
+  })
+
   it('treats OSM as free', () => {
     expect(isFreeLeafletTileUrl(OPENSTREETMAP_TILE_URL)).toBe(true)
     expect(resolveLeafletTileUrl(OPENSTREETMAP_TILE_URL)).toBe(OPENSTREETMAP_TILE_URL)
@@ -38,7 +44,8 @@ describe('leafletTiles', () => {
   })
 
   it('paints unvisited land as solid fills without a raster basemap', () => {
-    expect(atlasUnvisitedLandFill(true).fillColor).toBe('#ffffff')
+    expect(atlasUnvisitedLandFill(true).fillColor).toBe('#d4d4d8')
+    expect(atlasUnvisitedLandFill(true).color).toBe('#94a3b8')
     expect(atlasUnvisitedLandFill(true).fillOpacity).toBeGreaterThan(0.8)
     expect(atlasUnvisitedLandFill(false).fillColor).toBe('#f8fafc')
     expect(atlasUnvisitedLandFill(false).fillOpacity).toBeGreaterThan(0.8)

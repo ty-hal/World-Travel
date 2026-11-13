@@ -29,7 +29,7 @@ vi.mock('../../../src/websocket', () => ({ broadcastToUser: vi.fn() }));
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
 import { resetTestDb } from '../../helpers/test-db';
-import { createUser } from '../../helpers/factories';
+import { createTrip, createUser } from '../../helpers/factories';
 
 import {
   getOwnPlan,
@@ -53,6 +53,7 @@ import {
   toggleCompanyHoliday,
   getStats,
   applyHolidayCalendars,
+  getHolidays,
 } from '../../../src/services/vacayService';
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -64,12 +65,117 @@ beforeAll(() => {
 
 beforeEach(() => {
   resetTestDb(testDb);
+  testDb.exec('DELETE FROM seasonal_data_cache; DELETE FROM seasonal_provider_state;');
   // Stub fetch with empty holiday list by default so updatePlan / applyHolidayCalendars
   // never makes real network calls.
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: true,
     json: async () => [],
   }));
+});
+
+describe('persistent seasonal provider cache', () => {
+  it('normalizes and persists Nager holidays so a repeat lookup makes no provider request', async () => {
+    const response = [{ date: '2027-01-01', name: "New Year's Day", nationalHoliday: true, subdivisionCodes: null, holidayTypes: ['Public'] }];
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => response, headers: { get: () => null } });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = await getHolidays('2027', 'JP');
+    const second = await getHolidays('2027', 'JP');
+
+    expect(first.data).toEqual([{ date: '2027-01-01', name: "New Year's Day", localName: "New Year's Day", global: true, counties: null }]);
+    expect(second).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(testDb.prepare('SELECT cache_key FROM seasonal_data_cache').get()).toEqual({ cache_key: 'nager:holidays:JP:2027:v4' });
+  });
+
+  it('uses the cached keyless OpenHolidays source for Italy', async () => {
+    const response = [
+      { startDate: '2026-01-01', endDate: '2026-01-01', nationwide: true, name: [{ language: 'EN', text: "New Year's Day" }] },
+      { startDate: '2026-02-01', endDate: '2026-02-01', nationwide: false, name: [{ language: 'IT', text: 'Local holiday' }], subdivisions: [{ code: 'IT-XX' }] },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => response, headers: { get: () => null } });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = await getHolidays('2026', 'IT');
+    const second = await getHolidays('2026', 'IT');
+
+    expect(first).toEqual({
+      data: [
+        { date: '2026-01-01', name: "New Year's Day", localName: "New Year's Day", global: true, counties: null },
+        { date: '2026-02-01', name: 'Local holiday', localName: 'Local holiday', global: false, counties: ['IT-XX'] },
+      ],
+      source: 'OpenHolidays',
+    });
+    expect(second).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('openholidaysapi.org/PublicHolidays?');
+    expect(testDb.prepare('SELECT cache_key FROM seasonal_data_cache').get()).toEqual({ cache_key: 'openholidays:holidays:IT:2026:v1' });
+  });
+
+  it('loads all uncovered TourismAPI calendars with one free-key request and caches the year', async () => {
+    vi.stubEnv('TOURISM_API_KEY', 'test-key');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => ({ data: [
+        { country: 'IN', date: '2026-01-26', name: 'Republic Day', local_name: 'Republic Day', national: true },
+        { country: 'IN', date: '2026-02-01', name: 'Local event', national: false },
+        { country: 'JO', date: '2026-05-25', name: 'Independence Day', national: true },
+      ] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const [india, jordan] = await Promise.all([getHolidays('2026', 'IN'), getHolidays('2026', 'JO')]);
+
+    expect(india).toEqual({ data: [{ date: '2026-01-26', name: 'Republic Day', localName: 'Republic Day', global: true, counties: null }], source: 'TourismAPI' });
+    expect(jordan).toEqual({ data: [{ date: '2026-05-25', name: 'Independence Day', localName: 'Independence Day', global: true, counties: null }], source: 'TourismAPI' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.searchParams.get('country')).toContain('IN,JO');
+    expect(url.searchParams.get('from')).toBe('2026-01');
+    const cache = testDb.prepare('SELECT cache_key, fetched_at, expires_at FROM seasonal_data_cache').get() as { cache_key: string; fetched_at: number; expires_at: number };
+    expect(cache.cache_key).toBe('tourismapi:holidays:2026:v1');
+    expect(cache.expires_at - cache.fetched_at).toBe(365 * 24 * 60 * 60 * 1_000);
+  });
+
+  it('does not call Nager for uncovered calendars when the TourismAPI key is absent', async () => {
+    vi.stubEnv('TOURISM_API_KEY', '');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await getHolidays('2026', 'TH')).toMatchObject({ error: 'TourismAPI free key is not configured', source: 'TourismAPI' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('canonicalizes GISCO Greek and British country codes before Nager lookup', async () => {
+    const fetchMock = vi.mocked(fetch);
+    testDb.prepare('INSERT INTO seasonal_data_cache (cache_key, payload_json, fetched_at, expires_at) VALUES (?, ?, ?, ?)')
+      .run('nager:holidays:EL:2027:v4', JSON.stringify({ __seasonalError: 'Provider returned HTTP 404' }), Date.now(), Date.now() + 60_000);
+    await getHolidays('2027', 'EL');
+    const greekUrl = String(fetchMock.mock.calls[0][0]);
+    expect(greekUrl).toContain('/GR/2027');
+    expect(testDb.prepare('SELECT cache_key FROM seasonal_data_cache').get()).toEqual({ cache_key: 'nager:holidays:GR:2027:v4' });
+    expect(testDb.prepare('SELECT COUNT(*) AS count FROM seasonal_data_cache WHERE cache_key LIKE \'nager:holidays:EL:%\'').get()).toEqual({ count: 0 });
+    await getHolidays('2027', 'UK');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/GB/2027');
+  });
+
+  it('does not retry a failed provider request immediately and rejects malformed holiday keys', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429, headers: { get: () => '3600' } });
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await getHolidays('2027', 'JP')).toMatchObject({ error: 'Provider returned HTTP 429' });
+    expect(await getHolidays('2027', 'JP')).toMatchObject({ error: 'Provider temporarily cooling down' });
+    expect(await getHolidays('20x7', 'JP')).toMatchObject({ error: 'Invalid holiday year or country code' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops holiday lookups at the shared UTC daily request budget', async () => {
+    testDb.prepare(`INSERT INTO seasonal_provider_state (provider, day, request_count) VALUES (?, ?, ?)`)
+      .run('nager-date', new Date().toISOString().slice(0, 10), 40);
+    const fetchMock = vi.mocked(fetch);
+    expect(await getHolidays('2027', 'FR')).toMatchObject({ error: 'Provider daily request budget reached' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 afterAll(() => {
@@ -700,6 +806,49 @@ describe('getStats', () => {
 
     expect(stats[0].used).toBe(2);
     expect(stats[0].remaining).toBe(28);
+  });
+
+  it('VACAY-SVC-048: used counts only workdays that are not company holidays', () => {
+    const { user, plan } = setupUserWithPlan();
+    const yr = new Date().getFullYear();
+    const dates = Array.from({ length: 30 }, (_, index) => {
+      const day = index + 1;
+      const date = new Date(yr, 8, day);
+      return { day, weekday: date.getDay() };
+    });
+    const monday = dates.find(date => date.weekday === 1)!;
+    const tuesday = dates.find(date => date.weekday === 2)!;
+    const saturday = dates.find(date => date.weekday === 6)!;
+    const sunday = dates.find(date => date.weekday === 0)!;
+    const iso = (day: number) => `${yr}-09-${String(day).padStart(2, '0')}`;
+
+    for (const { day } of [monday, tuesday, saturday, sunday]) toggleEntry(user.id, plan.id, iso(day), undefined);
+    testDb.prepare('INSERT INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)')
+      .run(plan.id, iso(tuesday.day), 'Company holiday');
+
+    const stats = getStats(plan.id, yr);
+    expect(stats[0].used).toBe(1);
+    expect(stats[0].remaining).toBe(29);
+  });
+
+  it('VACAY-SVC-050: counts trip weekdays as PTO and deduplicates planned entries', () => {
+    const { user, plan } = setupUserWithPlan();
+    const yr = new Date().getFullYear();
+    const start = `${yr}-09-18`;
+    const end = `${yr}-10-09`;
+    createTrip(testDb, user.id, { start_date: start, end_date: end });
+    toggleEntry(user.id, plan.id, `${yr}-09-21`, undefined);
+    testDb.prepare('INSERT INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)')
+      .run(plan.id, `${yr}-09-21`, 'Company holiday');
+
+    const stats = getStats(plan.id, yr);
+    const weekdays = Array.from({ length: 22 }, (_, index) => {
+      const date = new Date(`${start}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + index);
+      return date.getUTCDay();
+    }).filter(day => day !== 0 && day !== 6).length;
+
+    expect(stats[0].used).toBe(weekdays - 1);
   });
 });
 

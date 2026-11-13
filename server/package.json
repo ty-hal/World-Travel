@@ -23,7 +23,8 @@
     "test:integration": "vitest run tests/integration",
     "test:ws": "vitest run tests/websocket",
     "test:e2e": "vitest run tests/e2e",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "beli:link-local": "tsx scripts/link-beli-local.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

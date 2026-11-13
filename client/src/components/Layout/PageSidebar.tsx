@@ -61,7 +61,7 @@ export default function PageSidebar({
       >
         <button
           onClick={() => setMobileOpen(true)}
-          className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--bg-hover)] text-content"
+          className="w-11 h-11 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--bg-hover)] text-content"
           aria-label="Open navigation"
         >
           <Menu size={18} />
@@ -69,7 +69,7 @@ export default function PageSidebar({
         <div className="flex items-center gap-2 text-sm font-semibold text-content">
           {activeLabel}
         </div>
-        <div className="w-9" />
+        <div className="w-11" />
       </div>
 
       {/* Desktop sidebar (always visible on lg) */}
@@ -93,12 +93,12 @@ export default function PageSidebar({
       {mobileOpen && (
         <>
           <div
-            className="lg:hidden fixed inset-0 z-40 bg-[rgba(0,0,0,0.35)]"
+            className="lg:hidden fixed inset-0 z-[70] bg-[rgba(0,0,0,0.35)]"
             onClick={() => setMobileOpen(false)}
           />
           <aside
             ref={drawerRef}
-            className="lg:hidden fixed top-0 left-0 bottom-0 z-50 flex flex-col shadow-2xl bg-surface-secondary"
+            className="lg:hidden fixed top-0 left-0 bottom-0 z-[80] flex flex-col shadow-2xl bg-surface-secondary"
             style={{
               width: 280,
               padding: '18px 14px',
@@ -112,7 +112,7 @@ export default function PageSidebar({
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--bg-hover)] text-content"
+                className="w-11 h-11 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--bg-hover)] text-content"
                 aria-label="Close navigation"
               >
                 <X size={16} />
@@ -179,7 +179,7 @@ function SidebarInner({
                 )}
                 <button
                   onClick={() => onTabChange(tab.id)}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-colors ${active ? 'text-content font-semibold' : 'text-content-secondary font-medium'}`}
+                  className={`min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-colors ${active ? 'text-content font-semibold' : 'text-content-secondary font-medium'}`}
                   style={{
                     background: active ? 'var(--bg-hover)' : 'transparent',
                   }}

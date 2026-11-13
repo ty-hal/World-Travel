@@ -1,6 +1,7 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react'
 import L from 'leaflet'
 import { useSettingsStore } from '../../store/settingsStore'
+import type { JourneyTrack } from '@trek/shared'
 
 export interface MapMarkerItem {
   id: string
@@ -33,6 +34,7 @@ interface MapEntry {
 interface Props {
   checkins: any[]
   entries: MapEntry[]
+  tracks?: JourneyTrack[]
   trail?: { lat: number; lng: number }[]
   height?: number
   dark?: boolean
@@ -85,7 +87,7 @@ function markerSvg(dayColor: string, dayLabel: number, highlighted: boolean): st
 const EMPTY_TRAIL: { lat: number; lng: number }[] = []
 
 const JourneyMap = forwardRef<JourneyMapHandle, Props>(function JourneyMap(
-  { entries, trail, height = 220, dark, activeMarkerId, onMarkerClick, fullScreen, paddingBottom },
+  { entries, tracks = [], trail, height = 220, dark, activeMarkerId, onMarkerClick, fullScreen, paddingBottom },
   ref
 ) {
   const stableTrail = trail || EMPTY_TRAIL
@@ -198,6 +200,15 @@ const JourneyMap = forwardRef<JourneyMapHandle, Props>(function JourneyMap(
       coords.forEach(c => allCoords.push(c))
     }
 
+    tracks.forEach(track => {
+      if (track.points.length < 2) return
+      const coords = track.points.map(([lat, lng]) => [lat, lng] as L.LatLngTuple)
+      L.polyline(coords, {
+        color: track.color || '#6366f1', weight: 3, opacity: 0.8, lineCap: 'round', lineJoin: 'round',
+      }).addTo(map)
+      coords.forEach(c => allCoords.push(c))
+    })
+
     // route polyline — only in non-fullscreen (sidebar map) mode
     if (!fullScreen && items.length > 1) {
       const routeCoords = items.map(i => [i.lat, i.lng] as L.LatLngTuple)
@@ -259,7 +270,7 @@ const JourneyMap = forwardRef<JourneyMapHandle, Props>(function JourneyMap(
       mapRef.current = null
       markersRef.current.clear()
     }
-  }, [entries, stableTrail, dark, mapTileUrl, fullScreen, paddingBottom])
+  }, [entries, tracks, stableTrail, dark, mapTileUrl, fullScreen, paddingBottom])
 
   // react to activeMarkerId prop changes — runs after map is built
   useEffect(() => {

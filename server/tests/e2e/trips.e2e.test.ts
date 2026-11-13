@@ -36,7 +36,7 @@ vi.mock('../../src/services/permissions', () => ({ checkPermission }));
 
 const { tripSvc } = vi.hoisted(() => ({
   tripSvc: {
-    listTrips: vi.fn(), createTrip: vi.fn(), getTrip: vi.fn(), updateTrip: vi.fn(), deleteTrip: vi.fn(),
+    listTrips: vi.fn(), reorderTrips: vi.fn(), createTrip: vi.fn(), getTrip: vi.fn(), updateTrip: vi.fn(), deleteTrip: vi.fn(),
     getTripRaw: vi.fn(), getTripOwner: vi.fn(), deleteOldCover: vi.fn(), updateCoverImage: vi.fn(),
     listMembers: vi.fn(), addMember: vi.fn(), removeMember: vi.fn(), exportICS: vi.fn(), copyTripById: vi.fn(),
     verifyTripAccess: vi.fn(), NotFoundError: class NotFoundError extends Error {}, ValidationError: class ValidationError extends Error {}, TRIP_SELECT: 'SELECT',

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { dismissSystemNotices, loginViaUi, E2E_ADMIN } from './helpers'
+import { dismissSystemNotices, loginViaUi, E2E_ADMIN, E2E_BASE_URL } from './helpers'
 
 test.describe('login and session', () => {
   test.use({ storageState: undefined })
@@ -21,7 +21,7 @@ test.describe('login and session', () => {
   test('protected API requires authentication', async ({ playwright }) => {
     // `test.use({ storageState: undefined })` clears cookies for page, not request.
     const anon = await playwright.request.newContext({
-      baseURL: 'http://localhost:5173',
+      baseURL: E2E_BASE_URL,
       storageState: undefined,
     })
     const res = await anon.get('/api/trips')

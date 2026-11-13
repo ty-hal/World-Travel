@@ -25,6 +25,12 @@ describe('Modal', () => {
     expect(screen.getByText('My Modal Title')).toBeTruthy();
   });
 
+  it('exposes a named modal dialog and an accessible close button', () => {
+    render(<Modal isOpen onClose={onClose} title="My Modal Title" />);
+    expect(screen.getByRole('dialog', { name: 'My Modal Title' })).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
   it('FE-COMP-MODAL-004: renders children content', () => {
     render(<Modal isOpen={true} onClose={onClose}><p>Hello World</p></Modal>);
     expect(screen.getByText('Hello World')).toBeTruthy();
@@ -52,6 +58,48 @@ describe('Modal', () => {
     render(<Modal isOpen={true} onClose={onClose} title="T" />);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('keeps keyboard focus inside while open and restores focus when closed', () => {
+    const { rerender } = render(
+      <>
+        <button>Open modal</button>
+        <Modal isOpen={false} onClose={onClose} title="Keyboard modal">
+          <button>First action</button>
+          <button>Last action</button>
+        </Modal>
+      </>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Open modal' });
+    trigger.focus();
+    rerender(
+      <>
+        <button>Open modal</button>
+        <Modal isOpen onClose={onClose} title="Keyboard modal">
+          <button>First action</button>
+          <button>Last action</button>
+        </Modal>
+      </>,
+    );
+    const close = screen.getByRole('button', { name: 'Close' });
+    const last = screen.getByRole('button', { name: 'Last action' });
+    expect(close).toHaveFocus();
+
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+    expect(last).toHaveFocus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(close).toHaveFocus();
+
+    rerender(
+      <>
+        <button>Open modal</button>
+        <Modal isOpen={false} onClose={onClose} title="Keyboard modal">
+          <button>First action</button>
+          <button>Last action</button>
+        </Modal>
+      </>,
+    );
+    expect(trigger).toHaveFocus();
   });
 
   it('FE-COMP-MODAL-008: clicking the backdrop calls onClose', () => {

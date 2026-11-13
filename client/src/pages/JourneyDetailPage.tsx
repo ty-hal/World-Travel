@@ -37,7 +37,7 @@ export default function JourneyDetailPage() {
     unlinkTrip, setUnlinkTrip, showSettings, setShowSettings,
     hideSkeletons, setHideSkeletons,
     mapRef, fullMapRef, activeLocationId, handleMarkerClick, handleLocationClick,
-    mapEntries, sidebarMapItems, tripDates, isMobile,
+    mapEntries, sidebarMapItems, tripDates, isMobile, tracks,
     loadJourney, updateEntry, deleteEntry, reorderEntries, uploadPhotos, deletePhoto,
   } = useJourneyDetail()
 
@@ -226,7 +226,7 @@ export default function JourneyDetailPage() {
                       </span>
                     </div>
                     {canEditJourney && (
-                      <button onClick={() => setShowSettings(true)} className="w-[34px] h-[34px] rounded-lg bg-white/15 backdrop-blur flex items-center justify-center hover:bg-white/25"><MoreHorizontal size={14} /></button>
+                      <button onClick={() => setShowSettings(true)} aria-label={t('journey.settings.title')} className="w-[34px] h-[34px] rounded-lg bg-white/15 backdrop-blur flex items-center justify-center hover:bg-white/25"><MoreHorizontal size={14} /></button>
                     )}
                   </div>
                 </div>
@@ -329,7 +329,7 @@ export default function JourneyDetailPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3 text-[11px] text-zinc-500">
-                            <span className="flex items-center gap-1"><MapPin size={12} /> {entries.length} {t('journey.synced.places')}</span>
+                            <span className="flex items-center gap-1"><MapPin size={12} /> {t('journey.synced.places', { count: entries.length })}</span>
                           </div>
                         </div>
 
@@ -428,6 +428,7 @@ export default function JourneyDetailPage() {
                   ref={mapRef}
                   checkins={[]}
                   entries={sidebarMapItems as any}
+                  tracks={tracks}
                   height={9999}
                   activeMarkerId={activeEntryId}
                   onMarkerClick={handleMarkerClick}

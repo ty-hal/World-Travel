@@ -37,6 +37,7 @@ export interface Trip {
   cover_image?: string | null;
   is_archived: number;
   reminder_days: number;
+  sort_order?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -75,6 +76,8 @@ export interface Place {
   website?: string | null;
   phone?: string | null;
   transport_mode?: string;
+  source_collection_id?: number | null;
+  source_collection_place_id?: number | null;
   created_at?: string;
   updated_at?: string;
 }

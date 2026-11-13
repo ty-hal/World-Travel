@@ -7,7 +7,8 @@ export function useResizablePanels() {
   const [leftWidth, setLeftWidth] = useState<number>(() => parseInt(localStorage.getItem('sidebarLeftWidth') || '') || 340)
   const [rightWidth, setRightWidth] = useState<number>(() => parseInt(localStorage.getItem('sidebarRightWidth') || '') || 300)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
-  const [rightCollapsed, setRightCollapsed] = useState(false)
+  // Places / activity sidebar starts collapsed so the map gets the room on trip open.
+  const [rightCollapsed, setRightCollapsed] = useState(true)
   const isResizingLeft = useRef(false)
   const isResizingRight = useRef(false)
 

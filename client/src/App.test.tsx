@@ -79,6 +79,12 @@ describe('RootRedirect', () => {
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
     expect(screen.queryByText('Login')).not.toBeInTheDocument()
   })
+
+  it('FE-COMP-APP-026: persisted authenticated session renders while validation is loading', async () => {
+    seedAuth({ isLoading: true, isAuthenticated: true, user: buildUser() })
+    renderApp('/dashboard')
+    await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument())
+  })
 })
 
 // ── ProtectedRoute — unauthenticated ──────────────────────────────────────────
@@ -178,7 +184,7 @@ describe('Public routes', () => {
   it('FE-COMP-APP-013: /shared/:token is accessible without authentication', async () => {
     seedAuth({ isAuthenticated: false })
     renderApp('/shared/sometoken')
-    expect(screen.getByText('SharedTrip')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('SharedTrip')).toBeInTheDocument())
   })
 
   it('FE-COMP-APP-014: unknown routes redirect to / which then redirects to /login', async () => {
@@ -216,6 +222,14 @@ describe('App — on-mount effects', () => {
     seedAuth()
     renderApp('/')
     await waitFor(() => expect(configCalled).toBe(true))
+  })
+
+  it('FE-COMP-APP-027: config failure is visible without blocking the route', async () => {
+    server.use(http.get('/api/auth/app-config', () => HttpResponse.error()))
+    seedAuth({ isAuthenticated: true, user: buildUser() })
+    renderApp('/dashboard')
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Server settings could not load'))
+    expect(screen.getByText('Dashboard')).toBeInTheDocument()
   })
 
   it('FE-COMP-APP-018: setDemoMode(true) is called when config returns demo_mode: true', async () => {
@@ -302,14 +316,8 @@ describe('Version cache-busting', () => {
     )
   })
 
-  it('FE-COMP-APP-025: calls window.location.reload() when version changes', async () => {
+  it('FE-COMP-APP-025: stores the new version without clearing offline caches when version changes', async () => {
     localStorage.setItem('trek_app_version', '2.9.9')
-    const reload = vi.fn()
-    Object.defineProperty(window, 'location', {
-      writable: true,
-      value: { ...window.location, reload },
-    })
-
     server.use(
       http.get('/api/auth/app-config', () =>
         HttpResponse.json({ version: '2.9.10' })
@@ -317,6 +325,6 @@ describe('Version cache-busting', () => {
     )
     seedAuth()
     renderApp('/')
-    await waitFor(() => expect(reload).toHaveBeenCalled())
+    await waitFor(() => expect(localStorage.getItem('trek_app_version')).toBe('2.9.10'))
   })
 })

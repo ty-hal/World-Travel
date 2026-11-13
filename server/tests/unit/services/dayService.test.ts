@@ -297,6 +297,19 @@ describe('createAccommodation', () => {
     expect(reservation.type).toBe('hotel');
     expect(reservation.status).toBe('confirmed');
   });
+
+  it('DAY-SVC-020b — rolls back the accommodation when linked reservation creation fails', () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const day = createDay(testDb, trip.id) as any;
+    const place = createPlace(testDb, trip.id) as any;
+    testDb.exec(`CREATE TRIGGER fail_hotel_insert BEFORE INSERT ON reservations
+      WHEN NEW.type = 'hotel' BEGIN SELECT RAISE(ABORT, 'reservation failure'); END;`);
+
+    expect(() => createAccommodation(trip.id, { place_id: place.id, start_day_id: day.id, end_day_id: day.id })).toThrow('reservation failure');
+    expect(testDb.prepare('SELECT COUNT(*) AS n FROM day_accommodations WHERE trip_id = ?').get(trip.id)).toEqual({ n: 0 });
+    testDb.exec('DROP TRIGGER fail_hotel_insert');
+  });
 });
 
 // ── getAccommodation ──────────────────────────────────────────────────────────
@@ -360,6 +373,21 @@ describe('updateAccommodation', () => {
     const row = getAccommodation(accom.id, trip.id) as any;
     expect(row.confirmation).toBe('ABC123');
   });
+
+  it('DAY-SVC-024b — rolls back the accommodation when reservation synchronization fails', () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const day = createDay(testDb, trip.id) as any;
+    const place = createPlace(testDb, trip.id) as any;
+    const accom = createAccommodation(trip.id, { place_id: place.id, start_day_id: day.id, end_day_id: day.id }) as any;
+    const existing = getAccommodation(accom.id, trip.id)!;
+    testDb.exec(`CREATE TRIGGER fail_hotel_update BEFORE UPDATE ON reservations
+      WHEN NEW.accommodation_id IS NOT NULL BEGIN SELECT RAISE(ABORT, 'reservation failure'); END;`);
+
+    expect(() => updateAccommodation(accom.id, existing as any, { check_in: '16:00' })).toThrow('reservation failure');
+    expect((getAccommodation(accom.id, trip.id) as any).check_in).toBeNull();
+    testDb.exec('DROP TRIGGER fail_hotel_update');
+  });
 });
 
 // ── deleteAccommodation ───────────────────────────────────────────────────────
@@ -399,5 +427,22 @@ describe('deleteAccommodation', () => {
 
     const result = deleteAccommodation(accom.id);
     expect(result.linkedReservationId).toBeNull();
+  });
+
+  it('DAY-SVC-026b — restores linked budget and accommodation when reservation deletion fails', () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const day = createDay(testDb, trip.id) as any;
+    const place = createPlace(testDb, trip.id) as any;
+    const accom = createAccommodation(trip.id, { place_id: place.id, start_day_id: day.id, end_day_id: day.id }) as any;
+    const reservation = testDb.prepare('SELECT id FROM reservations WHERE accommodation_id = ?').get(accom.id) as { id: number };
+    const budget = testDb.prepare("INSERT INTO budget_items (trip_id, name, reservation_id) VALUES (?, 'Hotel', ?)").run(trip.id, reservation.id);
+    testDb.exec(`CREATE TRIGGER fail_hotel_delete BEFORE DELETE ON reservations
+      WHEN OLD.accommodation_id IS NOT NULL BEGIN SELECT RAISE(ABORT, 'reservation failure'); END;`);
+
+    expect(() => deleteAccommodation(accom.id)).toThrow('reservation failure');
+    expect(getAccommodation(accom.id, trip.id)).toBeDefined();
+    expect(testDb.prepare('SELECT id FROM budget_items WHERE id = ?').get(budget.lastInsertRowid)).toBeDefined();
+    testDb.exec('DROP TRIGGER fail_hotel_delete');
   });
 });

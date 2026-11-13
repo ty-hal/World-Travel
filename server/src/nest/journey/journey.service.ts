@@ -24,6 +24,7 @@ export class JourneyService {
   listJourneys(userId: number) { return svc.listJourneys(userId); }
   createJourney(userId: number, data: Parameters<typeof svc.createJourney>[1]) { return svc.createJourney(userId, data); }
   getJourneyFull(id: number, userId: number) { return svc.getJourneyFull(id, userId); }
+  listJourneyTracks(id: number, userId: number) { return svc.listJourneyTracks(id, userId); }
   updateJourney(id: number, userId: number, data: Parameters<typeof svc.updateJourney>[2]) { return svc.updateJourney(id, userId, data); }
   deleteJourney(id: number, userId: number) { return svc.deleteJourney(id, userId); }
   getSuggestions(userId: number) { return svc.getSuggestions(userId); }

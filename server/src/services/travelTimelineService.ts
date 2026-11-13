@@ -12,7 +12,7 @@ export interface TimelineItem {
 }
 
 /** Account-level chronological feed across trips, visits, and change events. */
-export function getUserTravelTimeline(userId: number, limit = 200): TimelineItem[] {
+export function getUserTravelTimeline(userId: number, limit = 50, offset = 0): { items: TimelineItem[]; nextOffset: number | null } {
   const items: TimelineItem[] = [];
 
   const trips = db.prepare(`
@@ -50,19 +50,20 @@ export function getUserTravelTimeline(userId: number, limit = 200): TimelineItem
   }
 
   const visits = db.prepare(`
-    SELECT country, map_country, first_visited
+    SELECT COALESCE(NULLIF(map_country, ''), country) AS country, MIN(first_visited) AS first_visited
     FROM atlas_visits
     WHERE user_id = ? AND first_visited IS NOT NULL
+    GROUP BY COALESCE(NULLIF(map_country, ''), country)
     ORDER BY first_visited DESC
     LIMIT 60
-  `).all(userId) as Array<{ country: string; map_country: string; first_visited: string }>;
+  `).all(userId) as Array<{ country: string; first_visited: string }>;
 
   for (const visit of visits) {
     items.push({
-      id: `visit-${visit.country}-${visit.first_visited}`,
+      id: `visit-${visit.country}`,
       kind: 'country',
       date: visit.first_visited,
-      title: visit.map_country || visit.country,
+      title: visit.country,
       subtitle: 'Country first visited',
     });
   }
@@ -76,7 +77,7 @@ export function getUserTravelTimeline(userId: number, limit = 200): TimelineItem
        OR EXISTS (SELECT 1 FROM trip_members tm WHERE tm.trip_id = t.id AND tm.user_id = ?)
     ORDER BY e.created_at DESC
     LIMIT ?
-  `).all(userId, userId, userId, Math.min(limit, 120)) as Array<{
+  `).all(userId, userId, userId, Math.min(limit + offset + 1, 500)) as Array<{
     id: number; trip_id: number; action: string; entity_type: string; created_at: string; trip_title: string;
   }>;
 
@@ -94,6 +95,7 @@ export function getUserTravelTimeline(userId: number, limit = 200): TimelineItem
     });
   }
 
-  items.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  return items.slice(0, limit);
+  items.sort((a, b) => String(b.date).localeCompare(String(a.date)) || a.id.localeCompare(b.id));
+  const page = items.slice(offset, offset + limit);
+  return { items: page, nextOffset: items.length > offset + limit ? offset + limit : null };
 }

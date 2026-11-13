@@ -56,16 +56,30 @@ export default function VacayPage(): React.ReactElement {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-4 gap-1" role="group" aria-label={t('vacay.year')}>
           {years.map(y => (
-            <div key={y} onClick={() => setSelectedYear(y)}
-              className={`group relative py-1.5 rounded-lg text-xs font-medium transition-[background-color,color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] text-center cursor-pointer ${y === selectedYear ? 'bg-content text-surface-card' : 'bg-surface-secondary text-content-muted'}`}>
-              {y}
+            <div key={y} className="group relative">
+              <button
+                type="button"
+                aria-pressed={y === selectedYear}
+                onClick={() => setSelectedYear(y)}
+                className={`w-full rounded-lg py-1.5 text-center text-xs font-medium transition-[background-color,color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${y === selectedYear ? 'bg-content text-surface-card' : 'bg-surface-secondary text-content-muted'}`}
+              >
+                {y}
+              </button>
               {years.length > 1 && (
-                <span onClick={e => { e.stopPropagation(); setDeleteYear(y); setShowMobileSidebar(false) }}
-                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[7px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                  <Minus size={7} />
-                </span>
+                <button
+                  type="button"
+                  title={`${t('vacay.removeYear')} ${y}`}
+                  aria-label={`${t('vacay.removeYear')} ${y}`}
+                  onClick={() => {
+                    setDeleteYear(y);
+                    setShowMobileSidebar(false);
+                  }}
+                  className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent group-hover:opacity-100"
+                >
+                  <Minus size={11} aria-hidden="true" />
+                </button>
               )}
             </div>
           ))}
@@ -85,7 +99,7 @@ export default function VacayPage(): React.ReactElement {
           {plan?.holidays_enabled && (plan?.holiday_calendars ?? []).map(cal => (
             <LegendItem key={cal.id} color={cal.color} label={cal.label || cal.region} />
           ))}
-          {plan?.company_holidays_enabled && <LegendItem color="#fde68a" label={t('vacay.companyHoliday')} />}
+          {plan?.company_holidays_enabled && <LegendItem color="#f59e0b" label={t('vacay.companyHoliday')} />}
           {plan?.block_weekends && <LegendItem color="#e5e7eb" label={t('vacay.weekend')} />}
         </div>
       </div>

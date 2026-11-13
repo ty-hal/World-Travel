@@ -157,4 +157,9 @@ describe('CollectionList', () => {
     expect(screen.getByText('Blue Bottle Coffee').closest('.col-lrow')).toBeInTheDocument();
     expect(screen.getByText('Golden Gate Bridge').closest('.col-lrow')).toBeInTheDocument();
   });
+
+  it('names each place row once without repeating its thumbnail alt text', () => {
+    renderList();
+    expect(screen.getByRole('button', { name: 'Blue Bottle Coffee, 123 Market St, San Francisco' })).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,7 @@
 import { Plus, X, Upload, ChevronDown, Check, MapPin } from 'lucide-react'
 import AnimatedSearchIcon from '../shared/AnimatedSearchIcon'
 import { getCategoryIcon } from '../shared/categoryIcons'
+import { getUiCategoryColor } from '../Map/pinColors'
 import Tooltip from '../shared/Tooltip'
 import type { SidebarState } from './usePlacesSidebar'
 
@@ -45,27 +46,27 @@ export function PlacesHeader(S: SidebarState) {
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
         <button
           onClick={() => setFileImportOpen(true)}
-          className="border border-dashed border-edge text-content-faint"
+          className="border border-dashed border-edge text-content-secondary"
           style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            flex: 1, padding: '5px 12px', borderRadius: 8,
-            background: 'none', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 500,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            flex: 1, padding: '7px 12px', borderRadius: 8,
+            background: 'none', fontSize: 'calc(12px * var(--fs-scale-caption, 1))', fontWeight: 550,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
-          <Upload size={11} strokeWidth={2} /> {t('places.importFile')}
+          <Upload size={13} strokeWidth={2} /> {t('places.importFile')}
         </button>
         <button
           onClick={() => setListImportOpen(true)}
-          className="border border-dashed border-edge text-content-faint"
+          className="border border-dashed border-edge text-content-secondary"
           style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            flex: 1, padding: '5px 12px', borderRadius: 8,
-            background: 'none', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 500,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            flex: 1, padding: '7px 12px', borderRadius: 8,
+            background: 'none', fontSize: 'calc(12px * var(--fs-scale-caption, 1))', fontWeight: 550,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
-          <MapPin size={11} strokeWidth={2} /> {t(hasMultipleListImportProviders ? 'places.importList' : 'places.importGoogleList')}
+          <MapPin size={13} strokeWidth={2} /> {t(hasMultipleListImportProviders ? 'places.importList' : 'places.importGoogleList')}
         </button>
       </div>
       <div className="bg-edge" style={{ height: 1, margin: '2px 0 10px' }} />
@@ -112,10 +113,10 @@ export function PlacesHeader(S: SidebarState) {
                   }}
                 >
                   {f.label}
-                  <span className={active ? 'text-accent-text' : 'text-content-faint'} style={{
-                    fontSize: 'calc(9px * var(--fs-scale-caption, 1))', fontWeight: 600, lineHeight: 1,
+                  <span className={active ? 'text-accent-text' : 'text-content-muted'} style={{
+                    fontSize: 'calc(10px * var(--fs-scale-caption, 1))', fontWeight: 650, lineHeight: 1,
                     background: active ? 'color-mix(in srgb, var(--accent-text) 22%, transparent)' : 'var(--bg-tertiary)',
-                    padding: '1px 5px', borderRadius: 99, minWidth: 14, textAlign: 'center',
+                    padding: '2px 6px', borderRadius: 99, minWidth: 16, textAlign: 'center',
                   }}>
                     {counts[f.id]}
                   </span>
@@ -128,7 +129,7 @@ export function PlacesHeader(S: SidebarState) {
 
       {/* Suchfeld */}
       <div style={{ position: 'relative' }}>
-        <AnimatedSearchIcon size={13} strokeWidth={1.8} color="var(--text-faint)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        <AnimatedSearchIcon size={14} strokeWidth={1.8} color="var(--text-muted)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
         <input
           type="text"
           value={search}
@@ -136,14 +137,14 @@ export function PlacesHeader(S: SidebarState) {
           placeholder={t('places.search')}
           className="bg-surface-tertiary text-content"
           style={{
-            width: '100%', padding: '7px 30px 7px 30px', borderRadius: 10,
-            border: 'none', fontSize: 'calc(12px * var(--fs-scale-body, 1))',
+            width: '100%', padding: '8px 32px 8px 32px', borderRadius: 10,
+            border: '1px solid var(--border-primary)', fontSize: 'calc(13px * var(--fs-scale-body, 1))',
             outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
           }}
         />
         {search && (
           <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
-            <X size={12} strokeWidth={2} color="var(--text-faint)" />
+            <X size={13} strokeWidth={2} color="var(--text-muted)" />
           </button>
         )}
       </div>
@@ -225,7 +226,7 @@ export function PlacesHeader(S: SidebarState) {
                       }}>
                         {active && <Check size={10} strokeWidth={3} color="white" />}
                       </div>
-                      <CatIcon size={12} strokeWidth={2} color={c.color || 'var(--text-muted)'} />
+                      <CatIcon size={12} strokeWidth={2} color={getUiCategoryColor(c.name, c.color)} />
                       <span style={{ flex: 1 }}>{c.name}</span>
                     </button>
                   )

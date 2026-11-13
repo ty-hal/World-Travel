@@ -232,6 +232,19 @@ describe('status + updatePlace move', () => {
 // ── copy to trip ─────────────────────────────────────────────────────────────
 
 describe('copyToTrip', () => {
+  it('COLLECTIONS-SVC-019: migrates provenance columns onto an existing places table', () => {
+    const version = (testDb.prepare('SELECT version FROM schema_version').get() as { version: number }).version;
+    testDb.exec('ALTER TABLE places DROP COLUMN source_collection_id');
+    testDb.exec('ALTER TABLE places DROP COLUMN source_collection_place_id');
+    testDb.prepare('UPDATE schema_version SET version = ?').run(version - 1);
+
+    runMigrations(testDb);
+
+    const columns = new Set((testDb.prepare("PRAGMA table_info('places')").all() as Array<{ name: string }>).map(({ name }) => name));
+    expect(columns.has('source_collection_id')).toBe(true);
+    expect(columns.has('source_collection_place_id')).toBe(true);
+  });
+
   it('COLLECTIONS-SVC-020: reduced INSERT (itinerary defaults), skips dups, copies tags', () => {
     const u = createUser(testDb).user;
     createCategory(testDb);
@@ -251,6 +264,8 @@ describe('copyToTrip', () => {
     const inserted = testDb.prepare("SELECT * FROM places WHERE trip_id = ? AND name = 'Colosseum'").get(trip.id) as Record<string, unknown>;
     expect(inserted.reservation_status).toBe('none'); // itinerary column took the table default
     expect(inserted.duration_minutes).toBe(60);
+    expect(inserted.source_collection_id).toBe(col.id);
+    expect(inserted.source_collection_place_id).toBe(p1.id);
     const tagLink = testDb.prepare('SELECT COUNT(*) n FROM place_tags WHERE place_id = ?').get(inserted.id);
     expect(tagLink).toEqual({ n: 1 });
   });

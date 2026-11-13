@@ -9,7 +9,7 @@ import { useHelp } from './help/useHelp'
 
 export default function HelpPage() {
   const { t } = useTranslation()
-  const { page, loading, pageError, query, setQuery, navOpen, setNavOpen, contentRef, activeSlug, filtered } =
+  const { page, loading, pageError, retryPage, query, setQuery, navOpen, setNavOpen, contentRef, activeSlug, filtered } =
     useHelp()
 
   const nav = (
@@ -20,6 +20,7 @@ export default function HelpPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t('help.search')}
+          aria-label={t('help.search')}
           className="w-full bg-surface-tertiary text-content rounded-lg pl-9 pr-3 py-2 text-[13px] outline-none border border-transparent focus:border-edge"
         />
       </div>
@@ -74,20 +75,30 @@ export default function HelpPage() {
           {/* Mobile nav toggle */}
           <button
             onClick={() => setNavOpen(true)}
+            aria-expanded={navOpen}
+            aria-controls="help-navigation-drawer"
             className="lg:hidden inline-flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-surface-card border border-edge text-[13px] font-medium text-content"
           >
             <PanelLeft size={15} /> {t('help.contents')}
           </button>
 
           {loading ? (
-            <div className="flex items-center justify-center py-24 text-content-faint">
+            <div role="status" aria-live="polite" className="flex items-center justify-center py-24 text-content-faint">
               <Loader2 size={22} className="animate-spin" />
+              <span className="sr-only">{t('common.loading')}</span>
             </div>
           ) : pageError ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-24 text-center">
+            <div role="alert" className="flex flex-col items-center justify-center gap-2 py-24 text-center">
               <AlertCircle size={28} className="text-content-faint" />
               <p className="text-[14px] font-semibold text-content">{t('help.errorTitle')}</p>
               <p className="text-[13px] text-content-faint max-w-sm">{t('help.errorBody')}</p>
+              <button
+                type="button"
+                onClick={retryPage}
+                className="mt-2 min-h-[44px] rounded-lg bg-content px-4 text-sm font-semibold text-surface-card hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {t('help.retry')}
+              </button>
             </div>
           ) : page ? (
             <article className="wiki-prose max-w-[1040px]">
@@ -102,6 +113,7 @@ export default function HelpPage() {
         <div className="lg:hidden fixed inset-0 z-[120]" onClick={() => setNavOpen(false)}>
           <div className="absolute inset-0 bg-black/40" />
           <div
+            id="help-navigation-drawer"
             className="absolute left-0 top-0 bottom-0 w-[280px] bg-surface-card p-5 overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -109,7 +121,12 @@ export default function HelpPage() {
               <span className="text-[14px] font-bold text-content flex items-center gap-2">
                 <BookOpen size={16} className="text-accent" /> {t('help.title')}
               </span>
-              <button onClick={() => setNavOpen(false)} className="text-content-faint">
+              <button
+                type="button"
+                onClick={() => setNavOpen(false)}
+                aria-label={t('common.close')}
+                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-content-faint hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+              >
                 <X size={18} />
               </button>
             </div>

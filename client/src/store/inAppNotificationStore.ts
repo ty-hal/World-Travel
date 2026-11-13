@@ -47,6 +47,7 @@ interface NotificationState {
   unreadCount: number
   total: number
   isLoading: boolean
+  loadError: boolean
   hasMore: boolean
 
   fetchNotifications: (reset?: boolean) => Promise<void>
@@ -69,13 +70,14 @@ export const useInAppNotificationStore = create<NotificationState>((set, get) =>
   unreadCount: 0,
   total: 0,
   isLoading: false,
+  loadError: false,
   hasMore: false,
 
   fetchNotifications: async (reset = false) => {
     const { notifications, isLoading } = get()
     if (isLoading) return
 
-    set({ isLoading: true })
+    set({ isLoading: true, loadError: false })
     try {
       const offset = reset ? 0 : notifications.length
       const data = await inAppNotificationsApi.list({ limit: PAGE_SIZE, offset })
@@ -87,9 +89,10 @@ export const useInAppNotificationStore = create<NotificationState>((set, get) =>
         unreadCount: data.unread_count,
         hasMore: (reset ? normalized.length : notifications.length + normalized.length) < data.total,
         isLoading: false,
+        loadError: false,
       })
     } catch {
-      set({ isLoading: false })
+      set({ isLoading: false, loadError: true })
     }
   },
 

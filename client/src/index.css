@@ -33,6 +33,47 @@
 .atlas-bottom-panel {
   border-radius: 18px;
 }
+.atlas-wonders-content {
+  width: min(860px, calc(100vw - 40px));
+  max-width: 860px;
+  box-sizing: border-box;
+}
+@media (max-width: 767px) {
+  .atlas-bottom-panel {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px) + 8px) !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: 45vh;
+    transform: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    border-radius: 16px;
+  }
+  .atlas-bottom-panel > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .atlas-bottom-panel .atlas-sidebar-content {
+    width: 100%;
+    min-width: 0;
+  }
+  .atlas-bottom-panel .atlas-stats-scroll {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 560px) {
+  .atlas-bottom-panel .atlas-wonders-content { width: 100%; }
+  .atlas-bottom-panel .atlas-wonders-toolbar {
+    align-items: stretch !important;
+    flex-wrap: wrap;
+  }
+  .atlas-bottom-panel .atlas-wonders-toolbar > input { flex: 1 1 100%; min-height: 36px; }
+  .atlas-bottom-panel .atlas-wonders-filters { flex: 1 1 100%; }
+  .atlas-bottom-panel .atlas-wonders-filters .atlas-tab { min-height: 44px; }
+  .atlas-bottom-panel .atlas-wonders-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
 .atlas-stat-hero {
   background: #f1f5f9;
 }
@@ -48,10 +89,46 @@
   background: #eef2f7;
   border: 1px solid #d8dee8;
 }
+.atlas-tabbar-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+.atlas-panel-toggle,
+.atlas-panel-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 9px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.atlas-panel-toggle:hover,
+.atlas-panel-expand:hover { background: rgba(100, 116, 139, 0.14); }
+.atlas-panel-toggle:focus-visible,
+.atlas-panel-expand:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+.atlas-panel-expand { margin: 8px; }
+.dark .atlas-panel-toggle:hover,
+.dark .atlas-panel-expand:hover { background: rgba(255, 255, 255, 0.1); }
 .dark .atlas-tabbar {
   background: rgba(0, 0, 0, 0.28);
   border-color: #334155;
 }
+.atlas-wonders-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 18px 8px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+.dark .atlas-wonders-empty { color: #94a3b8; }
 .atlas-tab {
   flex: 1;
   display: flex;
@@ -615,8 +692,9 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
   --bg-selected: #e2e8f0;
   --text-primary: #111827;
   --text-secondary: #374151;
-  --text-muted: #6b7280;
-  --text-faint: #9ca3af;
+  /* Secondary labels (categories, import links) — darker for WCAG-ish contrast on white. */
+  --text-muted: #4b5563;
+  --text-faint: #6b7280;
   --border-primary: #e5e7eb;
   --border-secondary: #f3f4f6;
   --border-faint: rgba(0,0,0,0.06);
@@ -647,6 +725,7 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
   --danger:  #dc2626;  --danger-soft:  #fef2f2;
   --warning: #d97706;  --warning-soft: #fffbeb;
   --info:    #2563eb;  --info-soft:    #eff6ff;
+  --link:    #2563eb;
 
   --bg-inverse: #111827;  --text-inverse: #ffffff;
   --overlay: rgba(0, 0, 0, 0.5);
@@ -675,6 +754,7 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
 
 @media (max-width: 767px) {
   :root { --bottom-nav-h: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .app-route-scroll { padding-bottom: calc(var(--bottom-nav-h) + 8px); }
 }
 
 @media (min-width: 768px) {
@@ -691,9 +771,10 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
   --bg-hover: rgba(255,255,255,0.07);
   --bg-selected: rgba(255,255,255,0.11);
   --text-primary: #f4f4f5;
-  --text-secondary: #d4d4d8;
-  --text-muted: #b8b8c2;
-  --text-faint: #9a9aa5;
+  --text-secondary: #e4e4e7;
+  /* Secondary labels — lighter so they read on dark surfaces / maps. */
+  --text-muted: #d4d4d8;
+  --text-faint: #c4c4ce;
   --border-primary: #334155;
   --border-secondary: #283040;
   --border-faint: rgba(255,255,255,0.1);
@@ -712,9 +793,10 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
   --accent-subtle: rgba(255, 255, 255, 0.08);
 
   --success: #22c55e;  --success-soft: rgba(34, 197, 94, 0.15);
-  --danger:  #ef4444;  --danger-soft:  rgba(239, 68, 68, 0.15);
+  --danger:  #f87171;  --danger-soft:  rgba(248, 113, 113, 0.22);
   --warning: #f59e0b;  --warning-soft: rgba(245, 158, 11, 0.15);
-  --info:    #3b82f6;  --info-soft:    rgba(59, 130, 246, 0.15);
+  --info:    #60a5fa;  --info-soft:    rgba(96, 165, 250, 0.2);
+  --link:    #93c5fd;
 
   --bg-inverse: #e4e4e7;  --text-inverse: #09090b;
   --overlay: rgba(0, 0, 0, 0.6);
@@ -1032,6 +1114,41 @@ body {
 }
 .leaflet-top, .leaflet-bottom {
   z-index: 1 !important;
+}
+
+@media (max-width: 767px) {
+  .maplibregl-ctrl-bottom-left,
+  .maplibregl-ctrl-bottom-right,
+  .mapboxgl-ctrl-bottom-left,
+  .mapboxgl-ctrl-bottom-right,
+  .leaflet-bottom {
+    bottom: calc(var(--bottom-nav-h, 84px) + 8px) !important;
+  }
+
+  .map-with-floating-controls .maplibregl-ctrl-bottom-right,
+  .map-with-floating-controls .mapboxgl-ctrl-bottom-right {
+    bottom: calc(var(--bottom-nav-h, 84px) + 64px) !important;
+  }
+
+  .trip-planner-map .maplibregl-ctrl-bottom-left,
+  .trip-planner-map .maplibregl-ctrl-bottom-right,
+  .trip-planner-map .mapboxgl-ctrl-bottom-left,
+  .trip-planner-map .mapboxgl-ctrl-bottom-right,
+  .trip-planner-map .leaflet-bottom {
+    bottom: calc(var(--bottom-nav-h, 84px) + 64px) !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .map-with-floating-controls .maplibregl-ctrl-bottom-right,
+  .map-with-floating-controls .mapboxgl-ctrl-bottom-right {
+    bottom: 56px !important;
+  }
+}
+
+.map-settings-preview .maplibregl-ctrl-bottom-right,
+.map-settings-preview .mapboxgl-ctrl-bottom-right {
+  bottom: 8px !important;
 }
 
 /* ── iOS-style map tooltip ─────────────────────── */
@@ -1538,6 +1655,7 @@ img[alt="TREK"] {
 .dark .text-slate-500, .dark .text-gray-500 { color: var(--text-muted) !important; }
 .dark .text-slate-400, .dark .text-gray-400 { color: var(--text-faint) !important; }
 .dark .border-slate-200, .dark .border-gray-200, .dark .border-slate-300 { border-color: #27272a !important; }
+html.dark .border-t-slate-900 { border-top-color: var(--text-primary) !important; }
 .dark .border-gray-100, .dark .border-slate-100 { border-color: #1c1c21 !important; }
 .dark .hover\:bg-slate-50:hover, .dark .hover\:bg-gray-50:hover { background-color: #1c1c21 !important; }
 .dark .bg-slate-50\/60 { background-color: transparent !important; }
@@ -1631,24 +1749,26 @@ img[alt="TREK"] {
 .collab-note-md code, .collab-note-md-full code { font-size: 0.9em; padding: 1px 5px; border-radius: 4px; background: var(--bg-secondary); }
 .collab-note-md-full pre { padding: 10px 12px; border-radius: 8px; background: var(--bg-secondary); overflow-x: auto; margin: 0.5em 0; }
 .collab-note-md-full pre code { padding: 0; background: none; }
-.collab-note-md a, .collab-note-md-full a { color: #3b82f6; text-decoration: underline; word-break: break-all; }
+.collab-note-md a, .collab-note-md-full a { color: var(--link, #2563eb); text-decoration: underline; word-break: break-all; }
+html.dark .collab-note-md a, html.dark .collab-note-md-full a,
+.dark .collab-note-md a, .dark .collab-note-md-full a { color: var(--link, #93c5fd); }
 .collab-note-md blockquote, .collab-note-md-full blockquote { border-left: 3px solid var(--border-primary); padding-left: 12px; margin: 0.5em 0; color: var(--text-muted); }
 .collab-note-md-full table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
 .collab-note-md-full th, .collab-note-md-full td { border: 1px solid var(--border-primary); padding: 4px 8px; font-size: 0.9em; }
 .collab-note-md-full hr { border: none; border-top: 1px solid var(--border-primary); margin: 0.8em 0; }
 
-/* Day-plan header action grid (edit / +transport / note / collapse) */
+/* Day-plan header ⋯ overflow menu — reveal on row hover (pointer devices). */
+@media (max-width: 767px) {
+  .dp-day-header-content { padding-right: 36px; }
+}
 .dp-day-actions button {
-  color: var(--text-faint);
-  background: transparent;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  color: var(--text-secondary);
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 .dp-day-actions button:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-/* Reveal the action grid only when hovering the day row (pointer devices).
-   Touch devices (hover: none) keep it visible; the selected day stays visible too. */
 @media (hover: hover) {
   .dp-day-actions { opacity: 0; transition: opacity 0.12s ease; }
   .dp-day-header:hover .dp-day-actions,
@@ -1687,3 +1807,6 @@ img[alt="TREK"] {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 .trek-range::-moz-range-track { height: 5px; border-radius: 999px; background: transparent; }
+
+/* Keep light basemaps at their normal brightness in the dark shell. */
+.dark [data-basemap-tone="light"] .maplibregl-canvas { filter: brightness(1); }

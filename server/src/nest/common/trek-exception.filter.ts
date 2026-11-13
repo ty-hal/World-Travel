@@ -34,6 +34,7 @@ export class TrekExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const body = exception.getResponse();
+      if (status >= 500) console.error('Unhandled HTTP exception:', exception);
 
       if (body && typeof body === 'object') {
         const obj = body as Record<string, unknown>;

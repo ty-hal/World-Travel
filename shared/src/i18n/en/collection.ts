@@ -61,6 +61,7 @@ const collection: TranslationStrings = {
   'collections.empty.text': 'Save places from any trip to build this list.',
   'collections.empty.noMatchTitle': 'No matches',
   'collections.empty.noMatchText': 'No saved places match your filter or search.',
+  'collections.clearFilters': 'Clear filters',
   'collections.empty.firstTitle': 'Start your first collection',
   'collections.empty.firstText': 'Create a list to save places you want to remember across trips.',
 

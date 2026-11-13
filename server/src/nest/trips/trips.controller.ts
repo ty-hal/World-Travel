@@ -30,6 +30,8 @@ import { writeAudit, getClientIp, logInfo } from '../../services/auditLog';
 import { isDemoEmail } from '../../services/demo';
 import { NotFoundError, ValidationError } from '../../services/tripService';
 import { saveUnsplashCover, isUnsplashCoverUrl } from '../../services/unsplashService';
+import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { tripReorderRequestSchema, type TripReorderRequest } from '@trek/shared';
 
 const MAX_COVER_SIZE = 20 * 1024 * 1024;
 const coversDir = path.join(__dirname, '../../../uploads/covers');
@@ -85,6 +87,21 @@ export class TripsController {
       console.error('Unsplash cover image error:', err);
       throw new HttpException({ error: 'Error searching for cover images' }, 500);
     }
+  }
+
+  @Get('recent-activity')
+  recentActivity(@CurrentUser() user: User) {
+    return { items: this.trips.recentActivity(user.id) };
+  }
+
+  @Post('reorder')
+  @HttpCode(200)
+  reorder(
+    @CurrentUser() user: User,
+    @Body(new ZodValidationPipe(tripReorderRequestSchema)) body: TripReorderRequest,
+  ) {
+    this.trips.reorder(user.id, body.orderedIds);
+    return { success: true };
   }
 
   @Post()

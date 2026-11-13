@@ -44,6 +44,7 @@ export default function CollectionList({
             key={place.id}
             ref={active ? selectedRef : undefined}
             role="button"
+            aria-label={`${place.name}${place.address ? `, ${place.address}` : ''}`}
             tabIndex={0}
             onClick={() => (selectMode ? onToggleSelect(place.id) : onOpenPlace(place.id))}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (selectMode) onToggleSelect(place.id); else onOpenPlace(place.id) } }}

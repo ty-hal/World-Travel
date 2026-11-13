@@ -95,12 +95,16 @@ export function createTrip(
 
   // Auto-generate days if dates are provided
   if (overrides.start_date && overrides.end_date) {
-    const start = new Date(overrides.start_date);
-    const end = new Date(overrides.end_date);
+    const toUtcDay = (date: string) => {
+      const [year, month, day] = date.split('-').map(Number);
+      return Date.UTC(year, month - 1, day);
+    };
+    const start = toUtcDay(overrides.start_date);
+    const end = toUtcDay(overrides.end_date);
     const tripId = result.lastInsertRowid as number;
     let dayNumber = 1;
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().slice(0, 10);
+    for (let day = start; day <= end; day += 24 * 60 * 60 * 1000) {
+      const dateStr = new Date(day).toISOString().slice(0, 10);
       db.prepare('INSERT INTO days (trip_id, day_number, date) VALUES (?, ?, ?)').run(tripId, dayNumber++, dateStr);
     }
   }
@@ -651,4 +655,3 @@ export function createTag(
   const result = db.prepare('INSERT INTO tags (user_id, name, color) VALUES (?, ?, ?)').run(userId, name, color);
   return db.prepare('SELECT * FROM tags WHERE id = ?').get(result.lastInsertRowid) as { id: number; user_id: number; name: string; color: string };
 }
-

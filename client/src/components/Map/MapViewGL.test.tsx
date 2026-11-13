@@ -21,6 +21,7 @@ const glMap = vi.hoisted(() => ({
   flyTo: vi.fn(),
   jumpTo: vi.fn(),
   getZoom: vi.fn().mockReturnValue(10),
+  getBearing: vi.fn().mockReturnValue(0),
   addControl: vi.fn(),
   removeControl: vi.fn(),
   remove: vi.fn(),
@@ -114,6 +115,14 @@ vi.mock('maplibre-gl', () => ({
   },
 }))
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}))
+
+// MapViewGL's camera behavior is independent of how its renderer chunk arrives.
+// Keep that loader asynchronous in production, but make this component suite
+// deterministic; useGlRenderer itself is covered by the production build split.
+vi.mock('./useGlRenderer', async () => {
+  const [mapbox, maplibre] = await Promise.all([import('mapbox-gl'), import('maplibre-gl')])
+  return { useGlRenderer: (provider: string) => provider === 'maplibre-gl' ? maplibre.default : mapbox.default }
+})
 
 vi.mock('./mapboxSetup', () => ({
   isStandardFamily: vi.fn(() => false),
@@ -322,7 +331,10 @@ describe('MapViewGL', () => {
       clusterMaxZoom: 10,
     }))
     expect(glMap.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'trip-place-clusters-circle' }))
-    expect(glMap.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'trip-place-clusters-count' }))
+    expect(glMap.addLayer).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'trip-place-clusters-count',
+      layout: expect.objectContaining({ 'text-font': ['Noto Sans Regular'] }),
+    }))
   })
 
   function touchEvent(type: string, touches: Array<{ clientX: number; clientY: number }>) {

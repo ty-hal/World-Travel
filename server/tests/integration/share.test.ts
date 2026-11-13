@@ -198,6 +198,33 @@ describe('Shared trip access', () => {
     expect(res.body.budget).toHaveLength(0);
   });
 
+  it('SHARE-027 — public payload excludes private booking, packing and cost fields', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    testDb.prepare(`INSERT INTO reservations
+      (trip_id, title, confirmation_number, notes) VALUES (?, ?, ?, ?)`)
+      .run(trip.id, 'Train', 'SECRET-CODE', 'Private booking note');
+    testDb.prepare(`INSERT INTO packing_items
+      (trip_id, name, category, checked, is_private, owner_id) VALUES (?, ?, ?, 0, 0, ?)`)
+      .run(trip.id, 'Bag', 'Misc', user.id);
+    testDb.prepare(`INSERT INTO budget_items
+      (trip_id, name, note) VALUES (?, ?, ?)`)
+      .run(trip.id, 'Museum', 'Private cost note');
+
+    const { body: { token } } = await request(app)
+      .post(`/api/trips/${trip.id}/share-link`)
+      .set('Cookie', authCookie(user.id))
+      .send({ share_bookings: true, share_packing: true, share_budget: true });
+    const res = await request(app).get(`/api/shared/${token}`);
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain('SECRET-CODE');
+    expect(JSON.stringify(res.body)).not.toContain('Private booking note');
+    expect(JSON.stringify(res.body)).not.toContain('Private cost note');
+    expect(res.body.packing[0]).not.toHaveProperty('owner_id');
+    expect(res.body.budget[0]).not.toHaveProperty('note');
+  });
+
   // Regression: a co-member's private packing item (#858) must never reach a public share.
   it('SHARE-026 — hides private packing items from the public payload', async () => {
     const { user } = createUser(testDb);
@@ -248,6 +275,100 @@ describe('Shared trip access', () => {
   it('SHARE-008 — GET /shared/:invalid-token returns 404', async () => {
     const res = await request(app).get('/api/shared/invalid-token-xyz');
     expect(res.status).toBe(404);
+  });
+
+  it('SHARE-028 — an expired token cannot read a formerly shared trip', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id, { title: 'Expired itinerary' });
+    const { body: { token } } = await request(app)
+      .post(`/api/trips/${trip.id}/share-link`)
+      .set('Cookie', authCookie(user.id))
+      .send({});
+    testDb.prepare("UPDATE share_tokens SET expires_at = datetime('now', '-1 day') WHERE token = ?").run(token);
+
+    const res = await request(app).get(`/api/shared/${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('SHARE-029 — revoking a token immediately cuts off anonymous reads', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id, { title: 'Revoked itinerary' });
+    const { body: { token } } = await request(app)
+      .post(`/api/trips/${trip.id}/share-link`)
+      .set('Cookie', authCookie(user.id))
+      .send({});
+
+    await request(app)
+      .delete(`/api/trips/${trip.id}/share-link`)
+      .set('Cookie', authCookie(user.id))
+      .expect(200);
+
+    const res = await request(app).get(`/api/shared/${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('SHARE-030 — all disabled capabilities expose no optional trip sections', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const day = createDay(testDb, trip.id, { date: '2025-06-01' });
+    const place = createPlace(testDb, trip.id, { name: 'Private stop', lat: 12.3456, lng: 65.4321 });
+    createDayAssignment(testDb, day.id, place.id);
+    testDb.prepare("INSERT INTO reservations (trip_id, title, confirmation_number) VALUES (?, 'Private booking', 'ABC123')").run(trip.id);
+    testDb.prepare("INSERT INTO packing_items (trip_id, name, is_private) VALUES (?, 'Private packing', 0)").run(trip.id);
+    testDb.prepare("INSERT INTO budget_items (trip_id, name, note) VALUES (?, 'Private cost', 'Do not share')").run(trip.id);
+    testDb.prepare('INSERT INTO collab_messages (trip_id, user_id, text, deleted) VALUES (?, ?, ?, 0)').run(trip.id, user.id, 'Private discussion');
+
+    const { body: { token } } = await request(app)
+      .post(`/api/trips/${trip.id}/share-link`)
+      .set('Cookie', authCookie(user.id))
+      .send({ share_map: false, share_bookings: false, share_packing: false, share_budget: false, share_collab: false });
+
+    const res = await request(app).get(`/api/shared/${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.days).toEqual([]);
+    expect(res.body.places).toEqual([]);
+    expect(res.body.reservations).toEqual([]);
+    expect(res.body.accommodations).toEqual([]);
+    expect(res.body.packing).toEqual([]);
+    expect(res.body.budget).toEqual([]);
+    expect(res.body.collab).toEqual([]);
+    expect(JSON.stringify(res.body)).not.toContain('ABC123');
+    expect(JSON.stringify(res.body)).not.toContain('Private discussion');
+  });
+
+  it('SHARE-031 — every capability combination gates its own public section', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const day = createDay(testDb, trip.id, { date: '2025-06-01' });
+    const place = createPlace(testDb, trip.id, { name: 'Visible only when map is shared' });
+    createDayAssignment(testDb, day.id, place.id);
+    testDb.prepare("INSERT INTO reservations (trip_id, title) VALUES (?, 'Visible only when bookings are shared')").run(trip.id);
+    testDb.prepare("INSERT INTO packing_items (trip_id, name, is_private) VALUES (?, 'Visible only when packing is shared', 0)").run(trip.id);
+    testDb.prepare("INSERT INTO budget_items (trip_id, name) VALUES (?, 'Visible only when budget is shared')").run(trip.id);
+    testDb.prepare('INSERT INTO collab_messages (trip_id, user_id, text, deleted) VALUES (?, ?, ?, 0)').run(trip.id, user.id, 'Visible only when collaboration is shared');
+
+    for (let flags = 0; flags < 32; flags += 1) {
+      const permissions = {
+        share_map: !!(flags & 1),
+        share_bookings: !!(flags & 2),
+        share_packing: !!(flags & 4),
+        share_budget: !!(flags & 8),
+        share_collab: !!(flags & 16),
+      };
+      const { body: { token } } = await request(app)
+        .post(`/api/trips/${trip.id}/share-link`)
+        .set('Cookie', authCookie(user.id))
+        .send(permissions);
+      const res = await request(app).get(`/api/shared/${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.days.length > 0).toBe(permissions.share_map);
+      expect(res.body.places.length > 0).toBe(permissions.share_map);
+      expect(res.body.reservations.length > 0).toBe(permissions.share_bookings);
+      expect(res.body.packing.length > 0).toBe(permissions.share_packing);
+      expect(res.body.budget.length > 0).toBe(permissions.share_budget);
+      expect(res.body.collab.length > 0).toBe(permissions.share_collab);
+    }
   });
 
   it('SHARE-009 — non-member cannot create share link', async () => {

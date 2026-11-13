@@ -82,10 +82,14 @@ describe('WeatherWidget', () => {
   it('FE-COMP-WEATHERWIDGET-007: shows "Ø" prefix for climate data', async () => {
     vi.mocked(weatherApi.get).mockResolvedValue(buildWeather({ temp: 15, main: 'Clouds', type: 'climate' }))
     useSettingsStore.setState({ settings: { ...useSettingsStore.getState().settings, temperature_unit: 'celsius' } })
-    render(<WeatherWidget lat={48.86} lng={2.35} date="2025-06-01" />)
+    render(<WeatherWidget lat={48.86} lng={2.35} date="2025-06-01" stacked />)
     await waitFor(() => {
       expect(screen.getByText(/Ø/)).toBeInTheDocument()
     })
+    expect(screen.getByRole('img', { name: /15°C\. Historical averages/ })).toHaveAttribute(
+      'title',
+      'Historical averages — real forecast available within 16 days of this date.'
+    )
   })
 
   it('FE-COMP-WEATHERWIDGET-008: compact mode renders inline without description', async () => {

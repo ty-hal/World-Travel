@@ -4,6 +4,7 @@ import { PluginsFeedController } from './plugins-feed.controller';
 import { PluginsProxyController } from './plugins-proxy.controller';
 import { PluginFrameController } from './plugin-frame.controller';
 import { PlaceDetailsController } from './place-details.controller';
+import { JournalEntryRowsController } from './journal-entry-rows.controller';
 import { TripWarningsController } from './trip-warnings.controller';
 import { ViewContributionsController } from './view-contributions.controller';
 import { TripCardContributionsController } from './trip-card-contributions.controller';
@@ -28,7 +29,7 @@ import { PluginRegistryService } from './registry/registry.service';
  * widget assets at /plugin-frame/:id/*.
  */
 @Module({
-  controllers: [PluginsController, PluginsFeedController, PluginsProxyController, PluginFrameController, PlaceDetailsController, TripWarningsController, ViewContributionsController, TripCardContributionsController, PluginPhotosController, PluginCalendarController, MapMarkersController, PdfSectionsController, AtlasLayersController, PluginUserSettingsController, PluginOAuthController, PluginActivityController],
+  controllers: [PluginsController, PluginsFeedController, PluginsProxyController, PluginFrameController, PlaceDetailsController, JournalEntryRowsController, TripWarningsController, ViewContributionsController, TripCardContributionsController, PluginPhotosController, PluginCalendarController, MapMarkersController, PdfSectionsController, AtlasLayersController, PluginUserSettingsController, PluginOAuthController, PluginActivityController],
   providers: [PluginsService, PluginRuntimeService, PluginRegistryService, PluginOAuthService],
   // Exported so the admin addon-toggle handler can cascade-disable plugins whose
   // required addon was just turned off (#plugins dependencies).

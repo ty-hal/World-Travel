@@ -501,29 +501,24 @@ interface CreateAccommodationData {
 
 export function createAccommodation(tripId: string | number, data: CreateAccommodationData) {
   const { place_id, start_day_id, end_day_id, check_in, check_in_end, check_out, confirmation, notes } = data;
-
-  const result = db.prepare(
-    'INSERT INTO day_accommodations (trip_id, place_id, start_day_id, end_day_id, check_in, check_in_end, check_out, confirmation, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(tripId, place_id, start_day_id, end_day_id, check_in || null, check_in_end || null, check_out || null, confirmation || null, notes || null);
-
-  const accommodationId = result.lastInsertRowid;
-
-  // Auto-create linked reservation for this accommodation
-  const placeName = (db.prepare('SELECT name FROM places WHERE id = ?').get(place_id) as { name: string } | undefined)?.name || 'Hotel';
-  const startDayDate = (db.prepare('SELECT date FROM days WHERE id = ?').get(start_day_id) as { date: string } | undefined)?.date || null;
-  const meta: Record<string, string> = {};
-  if (check_in) meta.check_in_time = check_in;
-  if (check_in_end) meta.check_in_end_time = check_in_end;
-  if (check_out) meta.check_out_time = check_out;
-  db.prepare(`
-    INSERT INTO reservations (trip_id, day_id, title, reservation_time, location, confirmation_number, notes, status, type, accommodation_id, metadata)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed', 'hotel', ?, ?)
-  `).run(
-    tripId, start_day_id, placeName, startDayDate || null, null,
-    confirmation || null, notes || null, accommodationId,
-    Object.keys(meta).length > 0 ? JSON.stringify(meta) : null
-  );
-
+  const accommodationId = db.transaction(() => {
+    const result = db.prepare(
+      'INSERT INTO day_accommodations (trip_id, place_id, start_day_id, end_day_id, check_in, check_in_end, check_out, confirmation, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(tripId, place_id, start_day_id, end_day_id, check_in || null, check_in_end || null, check_out || null, confirmation || null, notes || null);
+    const id = Number(result.lastInsertRowid);
+    const placeName = (db.prepare('SELECT name FROM places WHERE id = ?').get(place_id) as { name: string } | undefined)?.name || 'Hotel';
+    const startDayDate = (db.prepare('SELECT date FROM days WHERE id = ?').get(start_day_id) as { date: string } | undefined)?.date || null;
+    const meta: Record<string, string> = {};
+    if (check_in) meta.check_in_time = check_in;
+    if (check_in_end) meta.check_in_end_time = check_in_end;
+    if (check_out) meta.check_out_time = check_out;
+    db.prepare(`
+      INSERT INTO reservations (trip_id, day_id, title, reservation_time, location, confirmation_number, notes, status, type, accommodation_id, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed', 'hotel', ?, ?)
+    `).run(tripId, start_day_id, placeName, startDayDate || null, null, confirmation || null, notes || null, id,
+      Object.keys(meta).length > 0 ? JSON.stringify(meta) : null);
+    return id;
+  })();
   return getAccommodationWithPlace(accommodationId);
 }
 
@@ -544,37 +539,38 @@ export function updateAccommodation(id: string | number, existing: DayAccommodat
   const newConfirmation = fields.confirmation !== undefined ? fields.confirmation : existing.confirmation;
   const newNotes = fields.notes !== undefined ? fields.notes : existing.notes;
 
-  db.prepare(
-    'UPDATE day_accommodations SET place_id = ?, start_day_id = ?, end_day_id = ?, check_in = ?, check_in_end = ?, check_out = ?, confirmation = ?, notes = ? WHERE id = ?'
-  ).run(newPlaceId, newStartDayId, newEndDayId, newCheckIn, newCheckInEnd, newCheckOut, newConfirmation, newNotes, id);
-
-  // Sync check-in/out/confirmation to linked reservation
-  const linkedRes = db.prepare('SELECT id, metadata FROM reservations WHERE accommodation_id = ?').get(Number(id)) as { id: number; metadata: string | null } | undefined;
-  if (linkedRes) {
-    const meta = linkedRes.metadata ? JSON.parse(linkedRes.metadata) : {};
-    if (newCheckIn) meta.check_in_time = newCheckIn;
-    if (newCheckInEnd) meta.check_in_end_time = newCheckInEnd;
-    if (newCheckOut) meta.check_out_time = newCheckOut;
-    db.prepare('UPDATE reservations SET metadata = ?, confirmation_number = COALESCE(?, confirmation_number) WHERE id = ?')
-      .run(JSON.stringify(meta), newConfirmation || null, linkedRes.id);
-  }
+  db.transaction(() => {
+    db.prepare(
+      'UPDATE day_accommodations SET place_id = ?, start_day_id = ?, end_day_id = ?, check_in = ?, check_in_end = ?, check_out = ?, confirmation = ?, notes = ? WHERE id = ?'
+    ).run(newPlaceId, newStartDayId, newEndDayId, newCheckIn, newCheckInEnd, newCheckOut, newConfirmation, newNotes, id);
+    const linkedRes = db.prepare('SELECT id, metadata FROM reservations WHERE accommodation_id = ?').get(Number(id)) as { id: number; metadata: string | null } | undefined;
+    if (linkedRes) {
+      const meta = linkedRes.metadata ? JSON.parse(linkedRes.metadata) : {};
+      if (newCheckIn) meta.check_in_time = newCheckIn;
+      if (newCheckInEnd) meta.check_in_end_time = newCheckInEnd;
+      if (newCheckOut) meta.check_out_time = newCheckOut;
+      db.prepare('UPDATE reservations SET metadata = ?, confirmation_number = COALESCE(?, confirmation_number) WHERE id = ?')
+        .run(JSON.stringify(meta), newConfirmation || null, linkedRes.id);
+    }
+  })();
 
   return getAccommodationWithPlace(Number(id));
 }
 
 /** Delete accommodation and its linked reservation (and any linked budget item). */
 export function deleteAccommodation(id: string | number): { linkedReservationId: number | null; deletedBudgetItemId: number | null } {
-  const linkedRes = db.prepare('SELECT id FROM reservations WHERE accommodation_id = ?').get(Number(id)) as { id: number } | undefined;
-  let deletedBudgetItemId: number | null = null;
-  if (linkedRes) {
-    const linkedBudget = db.prepare('SELECT id FROM budget_items WHERE reservation_id = ?').get(linkedRes.id) as { id: number } | undefined;
-    if (linkedBudget) {
-      db.prepare('DELETE FROM budget_items WHERE id = ?').run(linkedBudget.id);
-      deletedBudgetItemId = linkedBudget.id;
+  return db.transaction(() => {
+    const linkedRes = db.prepare('SELECT id FROM reservations WHERE accommodation_id = ?').get(Number(id)) as { id: number } | undefined;
+    let deletedBudgetItemId: number | null = null;
+    if (linkedRes) {
+      const linkedBudget = db.prepare('SELECT id FROM budget_items WHERE reservation_id = ?').get(linkedRes.id) as { id: number } | undefined;
+      if (linkedBudget) {
+        db.prepare('DELETE FROM budget_items WHERE id = ?').run(linkedBudget.id);
+        deletedBudgetItemId = linkedBudget.id;
+      }
+      db.prepare('DELETE FROM reservations WHERE id = ?').run(linkedRes.id);
     }
-    db.prepare('DELETE FROM reservations WHERE id = ?').run(linkedRes.id);
-  }
-
-  db.prepare('DELETE FROM day_accommodations WHERE id = ?').run(id);
-  return { linkedReservationId: linkedRes ? linkedRes.id : null, deletedBudgetItemId };
+    db.prepare('DELETE FROM day_accommodations WHERE id = ?').run(id);
+    return { linkedReservationId: linkedRes ? linkedRes.id : null, deletedBudgetItemId };
+  })();
 }

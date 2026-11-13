@@ -11,7 +11,7 @@ export default function InAppNotificationsPage(): React.ReactElement {
   const { t } = useTranslation()
   // Page = wiring container: store, filter, fetch + infinite scroll live in the hook.
   const {
-    notifications, unreadCount, total, isLoading, hasMore,
+    notifications, unreadCount, total, isLoading, loadError, hasMore, fetchNotifications,
     unreadOnly, setUnreadOnly, loaderRef, displayed,
     markAllRead, deleteAll,
   } = useInAppNotifications()
@@ -31,7 +31,9 @@ export default function InAppNotificationsPage(): React.ReactElement {
                 )}
               </h1>
               <p className="text-sm mt-0.5 text-content-muted">
-                {total} {total === 1 ? 'notification' : 'notifications'}
+                {loadError && notifications.length === 0
+                  ? t('notifications.countUnavailable')
+                  : `${total} ${total === 1 ? 'notification' : 'notifications'}`}
               </p>
             </div>
 
@@ -39,6 +41,7 @@ export default function InAppNotificationsPage(): React.ReactElement {
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <button
+                  aria-label={t('notifications.markAllRead')}
                   onClick={markAllRead}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors text-content-secondary bg-surface-hover"
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
@@ -50,6 +53,7 @@ export default function InAppNotificationsPage(): React.ReactElement {
               )}
               {notifications.length > 0 && (
                 <button
+                  aria-label={t('notifications.deleteAll')}
                   onClick={deleteAll}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors text-red-500 hover:bg-red-500/10"
                 >
@@ -63,12 +67,14 @@ export default function InAppNotificationsPage(): React.ReactElement {
           {/* Filter toggle */}
           <div className="flex gap-2 mb-4">
             <button
+              aria-pressed={!unreadOnly}
               onClick={() => setUnreadOnly(false)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!unreadOnly ? 'bg-content text-surface' : 'bg-surface-hover text-content-secondary'}`}
             >
               {t('notifications.all')}
             </button>
             <button
+              aria-pressed={unreadOnly}
               onClick={() => setUnreadOnly(true)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${unreadOnly ? 'bg-content text-surface' : 'bg-surface-hover text-content-secondary'}`}
             >
@@ -83,7 +89,7 @@ export default function InAppNotificationsPage(): React.ReactElement {
                 <Spinner className="w-6 h-6 border-2 border-slate-200 border-t-current" />
               </div>
             ) : displayed.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 px-4 text-center gap-3">
+              loadError ? null : <div className="flex flex-col items-center justify-center py-16 px-4 text-center gap-3">
                 <AnimatedBellIcon size={48} animate="always" className="w-12 h-12 text-content-faint" />
                 <p className="text-base font-medium text-content-muted">{t('notifications.empty')}</p>
                 <p className="text-sm text-content-faint">{t('notifications.emptyDescription')}</p>
@@ -92,6 +98,15 @@ export default function InAppNotificationsPage(): React.ReactElement {
               displayed.map(n => (
                 <InAppNotificationItem key={n.id} notification={n} />
               ))
+            )}
+
+            {loadError && (
+              <div role="alert" className="flex flex-col items-center gap-3 border-t border-red-200 bg-red-50 px-4 py-8 text-center text-sm text-red-800 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+                <p>{t('notifications.loadError')}</p>
+                <button type="button" onClick={() => fetchNotifications(true)} className="rounded-lg px-3 py-2 font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">
+                  {t('notifications.retry')}
+                </button>
+              </div>
             )}
 
             {/* Infinite scroll trigger */}

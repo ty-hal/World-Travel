@@ -6,38 +6,51 @@ process.env.COOKIE_SECURE = 'false';
 console.log('[dev] initial build...');
 execSync('node scripts/build.mjs', { stdio: 'inherit' });
 
-const children = [];
+const children = new Set();
 const stop = () => { children.forEach((c) => { try { c.kill(); } catch {} }); process.exit(0); };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
-// Start tsc -w and wait for its first "Watching for file changes." before launching
-// node --watch, so the initial tsc compilation doesn't trigger a spurious restart.
+// Restart only after a successful compilation, once all emitted files are ready.
 const tsc = spawn('npx', ['tsc', '-w', '-p', 'tsconfig.build.json', '--preserveWatchOutput'], {
   stdio: ['ignore', 'pipe', 'inherit'],
   shell: true,
 });
-children.push(tsc);
+children.add(tsc);
 
 let nodeProc = null;
-let ready = false;
+let outputBuffer = '';
+let restartQueue = Promise.resolve();
 
-tsc.stdout.on('data', (chunk) => {
-  process.stdout.write(chunk);
-  if (!ready && chunk.toString().includes('Watching for file changes')) {
-    ready = true;
-    nodeProc = spawn('node', ['--require', 'tsconfig-paths/register', '--watch', 'dist/index.js'], {
+function restartBackend() {
+  restartQueue = restartQueue.then(async () => {
+    if (nodeProc && nodeProc.exitCode === null && nodeProc.signalCode === null) {
+      await new Promise((resolve) => {
+        nodeProc.once('exit', resolve);
+        nodeProc.kill('SIGTERM');
+      });
+    }
+    nodeProc = spawn(process.execPath, ['--require', 'tsconfig-paths/register', 'dist/index.js'], {
       stdio: 'inherit',
-      shell: true,
       env: { ...process.env, NODE_ENV: 'development', COOKIE_SECURE: 'false' },
     });
     nodeProc.on('exit', (code) => {
-      if (code !== 0 && code !== null) {
-        console.error(
-          '[dev] Backend exited. If you see EADDRINUSE on :3001, a Playwright E2E server may still be running — run `npm run e2e:free-ports --workspace=client` and restart dev.',
-        );
-      }
+      children.delete(nodeProc);
+      if (code !== 0 && code !== null) console.error('[dev] Backend exited. Check the server error above.');
     });
-    children.push(nodeProc);
+    children.add(nodeProc);
+  }).catch((err) => {
+    console.error('[dev] Could not restart backend:', err);
+    stop();
+  });
+}
+
+tsc.stdout.on('data', (chunk) => {
+  process.stdout.write(chunk);
+  outputBuffer += chunk.toString();
+  const lines = outputBuffer.split(/\r?\n/);
+  outputBuffer = lines.pop() || '';
+  for (const line of lines) {
+    if (line.includes('Found 0 errors. Watching for file changes')) restartBackend();
   }
 });

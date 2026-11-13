@@ -214,15 +214,15 @@ describe('Navbar', () => {
       addons: [{ id: 'vacay', name: 'Vacay', icon: 'CalendarDays', type: 'global', enabled: true }],
     });
     render(<Navbar />);
-    expect(document.querySelector('a[href="/vacay"]')).toBeInTheDocument();
+    expect(document.querySelector('a[href="/calendar"]')).toBeInTheDocument();
   });
 
-  it('FE-COMP-NAVBAR-025: global addon links hidden when in trip view (tripTitle set)', () => {
+  it('FE-COMP-NAVBAR-025: global addon links remain available in trip view', () => {
     seedStore(useAddonStore, {
       addons: [{ id: 'vacay', name: 'Vacay', icon: 'CalendarDays', type: 'global', enabled: true }],
     });
     render(<Navbar tripTitle="Japan 2025" />);
-    expect(document.querySelector('a[href="/vacay"]')).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/calendar"]')).toBeInTheDocument();
   });
 
   it('FE-COMP-NAVBAR-026: notification bell visible when tripId provided', () => {

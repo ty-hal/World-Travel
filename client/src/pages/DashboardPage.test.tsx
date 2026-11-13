@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor } from '../../tests/helpers/render';
+import { fireEvent, render, screen, waitFor } from '../../tests/helpers/render';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../tests/helpers/msw/server';
@@ -66,6 +66,30 @@ describe('DashboardPage', () => {
     });
   });
 
+  it('FE-PAGE-DASH-096: spotlight fetches scoped members and places, never the offline bundle', async () => {
+    let membersRequested = false;
+    let placesRequested = false;
+    let bundleRequested = false;
+    server.use(
+      http.get('/api/trips/:id/members', () => {
+        membersRequested = true;
+        return HttpResponse.json({ owner: buildUser(), members: [] });
+      }),
+      http.get('/api/trips/:id/places', () => {
+        placesRequested = true;
+        return HttpResponse.json({ places: [] });
+      }),
+      http.get('/api/trips/:id/bundle', () => {
+        bundleRequested = true;
+        return HttpResponse.json({});
+      }),
+    );
+
+    render(<DashboardPage />);
+    await waitFor(() => expect(membersRequested && placesRequested).toBe(true));
+    expect(bundleRequested).toBe(false);
+  });
+
   describe('FE-PAGE-DASH-003: Trips render with name and dates', () => {
     it('shows trip name and dates in the list', async () => {
       render(<DashboardPage />);
@@ -76,6 +100,30 @@ describe('DashboardPage', () => {
 
       // At least the first trip name should be visible
       expect(screen.getAllByText('Paris Adventure')[0]).toBeVisible();
+    });
+  });
+
+  it('FE-PAGE-DASH-097: hides a failed trip cover and retries it when online', async () => {
+    const trip = buildTrip({
+      title: 'Cover fallback trip',
+      start_date: '2026-09-01',
+      end_date: '2026-09-05',
+      cover_image: 'https://example.com/trip-cover.jpg',
+    });
+    server.use(http.get('/api/trips', () => HttpResponse.json({ trips: [trip] })));
+    render(<DashboardPage />);
+
+    await screen.findByRole('heading', { name: 'Cover fallback trip' });
+    const failedImage = document.querySelector('.hero-trip img.bg') as HTMLImageElement;
+    fireEvent.error(failedImage);
+    expect(failedImage).not.toBeVisible();
+    expect((failedImage.parentElement as HTMLElement).style.background).toContain('linear-gradient');
+
+    fireEvent(window, new Event('online'));
+    await waitFor(() => {
+      const retriedImage = document.querySelector('.hero-trip img.bg');
+      expect(retriedImage).not.toBe(failedImage);
+      expect(retriedImage).toBeVisible();
     });
   });
 
@@ -93,6 +141,18 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(screen.getByText(/plan a new trip from scratch/i)).toBeInTheDocument();
       });
+    });
+
+    it('does not show the no-trips state when the only trip is featured above', async () => {
+      const trip = buildTrip({ title: 'Solo Trip', start_date: '2026-09-01', end_date: '2026-09-15' });
+      server.use(
+        http.get('/api/trips', () => HttpResponse.json({ trips: [trip] })),
+      );
+
+      render(<DashboardPage />);
+
+      await waitFor(() => expect(screen.getAllByText('Solo Trip')[0]).toBeInTheDocument());
+      expect(screen.queryByText('No trips yet')).not.toBeInTheDocument();
     });
   });
 
@@ -277,12 +337,12 @@ describe('DashboardPage', () => {
         expect(screen.getAllByText('Paris Adventure')[0]).toBeInTheDocument();
       });
 
-      // The view-mode toggle flips grid ↔ list and persists the choice
-      const viewToggle = screen.getByRole('button', { name: /toggle view/i });
-      await user.click(viewToggle);
+      await user.click(screen.getByRole('button', { name: 'Seasons' }));
 
-      // localStorage should be updated to 'list'
-      expect(localStorage.getItem('trek_dashboard_view')).toBe('list');
+      expect(localStorage.getItem('trek_dashboard_view')).toBe('seasons');
+      expect(screen.getByRole('table')).toBeInTheDocument();
+      expect(document.querySelector('.hero-trip')).toBeInTheDocument();
+      expect(document.querySelector('.atlas')).toBeInTheDocument();
     });
   });
 
@@ -343,8 +403,7 @@ describe('DashboardPage', () => {
       });
 
       // Switch to list view
-      const viewToggle = screen.getByRole('button', { name: /toggle view/i });
-      await user.click(viewToggle);
+      await user.click(screen.getByRole('button', { name: 'List' }));
 
       // Non-spotlight trips should be visible in list view
       await waitFor(() => {
@@ -367,8 +426,7 @@ describe('DashboardPage', () => {
       });
 
       // Switch to list view
-      const viewToggle = screen.getByRole('button', { name: /toggle view/i });
-      await user.click(viewToggle);
+      await user.click(screen.getByRole('button', { name: 'List' }));
 
       // Non-spotlight trips render in list view
       await waitFor(() => {
@@ -423,6 +481,8 @@ describe('DashboardPage', () => {
       expect(screen.getByText('Currency')).toBeInTheDocument();
       expect(screen.getByText('From')).toBeInTheDocument();
       expect(screen.getByText('To')).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'From' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'To' })).toBeInTheDocument();
     });
   });
 
@@ -850,6 +910,18 @@ describe('DashboardPage', () => {
         expect(distanceValue('6.2 mi')).toBeInTheDocument();
       });
     });
+
+    it('shows distance flown as progress toward the next equator circuit', async () => {
+      seedStore(useSettingsStore, { settings: buildSettings({ distance_unit: 'metric' }) });
+
+      render(<DashboardPage />);
+
+      const ratioLabel = await screen.findByText(/around the equator/i);
+      const progressArc = ratioLabel.closest('.atlas-card')?.querySelector('.spark circle:nth-child(2)');
+      const arcLength = Number(progressArc?.getAttribute('stroke-dasharray')?.split(' ')[0]);
+
+      expect(arcLength).toBeCloseTo(2 * Math.PI * 14 * (10 / 40075), 3);
+    });
   });
 
   describe('FE-PAGE-DASH-032: Dark mode detection uses window.matchMedia', () => {
@@ -880,6 +952,28 @@ describe('DashboardPage', () => {
 
       // Page renders successfully with dark_mode = 'auto'
       expect(screen.getByText(/my trips/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('FE-PAGE-DASH-035: unavailable travel stats do not look like zero', () => {
+    it('shows unavailable values when the stats request fails', async () => {
+      server.use(
+        http.get('/api/auth/travel-stats', () => HttpResponse.error()),
+      );
+
+      render(<DashboardPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Paris Adventure')[0]).toBeInTheDocument();
+      });
+
+      const metricValue = (label: RegExp) =>
+        screen.getByText(label, { selector: '.label' }).parentElement?.querySelector('.value')?.textContent?.trim();
+
+      expect(metricValue(/countries visited/i)).toBe('—');
+      expect(metricValue(/trips total/i)).toBe('—');
+      expect(metricValue(/days traveled/i)).toBe('—');
+      expect(metricValue(/distance flown/i)).toBe('—');
     });
   });
 

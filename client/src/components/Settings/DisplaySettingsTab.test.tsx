@@ -57,7 +57,7 @@ describe('DisplaySettingsTab', () => {
     const updateSetting = vi.fn().mockResolvedValue(undefined);
     seedStore(useSettingsStore, { settings: buildSettings({ language: 'en' }), updateSetting });
     render(<DisplaySettingsTab />);
-    await user.click(screen.getByText('English'));
+    await user.click(within(screen.getByRole('group', { name: 'Language' })).getByRole('button', { name: 'English' }));
     expect(updateSetting).toHaveBeenCalledWith('language', 'en');
   });
 
@@ -92,8 +92,8 @@ describe('DisplaySettingsTab', () => {
     expect(updateSetting).toHaveBeenCalledWith('temperature_unit', 'fahrenheit');
   });
 
-  it('FE-COMP-DISPLAY-028: metric distance button is active by default', () => {
-    seedStore(useSettingsStore, { settings: { temperature_unit: 'celsius' } });
+  it('FE-COMP-DISPLAY-028: metric distance button is active when selected', () => {
+    seedStore(useSettingsStore, { settings: buildSettings({ distance_unit: 'metric' }) });
     render(<DisplaySettingsTab />);
     const metricBtn = screen.getByText('km Metric').closest('button')!;
     expect(metricBtn.style.border).toContain('var(--text-primary)');
@@ -144,9 +144,46 @@ describe('DisplaySettingsTab', () => {
 
   it('FE-COMP-DISPLAY-031: always-show-routes Off button is active by default (unset)', () => {
     render(<DisplaySettingsTab />);
-    const block = screen.getByText(/always show booking routes/i).closest('div')!;
-    const offBtn = within(block).getByText(/^Off$/i).closest('button')!;
+    const group = screen.getByRole('group', { name: 'Always show booking routes' });
+    const offBtn = within(group).getByRole('button', { name: 'Off' });
     expect(offBtn.style.border).toContain('var(--text-primary)');
+    expect(offBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: 'On' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('FE-COMP-DISPLAY-033: announces selected values for display and map preference groups', () => {
+    seedStore(useSettingsStore, {
+      settings: buildSettings({
+        language: 'en',
+        temperature_unit: 'celsius',
+        distance_unit: 'metric',
+        time_format: '24h',
+        map_booking_labels: true,
+        map_always_show_routes: false,
+        map_poi_pill_enabled: true,
+        blur_booking_codes: false,
+        optimize_from_accommodation: true,
+      }),
+    });
+    render(<DisplaySettingsTab />);
+
+    const selected = [
+      ['Language', 'English'],
+      ['Temperature Unit', '°C Celsius'],
+      ['Distance Unit', 'km Metric'],
+      ['Time Format', /24h/],
+      ['Booking route labels', 'On'],
+      ['Always show booking routes', 'Off'],
+      ['Explore places on the map', 'On'],
+      ['Blur Booking Codes', 'Off'],
+      ['Optimize route from accommodation', 'On'],
+    ] as const;
+
+    for (const [groupName, buttonName] of selected) {
+      expect(
+        within(screen.getByRole('group', { name: groupName })).getByRole('button', { name: buttonName }),
+      ).toHaveAttribute('aria-pressed', 'true');
+    }
   });
 
   it('FE-COMP-DISPLAY-032: clicking On for always-show-routes calls updateSetting with map_always_show_routes true', async () => {

@@ -30,7 +30,7 @@ help:
 	@echo ""
 	@echo "Standard commands (see $(STANDARDS_ROOT)/AGENTS.md):"
 	@echo "  make setup    Install dependencies"
-	@echo "  make start    Start local dev server or workflow"
+	@echo "  make start    Dev stack — open http://localhost:5173 (API :3001)"
 	@echo "  make test     Run automated tests"
 	@echo "  make check    Lint, typecheck, and static verification"
 	@echo "  make capture  Playwright wiki screenshots"

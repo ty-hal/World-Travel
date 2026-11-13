@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { db } from '../../db/database';
 import { broadcast } from '../../websocket';
 import { checkPermission } from '../../services/permissions';
+import { logError } from '../../services/auditLog';
 import type { User } from '../../types';
 import * as svc from '../../services/packingService';
 
@@ -153,7 +154,7 @@ export class PackingService {
         scope: 'trip',
         targetId: Number(tripId),
         params: { trip: tripInfo?.title || 'Untitled', actor: actor.email, category, tripId: String(tripId) },
-      }).catch(() => {});
-    });
+      }).catch((err: unknown) => logError(`Packing notification failed trip=${tripId}: ${err instanceof Error ? err.message : err}`));
+    }).catch((err: unknown) => logError(`Packing notification module failed trip=${tripId}: ${err instanceof Error ? err.message : err}`));
   }
 }

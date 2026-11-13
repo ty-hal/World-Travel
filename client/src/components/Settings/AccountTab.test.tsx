@@ -114,6 +114,13 @@ describe('AccountTab', () => {
 // ── Profile (013–017) ────────────────────────────────────────────────────────
 
 describe('AccountTab – Profile', () => {
+  it('associates profile labels with their inputs', () => {
+    seedStore(useAuthStore, {});
+    render(<AccountTab />);
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('testuser');
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('test@example.com');
+  });
+
   it('FE-COMP-ACCOUNT-013: Save Profile calls updateProfile with current field values', async () => {
     const user = userEvent.setup();
     const updateProfileMock = vi.fn().mockResolvedValue(undefined);

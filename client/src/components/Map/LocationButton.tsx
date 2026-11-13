@@ -6,15 +6,17 @@ interface Props {
   error: string | null
   onClick: () => void
   // Offset from the bottom edge — callers push this up above the mobile
-  // bottom nav. Defaults to 20px for desktop.
-  bottomOffset?: number
+  // bottom nav / place inspector. Defaults low so it sits over map attribution.
+  bottomOffset?: number | string
+  /** Distance from the right edge (default 6 — tuck over map info/attribution). */
+  rightOffset?: number | string
 }
 
 // Three-state FAB. Matches the Apple/Google Maps pattern:
 //   off    → outline locate icon
 //   show   → filled locate (blue dot is visible on the map)
 //   follow → filled navigation arrow (map follows + rotates with heading)
-export default function LocationButton({ mode, error, onClick, bottomOffset = 20 }: Props) {
+export default function LocationButton({ mode, error, onClick, bottomOffset = 8, rightOffset = 6 }: Props) {
   const Icon = mode === 'follow' ? Navigation : mode === 'show' ? LocateFixed : Locate
   const isActive = mode !== 'off'
   const title = error
@@ -34,7 +36,7 @@ export default function LocationButton({ mode, error, onClick, bottomOffset = 20
       style={{
         position: 'absolute',
         bottom: bottomOffset,
-        right: 12,
+        right: rightOffset,
         zIndex: 1000,
         width: 42,
         height: 42,

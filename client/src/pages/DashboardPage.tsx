@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from '../i18n'
 import Navbar from '../components/Layout/Navbar'
 import DemoBanner from '../components/Layout/DemoBanner'
@@ -9,15 +9,32 @@ import CustomSelect from '../components/shared/CustomSelect'
 import PlaceAvatar from '../components/shared/PlaceAvatar'
 import MobileTopBar from '../components/Layout/MobileTopBar'
 import { useDashboard } from './dashboard/useDashboard'
+import { TripSeasonsView } from './dashboard/TripSeasonsView'
 import {
-  type DashboardTrip, type HeroBundle, type TravelStats, type UpcomingReservation,
-  MS_PER_DAY, daysUntil, getTripStatus,
+  type DashboardTrip, type HeroBundle, type TravelStats, type UpcomingReservation, type Place,
+  type CompletedSortKey,
+  MS_PER_DAY, daysUntil, getTripStatus, moveTripId,
 } from './dashboard/dashboardModel'
 import {
   Plus, Edit2, Trash2, Archive, Copy, ArrowRight, MapPin,
-  Hotel, Utensils, Clock, ArrowRightLeft, Calendar,
-  LayoutGrid, List, X, CalendarPlus,
+  Hotel, Utensils, Clock, ArrowRightLeft, Calendar, CloudSun, CloudRain, Droplets, Wind,
+  LayoutGrid, List, X, CalendarPlus, ChevronLeft, ChevronRight,
 } from 'lucide-react'
+
+const ARRANGE_HOLD_MS = 420
+const ARRANGE_MOVE_CANCEL_PX = 12
+const ARRANGE_LIFT_PX = 6
+
+type LiftState = {
+  tripId: number
+  index: number
+  width: number
+  height: number
+  originLeft: number
+  originTop: number
+  dx: number
+  dy: number
+}
 import AnimatedAirplaneIcon from '../components/shared/AnimatedAirplaneIcon'
 import AnimatedTicketIcon from '../components/shared/AnimatedTicketIcon'
 import AnimatedRefreshCwIcon from '../components/shared/AnimatedRefreshCwIcon'
@@ -28,6 +45,8 @@ import PluginWidgets from '../components/Plugins/PluginWidgets'
 import PluginFrame from '../components/Plugins/PluginFrame'
 import { TripCardBadges, useTripCardBadges } from '../components/Plugins/TripCardBadges'
 import type { TripCardBadge } from '../api/client'
+import { mapsApi, weatherApi } from '../api/client'
+import { fetchWeather } from '../services/weatherQueue'
 import { usePluginStore } from '../store/pluginStore'
 import { formatTime, splitReservationDateTime } from '../utils/formatters'
 import { CURRENCIES } from '../components/Budget/BudgetPanel.constants'
@@ -35,40 +54,241 @@ import { convertDistance, getDistanceUnitLabel } from '../utils/units'
 import { useSettingsStore } from '../store/settingsStore'
 import { useAddonStore } from '../store/addonStore'
 import { normalizeAppearance } from '@trek/shared'
+import { currencyForCountryCode } from '../utils/countryCurrencies'
 import '../styles/dashboard.css'
 
 const DEFAULT_TRIP_COVERS: Record<string, string[]> = {
   'Mexico City': ['https://cdn.mos.cms.futurecdn.net/6Txsk2q5k3Hxho7cVhdrbV-1000-80.jpg'],
-  'Peru & Easter Island': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQjaYcjzofmBOHv9ZHeYgLz8KGTIu_SRiIuPOKqFQSwpw&s=10'],
-  'Middle East': [
-    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvRPhYGDAkE97AhDIfIP3ZEv0_l7gZFQhsbysxcChmfA&s=10',
-    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRkdVxqKELmEDWiDYCS1lg3KpxD1l9MWAkn71bFAbDIqA&s=10',
+  'Peru & Easter Island: Andes to Rapa Nui': [
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQjaYcjzofmBOHv9ZHeYgLz8KGTIu_SRiIuPOKqFQSwpw&s=10',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRh5sskw1tHtlYcKYpHu07Jlq7qNFoydTr7npFXEORqxw&s=10',
   ],
-  'Grand Canyon & Sedona': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRfpj0USn-3AXM2Q3oxKfoOlfwGOgvJweXoRORoXCdjWQ&s'],
-  'Grand Canyon': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRfpj0USn-3AXM2Q3oxKfoOlfwGOgvJweXoRORoXCdjWQ&s'],
-  'New England': ['https://t3.ftcdn.net/jpg/03/12/98/38/240_F_312983834_7WSgFX4z0zyZ5zEBXGNyGGA2wklOP2HM.jpg'],
+  'Middle East: Turkey, Egypt & Jordan': [
+    'https://images.unsplash.com/photo-1600520611035-84157ad4084d?auto=format&fit=crop&w=1800&q=85',
+    'https://images.unsplash.com/photo-1690440850413-d73785c4ac7d?auto=format&fit=crop&w=1800&q=85',
+    'https://www.grayline.com/wp-content/uploads/2025/07/Blue-Mosque-1-scaled.jpg',
+  ],
+  'Arizona: Grand Canyon & Sedona': [
+    'https://www.jasonweissphotography.com/images/xl/grand-canyon-toroweap-sunrise.jpg',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQgkkTJr4Dxqt8GYXEQtrGTALBY23895exebFrnoHpeVQ&s=10',
+  ],
+  'Grand Canyon': ['https://www.jasonweissphotography.com/images/xl/grand-canyon-toroweap-sunrise.jpg'],
+  'New England: Boston to Stowe': [
+    'https://t3.ftcdn.net/jpg/03/12/98/38/240_F_312983834_7WSgFX4z0zyZ5zEBXGNyGGA2wklOP2HM.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/4/49/Portland_HeadLight_%28cropped%29.jpg',
+  ],
   'Utah in Las Vegas': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7sllsGS3cNKmYO-0Hm6B_mNsCGwk5GvLFE9m91mjnuOiQ6XPomjlmScPX&s=10'],
   'Utah': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7sllsGS3cNKmYO-0Hm6B_mNsCGwk5GvLFE9m91mjnuOiQ6XPomjlmScPX&s=10'],
-  'Utah & Las Vegas': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7sllsGS3cNKmYO-0Hm6B_mNsCGwk5GvLFE9m91mjnuOiQ6XPomjlmScPX&s=10'],
+  'Utah & Las Vegas': [
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7sllsGS3cNKmYO-0Hm6B_mNsCGwk5GvLFE9m91mjnuOiQ6XPomjlmScPX&s=10',
+    'https://stgeorgeutahvacationrentals.icnd-cdn.com/images/blog/55C1282Eoriginal%20(3).webp',
+  ],
   'Europe 2019': ['https://media.architecturaldigest.com/photos/66df5877d600aa994603fbd5/1:1/w_2000,h_2000,c_limit/GettyImages-1467072114.jpg'],
   'Europe Summer 2019': ['https://media.architecturaldigest.com/photos/66df5877d600aa994603fbd5/1:1/w_2000,h_2000,c_limit/GettyImages-1467072114.jpg'],
   'Europe Christmas 2018': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT976cEHu0UJLTgqf-kgyi8rgxLmeCDO58Kz2V8gsfeKQ&s=10'],
   'England Christmas 2018': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT976cEHu0UJLTgqf-kgyi8rgxLmeCDO58Kz2V8gsfeKQ&s=10'],
-  'England': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT976cEHu0UJLTgqf-kgyi8rgxLmeCDO58Kz2V8gsfeKQ&s=10'],
+  'England: London Christmas': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT976cEHu0UJLTgqf-kgyi8rgxLmeCDO58Kz2V8gsfeKQ&s=10'],
   'Europe Summer 2018': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvtu4WkAs-joHP5dmM5SBJQG1YKo6vptKSv_1ExlMb0A&s=10'],
-  'France & Italy': ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvtu4WkAs-joHP5dmM5SBJQG1YKo6vptKSv_1ExlMb0A&s=10'],
-  'Spain & Netherlands': ['https://media.architecturaldigest.com/photos/66df5877d600aa994603fbd5/1:1/w_2000,h_2000,c_limit/GettyImages-1467072114.jpg'],
-  'Midwest Road Trip Loop': ['https://www.boboandchichi.com/wp-content/uploads/aerial-view-of-Madison-Wisconsin-and-the-Wisconsin-Capitol-Building.jpg'],
+  'France & Italy: Paris to Naples': [
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvtu4WkAs-joHP5dmM5SBJQG1YKo6vptKSv_1ExlMb0A&s=10',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTdJ-SFJ3MikeGtOvn0_1jsWH3IthRFQK2Y_cQnptK0Og&s=10',
+  ],
+  'Spain & Netherlands: Barcelona to Leiden': [
+    'https://media.architecturaldigest.com/photos/66df5877d600aa994603fbd5/1:1/w_2000,h_2000,c_limit/GettyImages-1467072114.jpg',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ4dTrpaCKM060835MWC6rImn7JJ2Om2XkJOknVB1PS8A&s=10',
+  ],
+  'Midwest: Chicago Loop': ['https://www.boboandchichi.com/wp-content/uploads/aerial-view-of-Madison-Wisconsin-and-the-Wisconsin-Capitol-Building.jpg'],
+  'Central Asia: Kazakhstan, Kyrgyzstan & Uzbekistan': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Registan_01.jpg/1920px-Registan_01.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e2/View_over_Itchan_Kala_with_madrasas.jpg/1920px-View_over_Itchan_Kala_with_madrasas.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Mountains_in_the_National_Park_Ala_Archa_04.jpg/1920px-Mountains_in_the_National_Park_Ala_Archa_04.jpg',
+  ],
+  'Southeast Asia: Thailand, Cambodia & Vietnam': [
+    'https://plus.unsplash.com/premium_photo-1661963188432-5de8a11f21a7?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDEyfHx8ZW58MHx8fHx8',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3d/Wat_Arun_03-2012-01.JPG/1920px-Wat_Arun_03-2012-01.JPG',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Lanterns_in_Hoi_An%2C_Vietnam_%2825708206924%29.jpg/1920px-Lanterns_in_Hoi_An%2C_Vietnam_%2825708206924%29.jpg',
+  ],
+  'Greece & the Balkans: Athens to Sarajevo': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Across_the_Hill_to_Athena%27s_Temple.jpg/1920px-Across_the_Hill_to_Athena%27s_Temple.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Casco_viejo_de_Dubrovnik%2C_Croacia%2C_2014-04-14%2C_DD_07.JPG/1920px-Casco_viejo_de_Dubrovnik%2C_Croacia%2C_2014-04-14%2C_DD_07.JPG',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/6/68/Mostar%2C_Stari_Most_at_night.jpg/1920px-Mostar%2C_Stari_Most_at_night.jpg',
+  ],
+  'Taiwan: Taipei to Kaohsiung': [
+    'https://images.unsplash.com/photo-1563464284524-8229f8bcd56f?auto=format&fit=crop&w=1800&q=85',
+    'https://images.unsplash.com/photo-1743653258442-a37c15086a59?auto=format&fit=crop&w=1800&q=85',
+    'https://images.unsplash.com/photo-1759577362632-ce321d4387ce?auto=format&fit=crop&w=1800&q=85',
+    'https://images.unsplash.com/photo-1774244874788-94046442a9d8?auto=format&fit=crop&w=1800&q=85',
+    'https://images.unsplash.com/photo-1750441789294-45f2215d00e1?auto=format&fit=crop&w=1800&q=85',
+  ],
+  'Japan: Tokyo, Kyoto, Osaka & Kanazawa': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/1/11/Chureito_Pagoda_and_Mount_Fuji_%2844951842365%29.jpg/1920px-Chureito_Pagoda_and_Mount_Fuji_%2844951842365%29.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Torii_path_with_lantern_at_Fushimi_Inari_Taisha_Shrine%2C_Kyoto%2C_Japan.jpg/1920px-Torii_path_with_lantern_at_Fushimi_Inari_Taisha_Shrine%2C_Kyoto%2C_Japan.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Water_reflection_of_Kinkaku-ji_Temple_with_blue_sky_and_white_clouds%2C_Kyoto%2C_Japan.jpg/1920px-Water_reflection_of_Kinkaku-ji_Temple_with_blue_sky_and_white_clouds%2C_Kyoto%2C_Japan.jpg',
+  ],
+  'Morocco & Tunisia: Sahara to Carthage': [
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTlkXte3qJk8Q-QTYiDtEJoEWR5Li6GXFiT45oniBQLc5sDo5I8Uy312t0&s=10',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSd8ZPMcEW975dlCTX_HBfUhhoUO8ibepus7BiXcuWmezo9nFcH_315tHI&s=10',
+  ],
+  'Iceland & Norway: Ring Road to the Fjords': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/Seljalandsfoss%2C_Su%C3%B0urland%2C_Islandia%2C_2014-08-16%2C_DD_201-203_HDR.JPG/1920px-Seljalandsfoss%2C_Su%C3%B0urland%2C_Islandia%2C_2014-08-16%2C_DD_201-203_HDR.JPG',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Fiordo_de_Geiranger_desde_Flydalsjuvet%2C_Noruega%2C_2019-09-07%2C_DD_59.jpg/1920px-Fiordo_de_Geiranger_desde_Flydalsjuvet%2C_Noruega%2C_2019-09-07%2C_DD_59.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ee/J%C3%B6kuls%C3%A1rl%C3%B3n_glacier_lagoon%2C_Iceland%2C_20240719_1141_2541.jpg/1920px-J%C3%B6kuls%C3%A1rl%C3%B3n_glacier_lagoon%2C_Iceland%2C_20240719_1141_2541.jpg',
+  ],
+  'Central Europe: Prague to Budapest': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/42/Castillo_de_Praga%2C_Praga%2C_Rep%C3%BAblica_Checa%2C_2022-07-01%2C_DD_23-25_HDR.jpg/1920px-Castillo_de_Praga%2C_Praga%2C_Rep%C3%BAblica_Checa%2C_2022-07-01%2C_DD_23-25_HDR.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/Charles_Bridge_during_a_pink_sunrise_in_Prague.jpg/1920px-Charles_Bridge_during_a_pink_sunrise_in_Prague.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/Budapest_Parliament_Building_At_Night.jpg/1920px-Budapest_Parliament_Building_At_Night.jpg',
+  ],
+  'Portugal: Lisbon, Évora & Porto': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/A_vibrant_panorama_of_Porto%2C_Portugal%2C_showcasing_the_Douro_River%2C_historic_Ribeira_district%2C_and_the_Dom_Lu%C3%ADs_I_Bridge._%2855247151390%29.jpg/1920px-A_vibrant_panorama_of_Porto%2C_Portugal%2C_showcasing_the_Douro_River%2C_historic_Ribeira_district%2C_and_the_Dom_Lu%C3%ADs_I_Bridge._%2855247151390%29.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c4/Torre_de_Bel%C3%A9m_por_Rodrigo_Tetsuo_Argenton_%282%29.jpg/1920px-Torre_de_Bel%C3%A9m_por_Rodrigo_Tetsuo_Argenton_%282%29.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bc/No_28_Tram_%2845684287331%29.jpg/1920px-No_28_Tram_%2845684287331%29.jpg',
+  ],
+  'Guatemala: Antigua, Acatenango & Atitlán': [
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRGwLW1g03wtGrCgQ0wxLUdVRqcfINkhcp750pL3zYQS1Nb1Hacgcf2-uI&s=10',
+  ],
+  'Canadian Rockies: Banff to Jasper': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c5/Moraine_Lake_17092005.jpg/1920px-Moraine_Lake_17092005.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d1/Lake_Louise_and_Victoria_Glacier.jpg/1920px-Lake_Louise_and_Victoria_Glacier.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4e/Panorama_of_Peyto_Lake%2C_Banff_National_Park%2C_Alberta%2C_Canada.jpg/1920px-Panorama_of_Peyto_Lake%2C_Banff_National_Park%2C_Alberta%2C_Canada.jpg',
+  ],
+  'Northern China: Beijing to Xi\'an': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ef/67054-The-Great-Wall%2C_Mutianyu.jpg/1920px-67054-The-Great-Wall%2C_Mutianyu.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/49/Terracotta_Army%2C_View_of_Pit_1.jpg/1920px-Terracotta_Army%2C_View_of_Pit_1.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/da/Beijing_China_Forbidden-City-03.jpg/1920px-Beijing_China_Forbidden-City-03.jpg',
+  ],
+  'Silk Road: Xi\'an to Kashgar': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5e/Terracotta_Army-China.jpg/1920px-Terracotta_Army-China.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ac/Zhangye_Danxia_2016.jpg/1920px-Zhangye_Danxia_2016.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/2/23/Karakul_Lake_-_Muztag_Ata%2C_China.jpg/1920px-Karakul_Lake_-_Muztag_Ata%2C_China.jpg',
+  ],
+  'Southwest China: Chengdu to Shangri-La': [
+    'https://upload.wikimedia.org/wikipedia/commons/5/54/Chengdu-pandas-d10.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/20260223_Dali_Chongsheng_Temple_Pagoda_and_Erhai_Lake_01.jpg/1920px-20260223_Dali_Chongsheng_Temple_Pagoda_and_Erhai_Lake_01.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/be/Lijiang_Yunnan_China_Jade-Dragon-Snow-Mountain-01.jpg/1920px-Lijiang_Yunnan_China_Jade-Dragon-Snow-Mountain-01.jpg',
+  ],
+  'South Korea: Seoul to Busan': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ed/Bulguksa_temple_entrance_gate_stairs_flower_bed_and_blue_sky_in_Gyeongju_South_Korea.jpg/1920px-Bulguksa_temple_entrance_gate_stairs_flower_bed_and_blue_sky_in_Gyeongju_South_Korea.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ec/Haedong_Yonggungsa_Temple_20200522_044.jpg/1920px-Haedong_Yonggungsa_Temple_20200522_044.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Courtyard_of_colorful_paper_lanterns_and_shadow_patterns_at_Bulguksa_temple_Gyeongju_South_Korea.jpg/1920px-Courtyard_of_colorful_paper_lanterns_and_shadow_patterns_at_Bulguksa_temple_Gyeongju_South_Korea.jpg',
+  ],
+  'Andes Triangle: Colombia, Ecuador & Bolivia': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c4/Cartagena_de_Indias_2.jpg/1920px-Cartagena_de_Indias_2.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/af/Valle_de_Cocora%2C_Colombia_02.jpg/1920px-Valle_de_Cocora%2C_Colombia_02.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/Salar_de_Uyuni%2C_Bolivia%2C_2016-02-04%2C_DD_10-12_HDR.JPG/1920px-Salar_de_Uyuni%2C_Bolivia%2C_2016-02-04%2C_DD_10-12_HDR.JPG',
+  ],
+  'Mexico: CDMX, Oaxaca, Palenque & Yucatán': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/Pyramid_of_the_Sun%2C_Teotihuacan%2C_from_path_to_parking_lot.jpg/1920px-Pyramid_of_the_Sun%2C_Teotihuacan%2C_from_path_to_parking_lot.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0d/Panorama_of_Monte_Alban_Archaeological_Site_-_Oaxaca_City_-_Oaxaca_-_Mexico_-_01_%286505604025%29.jpg/1920px-Panorama_of_Monte_Alban_Archaeological_Site_-_Oaxaca_City_-_Oaxaca_-_Mexico_-_01_%286505604025%29.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/51/Chichen_Itza_3.jpg/1920px-Chichen_Itza_3.jpg',
+  ],
+  'Lebanon & Cyprus: Phoenician Coast to Troodos': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Lebanon%2C_Baalbek%2C_Temple_of_Bacchus_2.jpg/1920px-Lebanon%2C_Baalbek%2C_Temple_of_Bacchus_2.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ae/Byblos_Castle%2C_Byblos%2C_Lebanon.jpg/1920px-Byblos_Castle%2C_Byblos%2C_Lebanon.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Harbour%2C_Kyrenia%2C_Northern_Cyprus_07.jpg/1920px-Harbour%2C_Kyrenia%2C_Northern_Cyprus_07.jpg',
+  ],
+  'India: Delhi to Ellora': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bd/Taj_Mahal%2C_Agra%2C_India_edit3.jpg/1920px-Taj_Mahal%2C_Agra%2C_India_edit3.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f7/Jaipur_03-2016_02_Amber_Fort.jpg/1920px-Jaipur_03-2016_02_Amber_Fort.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/Courtyard_and_Mahabharata_Reliefs_at_the_Kailasa_Temple%2C_Ellora_01.jpg/1920px-Courtyard_and_Mahabharata_Reliefs_at_the_Kailasa_Temple%2C_Ellora_01.jpg',
+  ],
+  'Sri Lanka: Kingdoms, Highlands & Coast': [
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSMeno6JBIdN-EeqmTmm6v_wTW-H3hbw6NRD3sLgoVlOw&s=10',
+    'https://upload.wikimedia.org/wikipedia/commons/7/78/Galle_Fort_wall_and_lighthouse.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Nine_Arches_Bridge_in_Ella.jpg/1920px-Nine_Arches_Bridge_in_Ella.jpg',
+  ],
+  'Pakistan: Indus Valley to Hunza': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/47/Hunza_Valley%2C_view_from_Eagle%27s_Nest.jpg/1920px-Hunza_Valley%2C_view_from_Eagle%27s_Nest.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Baltit_Fort_Hunza_valley.jpg/1920px-Baltit_Fort_Hunza_valley.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/06/Clouds_in_the_Passu_Cones_-_Hunza_Valley.jpg/1920px-Clouds_in_the_Passu_Cones_-_Hunza_Valley.jpg',
+  ],
+  'Southern Africa: Cape Town to Victoria Falls': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dc/Table_Mountain_DanieVDM.jpg/1920px-Table_Mountain_DanieVDM.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/db/African_bush_elephant_%28Loxodonta_africana%29_drinking_Kruger.jpg/1920px-African_bush_elephant_%28Loxodonta_africana%29_drinking_Kruger.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/50/0845_VictoriaFallsZimbabwe_19920803.jpg/1920px-0845_VictoriaFallsZimbabwe_19920803.jpg',
+  ],
+  'South India: Tamil Nadu & Karnataka': [
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/Brihadisvara_Temple_during_Maha_Shivaratri-WUS03611_%28edit%29.jpg/1920px-Brihadisvara_Temple_during_Maha_Shivaratri-WUS03611_%28edit%29.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Complex_of_Virupaksha_Temple%2C_Hampi_%2801%29.jpg/1920px-Complex_of_Virupaksha_Temple%2C_Hampi_%2801%29.jpg',
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/71/Gopuram_of_the_Meenakshi_Temple_at_Madurai.jpg/1920px-Gopuram_of_the_Meenakshi_Temple_at_Madurai.jpg',
+  ],
 }
 
 function tripCovers(trip: DashboardTrip): string[] {
-  return trip.cover_image ? [trip.cover_image] : DEFAULT_TRIP_COVERS[trip.title] || (trip.trip_preview_image ? [trip.trip_preview_image] : [])
+  const curated = DEFAULT_TRIP_COVERS[trip.title]
+  if (curated && curated.length > 1) return [...new Set([trip.cover_image, ...curated].filter((url): url is string => !!url))]
+  return trip.cover_image ? [trip.cover_image] : curated || (trip.trip_preview_image ? [trip.trip_preview_image] : [])
 }
 
-function CoverImages({ images, className }: { images: string[]; className: string }): React.ReactElement {
-  return images.length > 1
-    ? <div className={`${className} cover-collage`}>{images.map((src) => <img key={src} src={src} alt="" />)}</div>
-    : <img className={className} src={images[0]} alt="" />
+/** Per-trip cover crop focus. Lower Y % keeps landmark-heavy top of the photo visible above card title. */
+const COVER_OBJECT_POSITION: Record<string, string> = {
+  'Central Asia: Kazakhstan, Kyrgyzstan & Uzbekistan': 'center 30%',
+  'Southeast Asia: Thailand, Cambodia & Vietnam': 'center 28%',
+  'Greece & the Balkans: Athens to Sarajevo': 'center 28%',
+  'Japan: Tokyo, Kyoto, Osaka & Kanazawa': 'center 30%',
+  'Morocco & Tunisia: Sahara to Carthage': 'center 32%',
+  'Iceland & Norway: Ring Road to the Fjords': 'center 30%',
+  'Central Europe: Prague to Budapest': 'center 30%',
+  'Portugal: Lisbon, Évora & Porto': 'center 28%',
+  'Guatemala: Antigua, Acatenango & Atitlán': 'center 72%',
+  'Canadian Rockies: Banff to Jasper': 'center 28%',
+  'Northern China: Beijing to Xi\'an': 'center 32%',
+  'Silk Road: Xi\'an to Kashgar': 'center 28%',
+  'Southwest China: Chengdu to Shangri-La': 'center 34%',
+  'South Korea: Seoul to Busan': 'center 28%',
+  'Andes Triangle: Colombia, Ecuador & Bolivia': 'center 30%',
+  'South India: Tamil Nadu & Karnataka': 'center 28%',
+  'Mexico: CDMX, Oaxaca, Palenque & Yucatán': 'center 28%',
+  'Lebanon & Cyprus: Phoenician Coast to Troodos': 'center 28%',
+  'India: Delhi to Ellora': 'center 28%',
+  'Sri Lanka: Kingdoms, Highlands & Coast': 'center 32%',
+  'Pakistan: Indus Valley to Hunza': 'center 28%',
+  'Southern Africa: Cape Town to Victoria Falls': 'center 58%',
+}
+
+function CoverImages({ images, className, isHovered, fallback, objectPosition }: {
+  images: string[]; className: string; isHovered: boolean; fallback: string; objectPosition?: string
+}): React.ReactElement {
+  const [active, setActive] = useState(0)
+  const [retry, setRetry] = useState(0)
+  const imgStyle = objectPosition ? { objectPosition } : undefined
+  useEffect(() => {
+    const retryFailedImages = () => setRetry(value => value + 1)
+    window.addEventListener('online', retryFailedImages)
+    return () => window.removeEventListener('online', retryFailedImages)
+  }, [])
+  const hideFailedImage = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    event.currentTarget.style.display = 'none'
+  }
+  useEffect(() => {
+    if (!isHovered || images.length <= 1) return
+    const timer = window.setTimeout(() => setActive((active + 1) % images.length), 1500)
+    return () => window.clearTimeout(timer)
+  }, [active, isHovered, images.length])
+  if (images.length <= 1) return <img key={retry} className={className} src={images[0]} alt="" style={imgStyle} onError={hideFailedImage} />
+  const show = (index: number) => setActive((index + images.length) % images.length)
+  return (
+    <div className={`${className} cover-carousel`} style={{ background: fallback }}>
+      {images.map((src, index) => <img key={`${src}-${retry}`} className={`cover-carousel-slide${index === active ? ' active' : ''}`} src={src} alt="" style={imgStyle} onError={hideFailedImage} />)}      {images[active]?.includes('upload.wikimedia.org/wikipedia/commons/4/49/Portland_HeadLight') && (
+        <a className="cover-carousel-credit" href="https://commons.wikimedia.org/wiki/File:Portland_HeadLight_(cropped).jpg" target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+          Giabar · CC BY-SA 3.0
+        </a>
+      )}
+      <div className="cover-carousel-dots">
+        {images.map((src, index) => (
+          <button key={src} type="button" aria-label={`Show cover ${index + 1}`} aria-pressed={index === active}
+            className={`cover-carousel-dot${index === active ? ' active' : ''}`}
+            onClick={e => { e.stopPropagation(); show(index) }} />
+        ))}
+      </div>
+      <div className="cover-carousel-arrows">
+        <button type="button" aria-label="Previous cover image" className="cover-carousel-arrow"
+          onClick={e => { e.stopPropagation(); show(active - 1) }}><ChevronLeft size={18} /></button>
+        <button type="button" aria-label="Next cover image" className="cover-carousel-arrow"
+          onClick={e => { e.stopPropagation(); show(active + 1) }}><ChevronRight size={18} /></button>
+      </div>
+    </div>
+  )
 }
 
 function tripGradient(id: number): string { return entityGradient(id) }
@@ -138,23 +358,90 @@ export default function DashboardPage(): React.ReactElement {
   // useDashboard data hook; this component only renders what it returns.
   const {
     demoMode, locale, t, navigate,
-    spotlight, heroBundle, stats, upcoming, gridTrips, isLoading,
+    spotlight, heroBundle, stats, upcoming, recentActivity, gridTrips, isLoading,
     loadError, retryLoad,
-    tripFilter, setTripFilter, viewMode, toggleViewMode,
+    tripFilter, setTripFilter, viewMode, selectViewMode,
+    completedSort, setCompletedSort, canReorder,
     showForm, setShowForm, editingTrip, setEditingTrip,
     deleteTrip, setDeleteTrip, copyTrip, setCopyTrip, setTrips,
     handleCreate, handleUpdate, confirmDelete, handleArchive, handleUnarchive, confirmCopy,
+    handleReorderGrid,
     allSubOpen, setAllSubOpen,
   } = useDashboard()
 
   // Per-device dashboard widget visibility (from the appearance config).
   const isMobile = useIsMobile()
+  const [arrangeMode, setArrangeMode] = useState(false)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [draftOrder, setDraftOrder] = useState<number[] | null>(null)
+  const [lift, setLift] = useState<LiftState | null>(null)
+  const overIndexRef = useRef<number | null>(null)
+  const suppressOpenRef = useRef(false)
+  const arrangedTrips = draftOrder
+    ? draftOrder.map(id => gridTrips.find(trip => trip.id === id)).filter((trip): trip is DashboardTrip => !!trip)
+    : gridTrips
+  const liftedTrip = lift ? arrangedTrips.find(trip => trip.id === lift.tripId) ?? null : null
+
+  const completedSortOptions: { value: CompletedSortKey; label: string }[] = [
+    { value: 'date-desc', label: t('dashboard.sort.dateDesc') },
+    { value: 'date-asc', label: t('dashboard.sort.dateAsc') },
+    { value: 'duration-desc', label: t('dashboard.sort.durationDesc') },
+    { value: 'duration-asc', label: t('dashboard.sort.durationAsc') },
+    { value: 'places-desc', label: t('dashboard.sort.placesDesc') },
+    { value: 'places-asc', label: t('dashboard.sort.placesAsc') },
+  ]
+
+  const exitArrangeMode = () => {
+    setArrangeMode(false)
+    setOverIndex(null)
+    setDraftOrder(null)
+    setLift(null)
+    overIndexRef.current = null
+  }
+
+  useEffect(() => { exitArrangeMode() }, [tripFilter])
+
+  useEffect(() => {
+    if (!arrangeMode) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') exitArrangeMode() }
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target
+      if (!(target instanceof Element)) return
+      // Stay in arrange mode while interacting with trip cards (or the floating ghost).
+      if (target.closest('[data-trip-index], .trip-drag-ghost')) return
+      exitArrangeMode()
+    }
+    window.addEventListener('keydown', onKey)
+    // Defer so the releasing pointer from a long-press doesn't immediately clear arrange mode.
+    const timer = window.setTimeout(() => {
+      window.addEventListener('pointerdown', onPointerDown, true)
+    }, 0)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [arrangeMode])
   const appearanceCfg = useSettingsStore(s => s.settings.appearance)
   const dashCfg = normalizeAppearance(appearanceCfg).dashboard
   const sideWidgets = isMobile ? dashCfg.mobile : dashCfg.desktop
   const showCurrency = sideWidgets.currency
   const showTimezones = sideWidgets.timezones
   const showUpcoming = sideWidgets.upcomingReservations
+  const today = new Date().toISOString().slice(0, 10)
+  const weatherPlace = heroBundle?.places.find(p => p.lat != null && p.lng != null)
+  const [destinationCountryCode, setDestinationCountryCode] = useState<string | null>(null)
+  useEffect(() => {
+    if (weatherPlace?.lat == null || weatherPlace.lng == null) { setDestinationCountryCode(null); return }
+    let cancelled = false
+    setDestinationCountryCode(null)
+    mapsApi.reverse(weatherPlace.lat, weatherPlace.lng, locale)
+      .then(result => { if (!cancelled) setDestinationCountryCode(result.country_code || null) })
+      .catch(() => { if (!cancelled) setDestinationCountryCode(null) })
+    return () => { cancelled = true }
+  }, [weatherPlace?.id, weatherPlace?.lat, weatherPlace?.lng, locale])
+  const tripCurrency = currencyForCountryCode(destinationCountryCode) || spotlight?.currency
+  const showWeather = !!spotlight?.start_date && spotlight.start_date >= today && !!weatherPlace
   // Collections is double-gated: the admin addon AND the per-user widget flag.
   const isAddonEnabled = useAddonStore(s => s.isEnabled)
   const showCollections = isAddonEnabled('collections') && sideWidgets.collections
@@ -162,7 +449,7 @@ export default function DashboardPage(): React.ReactElement {
   // Only true dashboard widgets belong here — hero mounts on the boarding pass, and
   // place-detail/day-detail widgets live inside the planner panels, not the sidebar.
   const widgetPlugins = usePluginStore(s => s.plugins).filter(p => p.type === 'widget' && p.slot !== 'hero' && p.slot !== 'place-detail' && p.slot !== 'day-detail' && p.slot !== 'reservation-detail')
-  const sidebarVisible = (isMobile || dashCfg.desktop.sidebar) && (showCurrency || showCollections || showTimezones || showUpcoming || widgetPlugins.length > 0)
+  const sidebarVisible = (isMobile || dashCfg.desktop.sidebar) && (showCurrency || showWeather || showCollections || showTimezones || showUpcoming || widgetPlugins.length > 0)
 
   // Plugin-contributed badges on the trip cards (tripCardProvider hook). One fetch for
   // all visible cards; only runs when at least one plugin is active. Fail-safe.
@@ -179,7 +466,7 @@ export default function DashboardPage(): React.ReactElement {
       {demoMode && <DemoBanner />}
       <div className="trek-dash-scroll">
         <MobileTopBar />
-        <main className="page" data-no-sidebar={sidebarVisible ? undefined : 'true'}>
+        <main className="page" data-no-sidebar={sidebarVisible ? undefined : 'true'} data-season-view={viewMode === 'seasons' && tripFilter === 'planned' ? 'true' : undefined}>
           <div className="page-main">
             {loadError && (
               <div className="dash-error" role="alert">
@@ -189,6 +476,30 @@ export default function DashboardPage(): React.ReactElement {
                   {t('dashboard.retry')}
                 </button>
               </div>
+            )}
+            {isLoading && !spotlight && !(viewMode === 'seasons' && tripFilter === 'planned') && (
+              <>
+                <section className="hero-trip dash-hero-skeleton" aria-hidden="true">
+                  <span className="hero-skeleton-badge trek-skeleton" />
+                  <span className="hero-skeleton-title trek-skeleton" />
+                  {!isMobile && (
+                    <div className="hero-skeleton-pass">
+                      {Array.from({ length: 4 }, (_, index) => <span className="trek-skeleton" key={index} />)}
+                    </div>
+                  )}
+                </section>
+                {isMobile && (
+                  <section className="pass-card dash-pass-skeleton" aria-hidden="true">
+                    {Array.from({ length: 4 }, (_, index) => (
+                      <div className="pass-cell" key={index}>
+                        <span className="trek-skeleton" />
+                        <span className="trek-skeleton" />
+                          <span className="trek-skeleton" />
+                      </div>
+                    ))}
+                  </section>
+                )}
+              </>
             )}
             {spotlight && (
               <BoardingPassHero
@@ -206,14 +517,24 @@ export default function DashboardPage(): React.ReactElement {
 
             <AtlasStats stats={stats} />
 
-            <section>
+            <section className="dashboard-trip-list">
               <div className="sec-head">
                 <h3 className="sec-title">{t('dashboard.title')}</h3>
                 <div className="sec-tools">
-                  <div className="seg">
-                    <button className={tripFilter === 'planned' ? 'on' : ''} onClick={() => setTripFilter('planned')}>{t('dashboard.filter.planned')}</button>
-                    <button className={tripFilter === 'archive' ? 'on' : ''} onClick={() => setTripFilter('archive')}>{t('dashboard.archived')}</button>
-                    <button className={tripFilter === 'completed' ? 'on' : ''} onClick={() => setTripFilter('completed')}>{t('dashboard.mobile.completed')}</button>
+                  {tripFilter === 'completed' && gridTrips.length > 1 && (
+                    <div className="trip-sort" role="group" aria-label={t('dashboard.sort.label')}>
+                      <CustomSelect
+                        value={completedSort}
+                        onChange={(v) => setCompletedSort(v as CompletedSortKey)}
+                        options={completedSortOptions}
+                        size="sm"
+                      />
+                    </div>
+                  )}
+                  <div className="seg" role="tablist" aria-label={t('dashboard.title')}>
+                    <button type="button" role="tab" aria-selected={tripFilter === 'planned'} className={tripFilter === 'planned' ? 'on' : ''} onClick={() => setTripFilter('planned')}>{t('dashboard.filter.planned')}</button>
+                    <button type="button" role="tab" aria-selected={tripFilter === 'archive'} className={tripFilter === 'archive' ? 'on' : ''} onClick={() => setTripFilter('archive')}>{t('dashboard.archived')}</button>
+                    <button type="button" role="tab" aria-selected={tripFilter === 'completed'} className={tripFilter === 'completed' ? 'on' : ''} onClick={() => setTripFilter('completed')}>{t('dashboard.mobile.completed')}</button>
                   </div>
                   <button
                     className="tool-action"
@@ -224,9 +545,11 @@ export default function DashboardPage(): React.ReactElement {
                   >
                     <CalendarPlus size={17} />
                   </button>
-                  <button className="tool-action" aria-label={t('dashboard.aria.toggleView')} onClick={toggleViewMode} style={{ width: 38, height: 38, borderRadius: 11 }}>
-                    {viewMode === 'grid' ? <List size={17} /> : <LayoutGrid size={17} />}
-                  </button>
+                  <div className="seg trip-view-select" role="group" aria-label="Trip view">
+                    <button type="button" aria-pressed={viewMode === 'grid'} onClick={() => selectViewMode('grid')}><LayoutGrid size={15} />Grid</button>
+                    <button type="button" aria-pressed={viewMode === 'list'} onClick={() => selectViewMode('list')}><List size={15} />List</button>
+                    {tripFilter === 'planned' && <button type="button" aria-pressed={viewMode === 'seasons'} onClick={() => selectViewMode('seasons')}>Seasons</button>}
+                  </div>
                 </div>
               </div>
               {allSubOpen && (
@@ -238,18 +561,56 @@ export default function DashboardPage(): React.ReactElement {
                 />
               )}
 
-              {gridTrips.length === 0 && tripFilter === 'planned' && !isLoading && !loadError && (
+              {!isLoading && !loadError && arrangedTrips.length === 0 && tripFilter === 'archive' && (
+                <div className="trips-empty">
+                  <h4>{t('dashboard.emptyArchivedTitle')}</h4>
+                  <p>{t('dashboard.emptyArchivedText')}</p>
+                </div>
+              )}
+              {!isLoading && !loadError && arrangedTrips.length === 0 && tripFilter === 'completed' && (
+                <div className="trips-empty">
+                  <h4>{t('dashboard.emptyCompletedTitle')}</h4>
+                  <p>{t('dashboard.emptyCompletedText')}</p>
+                </div>
+              )}
+              {!isLoading && !loadError && arrangedTrips.length === 0 && tripFilter === 'planned' && !spotlight && (
                 <div className="trips-empty">
                   <h4>{t('dashboard.emptyTitle')}</h4>
                   <p>{t('dashboard.emptyText')}</p>
                 </div>
               )}
 
-              <div className={`trips${viewMode === 'list' ? ' list-view' : ''}`}>
-                {gridTrips.map(trip => (
+              {isLoading && <div className="sr-only" role="status">{t('dashboard.subtitle.loading')}</div>}
+              {viewMode === 'seasons' && tripFilter === 'planned' ? (
+                <TripSeasonsView trips={[...(spotlight ? [spotlight] : []), ...gridTrips.filter(trip => trip.id !== spotlight?.id)]} onOpen={id => navigate(`/trips/${id}`)} />
+              ) : viewMode !== 'seasons' || tripFilter !== 'planned' ? (
+              <div
+                className={`trips${viewMode === 'list' ? ' list-view' : ''}${canReorder && arrangedTrips.length > 1 ? ' trips-reorderable' : ''}${arrangeMode ? ' is-arranging' : ''}`}
+                aria-busy={isLoading}
+              >
+                {isLoading && arrangedTrips.length === 0 && Array.from({ length: 3 }, (_, index) => (
+                  <article className="trip-card trip-card-skeleton" key={`loading-${index}`} aria-hidden="true">
+                    <div className="trip-cover trek-skeleton">
+                      <div className="trip-cover-content"><div className="trip-skeleton-title trek-skeleton" /></div>
+                    </div>
+                    <div className="trip-body">
+                      <div className="trip-dates"><span className="trip-skeleton-date trek-skeleton" /></div>
+                      <div className="trip-meta" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                        {Array.from({ length: 3 }, (_, cell) => (
+                          <span className="trip-skeleton-meta-cell" key={cell}>
+                            <span className="trek-skeleton" />
+                            <span className="trek-skeleton" />
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {arrangedTrips.map((trip, index) => (
                   <TripCard
                     key={trip.id}
                     trip={trip}
+                    index={index}
                     locale={locale}
                     badges={badgesFor(trip.id)}
                     href={`/trips/${trip.id}`}
@@ -258,6 +619,143 @@ export default function DashboardPage(): React.ReactElement {
                     onCopy={() => setCopyTrip(trip)}
                     onArchive={() => trip.is_archived ? handleUnarchive(trip.id) : handleArchive(trip.id)}
                     onDelete={() => setDeleteTrip(trip)}
+                    reorderable={canReorder && arrangedTrips.length > 1}
+                    arrangeMode={arrangeMode}
+                    dragging={lift?.tripId === trip.id}
+                    dragOver={overIndex === index && lift != null && lift.tripId !== trip.id}
+                    onArrangePointerDown={(e) => {
+                      if (!canReorder || arrangedTrips.length < 2 || e.button !== 0) return
+                      if (e.target instanceof Element && e.target.closest('button, a, [role="button"]')) return
+
+                      const cardEl = e.currentTarget
+                      const startX = e.clientX
+                      const startY = e.clientY
+                      let from = index
+                      let order = (draftOrder ?? arrangedTrips.map(item => item.id)).slice()
+                      let armed = arrangeMode
+                      let lifted = false
+                      let holdTimer: number | null = null
+                      let didReorder = false
+                      let originLeft = 0
+                      let originTop = 0
+                      let cardWidth = 0
+                      let cardHeight = 0
+                      const tripId = trip.id
+
+                      const setOver = (next: number | null) => {
+                        overIndexRef.current = next
+                        setOverIndex(next)
+                      }
+
+                      const hitIndex = (clientX: number, clientY: number): number | null => {
+                        const stack = document.elementsFromPoint(clientX, clientY)
+                        for (const el of stack) {
+                          if (!(el instanceof Element)) continue
+                          if (el.closest('.trip-drag-ghost')) continue
+                          const card = el.closest('[data-trip-index]')
+                          if (!card) continue
+                          const to = Number(card.getAttribute('data-trip-index'))
+                          return Number.isFinite(to) ? to : null
+                        }
+                        return null
+                      }
+
+                      const beginLift = () => {
+                        if (lifted) return
+                        const rect = cardEl.getBoundingClientRect()
+                        originLeft = rect.left
+                        originTop = rect.top
+                        cardWidth = rect.width
+                        cardHeight = rect.height
+                        lifted = true
+                        setLift({
+                          tripId,
+                          index: from,
+                          width: cardWidth,
+                          height: cardHeight,
+                          originLeft,
+                          originTop,
+                          dx: 0,
+                          dy: 0,
+                        })
+                      }
+
+                      const armArrange = () => {
+                        armed = true
+                        suppressOpenRef.current = true
+                        setArrangeMode(true)
+                        setDraftOrder(order.slice())
+                        setOver(from)
+                        try { navigator.vibrate?.(12) } catch { /* optional */ }
+                      }
+
+                      if (arrangeMode) {
+                        suppressOpenRef.current = true
+                        setOver(from)
+                      } else {
+                        holdTimer = window.setTimeout(armArrange, ARRANGE_HOLD_MS)
+                      }
+
+                      const onMove = (ev: PointerEvent) => {
+                        const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY)
+                        if (!armed && dist > ARRANGE_MOVE_CANCEL_PX) {
+                          if (holdTimer != null) window.clearTimeout(holdTimer)
+                          holdTimer = null
+                          cleanup()
+                          return
+                        }
+                        if (!armed) return
+                        ev.preventDefault()
+                        if (!lifted && dist >= ARRANGE_LIFT_PX) beginLift()
+                        if (lifted) {
+                          const dx = ev.clientX - startX
+                          const dy = ev.clientY - startY
+                          setLift(prev => prev && prev.tripId === tripId
+                            ? { ...prev, dx, dy, index: from }
+                            : prev)
+                        }
+                        const to = hitIndex(ev.clientX, ev.clientY)
+                        if (to == null || to === from) return
+                        order = moveTripId(order, from, to)
+                        from = to
+                        didReorder = true
+                        setDraftOrder(order.slice())
+                        setOver(from)
+                        setLift(prev => prev && prev.tripId === tripId ? { ...prev, index: from } : prev)
+                      }
+
+                      const onUp = () => {
+                        if (holdTimer != null) window.clearTimeout(holdTimer)
+                        setLift(null)
+                        setOver(null)
+                        cleanup()
+                        if (didReorder) {
+                          setDraftOrder(null)
+                          void handleReorderGrid(order)
+                        }
+                        if (armed || didReorder) {
+                          suppressOpenRef.current = true
+                          window.setTimeout(() => { suppressOpenRef.current = false }, 0)
+                        }
+                      }
+
+                      const cleanup = () => {
+                        window.removeEventListener('pointermove', onMove)
+                        window.removeEventListener('pointerup', onUp)
+                        window.removeEventListener('pointercancel', onUp)
+                      }
+
+                      window.addEventListener('pointermove', onMove, { passive: false })
+                      window.addEventListener('pointerup', onUp)
+                      window.addEventListener('pointercancel', onUp)
+                    }}
+                    suppressOpen={() => {
+                      if (suppressOpenRef.current || arrangeMode) {
+                        suppressOpenRef.current = false
+                        return true
+                      }
+                      return false
+                    }}
                   />
                 ))}
                 {tripFilter === 'planned' && !isLoading && (
@@ -270,15 +768,62 @@ export default function DashboardPage(): React.ReactElement {
                   </button>
                 )}
               </div>
+              ) : null}
+              {lift && liftedTrip && (
+                <div
+                  className="trip-drag-ghost"
+                  style={{
+                    left: lift.originLeft + lift.dx,
+                    top: lift.originTop + lift.dy,
+                    width: lift.width,
+                  }}
+                  aria-hidden="true"
+                >
+                  <TripCard
+                    trip={liftedTrip}
+                    index={lift.index}
+                    locale={locale}
+                    badges={badgesFor(liftedTrip.id)}
+                    href={`/trips/${liftedTrip.id}`}
+                    onOpen={() => {}}
+                    onEdit={() => {}}
+                    onCopy={() => {}}
+                    onArchive={() => {}}
+                    onDelete={() => {}}
+                    floating
+                  />
+                </div>
+              )}
             </section>
+
+            {recentActivity.length > 0 && (
+              <section className="recent-activity" aria-labelledby="recent-activity-title">
+                <div className="sec-head">
+                  <h3 className="sec-title" id="recent-activity-title">Recent activity</h3>
+                </div>
+                <div className="recent-activity-list">
+                  {recentActivity.map(item => (
+                    <button key={`${item.entity_type}-${item.entity_id}`} className="recent-activity-row" onClick={() => navigate(`/trips/${item.trip_id}`)}>
+                      <span className="recent-activity-copy">
+                        <span className="recent-activity-title">{item.entity_type === 'trip' || item.entity_type === 'trip_updated' ? item.trip_title : item.item_title}</span>
+                        <span className="recent-activity-sub">{item.entity_type === 'trip' ? 'Trip created' : item.entity_type === 'trip_updated' ? 'Trip updated' : `${item.entity_type === 'place_added' ? 'Added to' : 'Updated in'} ${item.trip_title}`}</span>
+                      </span>
+                      <span className="recent-activity-date">{new Date(item.activity_at).toLocaleDateString(locale, { month: 'short', day: 'numeric' })}</span>
+                      <ArrowRight size={15} aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
           {sidebarVisible && (
             <aside className="page-sidebar">
-              {showCurrency && <CurrencyTool />}
-              {showCollections && <CollectionsWidget onOpen={() => navigate('/collections')} />}
+              {showCurrency && <CurrencyTool tripCurrency={tripCurrency} tripTitle={spotlight?.title} />}
+              {showWeather && weatherPlace && spotlight?.start_date && <WeatherTool place={weatherPlace} date={spotlight.start_date} locale={locale} />}
               {showTimezones && <TimezoneTool locale={locale} />}
               {showUpcoming && <UpcomingTool items={upcoming} locale={locale} onOpen={(tripId) => navigate(`/trips/${tripId}`)} />}
+              {showCollections && <CollectionsWidget onOpen={() => navigate('/collections')} />}
               <PluginWidgets plugins={widgetPlugins} tripId={spotlight ? String(spotlight.id) : null} />
             </aside>
           )}
@@ -319,6 +864,7 @@ export default function DashboardPage(): React.ReactElement {
 }
 
 function openCard(e: React.MouseEvent, href: string, onOpen: () => void): void {
+  if (e.target instanceof Element && e.target.closest('button, a, [role="button"]')) return
   if (e.metaKey || e.ctrlKey) {
     window.open(href, '_blank', 'noopener,noreferrer')
     return
@@ -332,6 +878,7 @@ function BoardingPassHero({ trip, bundle, locale, href, onOpen, onEdit, onCopy, 
   onEdit: () => void; onCopy: () => void; onArchive: () => void; onDelete: () => void
 }): React.ReactElement {
   const { t } = useTranslation()
+  const [isHovered, setIsHovered] = useState(false)
   const covers = tripCovers(trip)
   const mobile = useIsMobile()
   const heroPlugins = usePluginStore(s => s.plugins).filter(p => p.type === 'widget' && p.slot === 'hero')
@@ -426,9 +973,9 @@ function BoardingPassHero({ trip, bundle, locale, href, onOpen, onEdit, onCopy, 
 
   return (
     <>
-    <section className="hero-trip" onClick={(e) => openCard(e, href, onOpen)}>
+    <section className="hero-trip" style={{ background: tripGradient(trip.id) }} onClick={(e) => openCard(e, href, onOpen)} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       {covers.length
-        ? <CoverImages images={covers} className="bg" />
+        ? <CoverImages images={covers} className="bg" isHovered={isHovered} fallback={tripGradient(trip.id)} objectPosition={COVER_OBJECT_POSITION[trip.title]} />
         : <div className="bg" style={{ background: tripGradient(trip.id) }} />}
       <div className="scrim" />
       <div className="hero-content">
@@ -504,12 +1051,17 @@ function AtlasStats({ stats }: { stats: TravelStats | null }): React.ReactElemen
   const atlasTemplateM =
     [dash.mobile.tripsTotal && '1fr', dash.mobile.daysTraveled && '1fr'].filter(Boolean).join(' ') || '1fr'
 
-  const countries = stats?.countries || []
+  const countries = stats
+    ? [...new Set(['US', ...(stats.countries || []).filter(code => code !== 'US')])]
+    : []
+  const countryNames = new Intl.DisplayNames(['en'], { type: 'region' })
   const distanceKm = stats?.totalDistanceKm || 0
   const distance = convertDistance(distanceKm, distanceUnit)
   const distanceText = formatCompactDistance(distance)
   const equatorDistance = convertDistance(40075, distanceUnit)
   const equatorTimes = (distance / equatorDistance).toFixed(2)
+  const equatorProgress = (distance % equatorDistance) / equatorDistance
+  const equatorRingLength = 2 * Math.PI * 14
   const distanceLabel = getDistanceUnitLabel(distanceUnit)
 
   return (
@@ -517,14 +1069,14 @@ function AtlasStats({ stats }: { stats: TravelStats | null }): React.ReactElemen
       {showAtlas && (
         <div className="atlas-card passport">
           <div className="label">{t('dashboard.atlas.countriesVisited')}</div>
-          <div className="value mono">{countries.length} <span className="unit text-[oklch(1_0_0_/_.55)]">{t('dashboard.atlas.ofTotal', { total: 195 })}</span></div>
+          <div className="value mono">{stats ? countries.length : '—'} {stats && <span className="unit text-[oklch(1_0_0_/_.55)]">{t('dashboard.atlas.ofTotal', { total: 195 })}</span>}</div>
           <div className="passport-flags">
-            {countries.slice(0, 5).map((c, i) => (
-              <span key={i} className="flag" title={c}>
-                <img src={`https://flagcdn.com/w40/${c.toLowerCase()}.png`} alt={c} loading="lazy" />
+            {stats && countries.slice(0, 5).map((c, i) => (
+              <span key={c} className="flag" title={`${countryNames.of(c) || c} (${c})`}>
+                <img src={`https://flagcdn.com/w40/${c.toLowerCase()}.png`} alt={countryNames.of(c) || c} loading="lazy" />
               </span>
             ))}
-            {countries.length > 5 && <span className="flag more">+{countries.length - 5}</span>}
+            {stats && countries.length > 5 && <span className="flag more">+{countries.length - 5}</span>}
           </div>
           <div className="delta" />
         </div>
@@ -533,8 +1085,8 @@ function AtlasStats({ stats }: { stats: TravelStats | null }): React.ReactElemen
       {showTrips && (
         <div className="atlas-card">
           <div className="label">{t('dashboard.atlas.tripsTotal')}</div>
-          <div className="value mono">{stats?.totalTrips ?? 0}</div>
-          <div className="delta">{t('dashboard.atlas.placesMapped', { count: stats?.totalPlaces ?? 0 })}</div>
+          <div className="value mono">{stats?.totalTrips ?? '—'}</div>
+          <div className="delta">{stats ? t('dashboard.atlas.placesMapped', { count: stats.totalPlaces ?? 0 }) : '—'}</div>
           <svg className="spark" width="80" height="36" viewBox="0 0 80 36">
             <polyline points="0,30 12,26 22,28 32,18 44,22 56,10 68,14 80,4" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -544,7 +1096,7 @@ function AtlasStats({ stats }: { stats: TravelStats | null }): React.ReactElemen
       {showDays && (
         <div className="atlas-card">
           <div className="label">{t('dashboard.atlas.daysTraveled')}</div>
-          <div className="value mono">{stats?.totalDays ?? 0} <span className="unit">{t('dashboard.atlas.daysUnit')}</span></div>
+          <div className="value mono">{stats ? <>{stats.totalDays ?? 0} <span className="unit">{t('dashboard.atlas.daysUnit')}</span></> : '—'}</div>
           <div className="delta">{t('dashboard.atlas.acrossAllTrips')}</div>
           <svg className="spark" width="80" height="36" viewBox="0 0 80 36">
             <path d="M0 30 Q10 24 20 26 T40 20 T60 14 T80 10" fill="none" strokeWidth="2" strokeLinecap="round" />
@@ -555,11 +1107,11 @@ function AtlasStats({ stats }: { stats: TravelStats | null }): React.ReactElemen
       {showDistance && (
         <div className="atlas-card">
           <div className="label">{t('dashboard.atlas.distanceFlown')}</div>
-          <div className="value mono">{distanceText} <span className="unit">{distanceLabel}</span></div>
-          <div className="delta">{t('dashboard.atlas.aroundEquator', { count: equatorTimes })}</div>
-          <svg className="spark" width="80" height="36" viewBox="0 0 80 36">
+          <div className="value mono">{stats ? <>{distanceText} <span className="unit">{distanceLabel}</span></> : '—'}</div>
+          <div className="delta">{stats ? t('dashboard.atlas.aroundEquator', { count: equatorTimes }) : '—'}</div>
+          <svg aria-hidden="true" className="spark" width="80" height="36" viewBox="0 0 80 36">
             <circle cx="40" cy="18" r="14" fill="none" stroke="oklch(0.88 0.01 70)" strokeWidth="2" />
-            <circle cx="40" cy="18" r="14" fill="none" strokeWidth="2" strokeDasharray="58 88" strokeLinecap="round" transform="rotate(-90 40 18)" />
+            <circle cx="40" cy="18" r="14" fill="none" strokeWidth="2" strokeDasharray={`${equatorRingLength * equatorProgress} ${equatorRingLength}`} strokeLinecap="round" transform="rotate(-90 40 18)" />
           </svg>
         </div>
       )}
@@ -568,11 +1120,22 @@ function AtlasStats({ stats }: { stats: TravelStats | null }): React.ReactElemen
 }
 
 // ── Trip card ────────────────────────────────────────────────────────────────
-function TripCard({ trip, locale, badges, href, onOpen, onEdit, onCopy, onArchive, onDelete }: {
-  trip: DashboardTrip; locale: string; badges?: TripCardBadge[]; href: string; onOpen: () => void
+function TripCard({ trip, index, locale, badges, href, onOpen, onEdit, onCopy, onArchive, onDelete,
+  reorderable = false, arrangeMode = false, dragging = false, dragOver = false, floating = false,
+  onArrangePointerDown, suppressOpen,
+}: {
+  trip: DashboardTrip; index: number; locale: string; badges?: TripCardBadge[]; href: string; onOpen: () => void
   onEdit: () => void; onCopy: () => void; onArchive: () => void; onDelete: () => void
+  reorderable?: boolean
+  arrangeMode?: boolean
+  dragging?: boolean
+  dragOver?: boolean
+  floating?: boolean
+  onArrangePointerDown?: (e: React.PointerEvent) => void
+  suppressOpen?: () => boolean
 }): React.ReactElement {
   const { t } = useTranslation()
+  const [isHovered, setIsHovered] = useState(false)
   const covers = tripCovers(trip)
   const status = getTripStatus(trip)
   const start = splitDate(trip.start_date, locale)
@@ -591,10 +1154,23 @@ function TripCard({ trip, locale, badges, href, onOpen, onEdit, onCopy, onArchiv
   const stop = (e: React.MouseEvent, fn: () => void) => { e.stopPropagation(); fn() }
 
   return (
-    <article className="trip-card" onClick={(e) => openCard(e, href, onOpen)}>
-      <div className="trip-cover">
+    <article
+      className={`trip-card${dragging && !floating ? ' is-drag-placeholder' : ''}${dragOver ? ' is-drag-over' : ''}`}
+      data-trip-index={floating ? undefined : index}
+      aria-grabbed={dragging || undefined}
+      title={!floating && reorderable && !arrangeMode ? t('dashboard.reorder.arrangeHint') : undefined}
+      onClick={(e) => {
+        if (floating) return
+        if (suppressOpen?.()) return
+        openCard(e, href, onOpen)
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onPointerDown={!floating && reorderable ? onArrangePointerDown : undefined}
+    >
+      <div className="trip-cover" style={{ background: tripGradient(trip.id) }}>
         {covers.length
-          ? <CoverImages images={covers} className="trip-cover-image" />
+          ? <CoverImages images={covers} className="trip-cover-image" isHovered={isHovered && !arrangeMode} fallback={tripGradient(trip.id)} objectPosition={COVER_OBJECT_POSITION[trip.title]} />
           : <div style={{ width: '100%', height: '100%', background: tripGradient(trip.id) }} />}
         <div className={`trip-status ${statusClass}`}><span className="indicator" /> {statusLabel}</div>
         <div className="trip-actions">
@@ -615,7 +1191,7 @@ function TripCard({ trip, locale, badges, href, onOpen, onEdit, onCopy, onArchiv
               <span className="date-arrow"><ArrowRight size={11} /></span>
               <span className="date-num">{fullDate(trip.end_date, locale)}</span>
             </>
-          ) : <span>{t('dashboard.hero.noDates')}</span>}
+          ) : <span className="date-num">{t('dashboard.hero.noDates')}</span>}
         </div>
         <div className="trip-meta" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           <div><span className="n mono">{trip.day_count ?? 0}</span><span className="k">{t('dashboard.days')}</span></div>
@@ -629,13 +1205,16 @@ function TripCard({ trip, locale, badges, href, onOpen, onEdit, onCopy, onArchiv
 }
 
 // ── Currency tool (self-contained, mirrors the design's fx widget) ───────────
-function CurrencyTool(): React.ReactElement {
+function CurrencyTool({ tripCurrency, tripTitle }: { tripCurrency?: string; tripTitle?: string }): React.ReactElement {
   const { t } = useTranslation()
   const isLoaded = useSettingsStore(s => s.isLoaded)
   const updateSetting = useSettingsStore(s => s.updateSetting)
-  const from = useSettingsStore(s => s.settings.dashboard_fx_from) || 'EUR'
+  const savedFrom = useSettingsStore(s => s.settings.dashboard_fx_from) || 'EUR'
   const to = useSettingsStore(s => s.settings.dashboard_fx_to) || 'USD'
-  const setFrom = (v: string) => { updateSetting('dashboard_fx_from', v).catch(() => {}) }
+  const [manualFrom, setManualFrom] = useState<string | null>(null)
+  const from = manualFrom || tripCurrency || savedFrom
+  useEffect(() => { setManualFrom(null) }, [tripCurrency, tripTitle])
+  const setFrom = (v: string) => { setManualFrom(v); updateSetting('dashboard_fx_from', v).catch(() => {}) }
   const setTo = (v: string) => { updateSetting('dashboard_fx_to', v).catch(() => {}) }
   const [amount, setAmount] = useState('100')
   const [rates, setRates] = useState<Record<string, number> | null>(null)
@@ -672,7 +1251,7 @@ function CurrencyTool(): React.ReactElement {
     }).catch(() => { /* keep localStorage; retry on next load */ })
   }, [isLoaded, updateSetting])
 
-  const currencies = rates ? Object.keys(rates).sort() : CURRENCIES
+  const currencies = [...new Set([...(rates ? Object.keys(rates) : CURRENCIES), from, to])].sort()
   const ccyOptions = currencies.map(c => ({ value: c, label: c }))
   const rate = rates?.[to] ?? null
   const converted = rate != null ? (parseFloat(amount.replace(',', '.')) || 0) * rate : null
@@ -682,25 +1261,72 @@ function CurrencyTool(): React.ReactElement {
   return (
     <div className="tool">
       <div className="tool-head">
-        <div className="tool-title"><AnimatedRefreshCwIcon size={14} /> {t('dashboard.currency')}</div>
+        <div className="tool-title">{t('dashboard.currency')}</div>
         <button className="tool-action" aria-label={t('dashboard.aria.refreshRates')} onClick={fetchRate}><AnimatedRefreshCwIcon size={14} /></button>
       </div>
+      {tripCurrency && tripTitle && <div className="context-hint">Trip currency · {tripCurrency} for {tripTitle}</div>}
       <div className="fx-input">
         <div className="fx-field">
-          <div className="lbl">{t('dashboard.fx.from')}</div>
-          <input className="amt mono" value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" />
+          <label className="lbl" htmlFor="dashboard-fx-from-amount">{t('dashboard.fx.from')}</label>
+          <input id="dashboard-fx-from-amount" className="amt mono" value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" />
           <CustomSelect value={from} onChange={v => setFrom(String(v))} options={ccyOptions} searchable size="sm" style={{ marginTop: 6 }} />
         </div>
         <button className="fx-swap" aria-label={t('dashboard.aria.swapCurrencies')} onClick={swap}><ArrowRightLeft size={14} /></button>
         <div className="fx-field">
-          <div className="lbl">{t('dashboard.fx.to')}</div>
-          <input className="amt mono" value={converted != null ? converted.toFixed(2) : '—'} readOnly />
+          <label className="lbl" htmlFor="dashboard-fx-to-amount">{t('dashboard.fx.to')}</label>
+          <input id="dashboard-fx-to-amount" className="amt mono" value={converted != null ? converted.toFixed(2) : '—'} readOnly />
           <CustomSelect value={to} onChange={v => setTo(String(v))} options={ccyOptions} searchable size="sm" style={{ marginTop: 6 }} />
         </div>
       </div>
       <div className="fx-rate">
         <span>{rate != null ? `1 ${from} = ${rate.toFixed(4)} ${to}` : t('dashboard.fx.unavailable')}</span>
       </div>
+    </div>
+  )
+}
+
+function WeatherTool({ place, date, locale }: { place: Place; date: string; locale: string }): React.ReactElement | null {
+  const [weather, setWeather] = useState<Awaited<ReturnType<typeof weatherApi.get>> | null>(null)
+  const isFahrenheit = useSettingsStore(s => s.settings.temperature_unit) === 'fahrenheit'
+  const isImperial = useSettingsStore(s => s.settings.distance_unit) === 'imperial'
+  useEffect(() => {
+    if (place.lat == null || place.lng == null) return
+    let cancelled = false
+    setWeather(null)
+    fetchWeather(place.lat, place.lng, date).then(result => { if (!cancelled) setWeather(result) }).catch(() => { if (!cancelled) setWeather(null) })
+    return () => { cancelled = true }
+  }, [place.lat, place.lng, date])
+  if (!weather || weather.error) return null
+  const temperature = Math.round(isFahrenheit ? weather.temp * 9 / 5 + 32 : weather.temp)
+  const formatTemperature = (value: number) => `${Math.round(isFahrenheit ? value * 9 / 5 + 32 : value)}°`
+  const rainAmount = weather.precipitation_sum == null ? null : isImperial
+    ? `${(weather.precipitation_sum / 25.4).toFixed(2)} in`
+    : `${weather.precipitation_sum.toFixed(1)} mm`
+  const windSpeed = weather.wind_max == null ? null : `${Math.round(isImperial ? weather.wind_max * 0.621371 : weather.wind_max)} ${isImperial ? 'mph' : 'km/h'}`
+  return (
+    <div className="tool weather-tool">
+      <div className="tool-head">
+        <div className="tool-title"><CloudSun /> Weather</div>
+        <span className="weather-kind">{weather.type === 'forecast' ? 'Forecast' : 'Typical'} · {new Date(date + 'T12:00:00').toLocaleDateString(locale, { month: 'short', day: 'numeric' })}</span>
+      </div>
+      <div className="weather-place">{place.name}</div>
+      <div className="weather-summary">
+        <span className="weather-temp">{temperature}°{isFahrenheit ? 'F' : 'C'}</span>
+        <span className="weather-condition"><strong>{weather.main}</strong>{weather.description && <small>{weather.description}</small>}</span>
+        {(weather.temp_max != null || weather.temp_min != null) && (
+          <div className="weather-extremes">
+            {weather.temp_max != null && <span><small>High</small><strong>{formatTemperature(weather.temp_max)}</strong></span>}
+            {weather.temp_min != null && <span><small>Low</small><strong>{formatTemperature(weather.temp_min)}</strong></span>}
+          </div>
+        )}
+      </div>
+      {(weather.precipitation_probability_max != null || rainAmount != null || windSpeed != null) && (
+        <div className="weather-details">
+          {rainAmount != null && <div><Droplets size={15} aria-hidden="true" /><span><small>Rain</small><strong>{rainAmount}</strong></span></div>}
+          {weather.precipitation_probability_max != null && <div><CloudRain size={15} aria-hidden="true" /><span><small>Rain chance</small><strong>{Math.round(weather.precipitation_probability_max)}%</strong></span></div>}
+          {windSpeed != null && <div><Wind size={15} aria-hidden="true" /><span><small>Wind</small><strong>{windSpeed}</strong></span></div>}
+        </div>
+      )}
     </div>
   )
 }

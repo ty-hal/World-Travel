@@ -1,4 +1,4 @@
-import React, { useEffect, ReactNode } from 'react'
+import React, { useEffect, ReactNode, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import { useSettingsStore } from './store/settingsStore'
@@ -9,22 +9,22 @@ import PluginPage from './pages/PluginPage'
 import LoginPage from './pages/LoginPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
-import DashboardPage from './pages/DashboardPage'
-import TripPlannerPage from './pages/TripPlannerPage'
-import AdminPage from './pages/AdminPage'
-import SettingsPage from './pages/SettingsPage'
-import VacayPage from './pages/VacayPage'
-import HelpPage from './pages/HelpPage'
-import AtlasPage from './pages/AtlasPage'
-import CollectionsPage from './pages/CollectionsPage'
-import JourneyPage from './pages/JourneyPage'
-import JourneyDetailPage from './pages/JourneyDetailPage'
-import JourneyPublicPage from './pages/JourneyPublicPage'
-import TravelTimelinePage from './pages/TravelTimelinePage'
-import SharedTripPage from './pages/SharedTripPage'
-import JoinTripPage from './pages/JoinTripPage'
-import InAppNotificationsPage from './pages/InAppNotificationsPage.tsx'
-import OAuthAuthorizePage from './pages/OAuthAuthorizePage'
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage'))
+const TripPlannerPage = React.lazy(() => import('./pages/TripPlannerPage'))
+const AdminPage = React.lazy(() => import('./pages/AdminPage'))
+const SettingsPage = React.lazy(() => import('./pages/SettingsPage'))
+const VacayPage = React.lazy(() => import('./pages/VacayPage'))
+const HelpPage = React.lazy(() => import('./pages/HelpPage'))
+const AtlasPage = React.lazy(() => import('./pages/AtlasPage'))
+const CollectionsPage = React.lazy(() => import('./pages/CollectionsPage'))
+const JourneyPage = React.lazy(() => import('./pages/JourneyPage'))
+const JourneyDetailPage = React.lazy(() => import('./pages/JourneyDetailPage'))
+const JourneyPublicPage = React.lazy(() => import('./pages/JourneyPublicPage'))
+const TravelTimelinePage = React.lazy(() => import('./pages/TravelTimelinePage'))
+const SharedTripPage = React.lazy(() => import('./pages/SharedTripPage'))
+const JoinTripPage = React.lazy(() => import('./pages/JoinTripPage'))
+const InAppNotificationsPage = React.lazy(() => import('./pages/InAppNotificationsPage.tsx'))
+const OAuthAuthorizePage = React.lazy(() => import('./pages/OAuthAuthorizePage'))
 import { ToastContainer } from './components/shared/Toast'
 import SaveToCollectionModal from './components/Collections/SaveToCollectionModal'
 import BackgroundTasksWidget from './components/BackgroundTasks/BackgroundTasksWidget'
@@ -54,7 +54,9 @@ function ProtectedRoute({ children, adminRequired = false, addonId }: ProtectedR
   const { t } = useTranslation()
   const location = useLocation()
 
-  if (isLoading) {
+  // A persisted authenticated snapshot is safe to render while its httpOnly
+  // session is validated; a failed validation still redirects normally.
+  if (isLoading && !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
@@ -89,7 +91,9 @@ function ProtectedRoute({ children, adminRequired = false, addonId }: ProtectedR
 
   return (
     <div className="flex flex-col h-dvh md:block md:h-auto">
-      <div className="flex-1 overflow-y-auto md:overflow-visible">{children}</div>
+      <div className="app-route-scroll flex-1 overflow-y-auto md:overflow-visible">
+        <React.Suspense fallback={<RouteLoading />}>{children}</React.Suspense>
+      </div>
       <BottomNav />
     </div>
   )
@@ -98,7 +102,7 @@ function ProtectedRoute({ children, adminRequired = false, addonId }: ProtectedR
 function RootRedirect() {
   const { isAuthenticated, isLoading } = useAuthStore()
 
-  if (isLoading) {
+  if (isLoading && !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
@@ -115,15 +119,28 @@ function DevLoginRedirect() {
   return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sm text-slate-500">{error || 'Signing in to local development account…'}</div>
 }
 
+function RouteLoading() {
+  const { t } = useTranslation()
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin motion-reduce:animate-none" />
+        <p className="text-slate-500 text-sm">{t('common.loading')}</p>
+      </div>
+    </div>
+  )
+}
+
 /** Playwright runs Vite in dev mode but needs the real login form, not auto dev-login. */
 const e2eMode = import.meta.env.VITE_E2E === '1' || import.meta.env.VITE_E2E === 'true'
-const useDevAutoLogin = import.meta.env.DEV && !e2eMode
+const useDevAutoLogin = import.meta.env.DEV && import.meta.env.MODE !== 'test' && !e2eMode
 
 export default function App() {
   const { loadUser, devLogin, isAuthenticated, demoMode, setDemoMode, setDevMode, setIsPrerelease, setAppVersion, setHasMapsKey, setServerTimezone, setAppRequireMfa, setTripRemindersEnabled, setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled } = useAuthStore()
   const { loadSettings } = useSettingsStore()
   const { loadAddons } = useAddonStore()
   const { loadPlugins } = usePluginStore()
+  const [configUnavailable, setConfigUnavailable] = useState(false)
 
   useEffect(() => {
     if (useDevAutoLogin && !location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/')) {
@@ -139,40 +156,52 @@ export default function App() {
         loadUser()
       }
     }
-    authApi.getAppConfig().then(async (config: { demo_mode?: boolean; dev_mode?: boolean; is_prerelease?: boolean; has_maps_key?: boolean; version?: string; timezone?: string; require_mfa?: boolean; trip_reminders_enabled?: boolean; places_photos_enabled?: boolean; places_autocomplete_enabled?: boolean; places_details_enabled?: boolean; permissions?: Record<string, PermissionLevel> }) => {
-      setDemoMode(!!config?.demo_mode)
-      if (config?.dev_mode) setDevMode(true)
-      if (config?.is_prerelease !== undefined) setIsPrerelease(config.is_prerelease)
-      if (config?.version) setAppVersion(config.version)
-      if (config?.has_maps_key !== undefined) setHasMapsKey(config.has_maps_key)
-      if (config?.timezone) setServerTimezone(config.timezone)
-      if (config?.require_mfa !== undefined) setAppRequireMfa(!!config.require_mfa)
-      if (config?.trip_reminders_enabled !== undefined) setTripRemindersEnabled(config.trip_reminders_enabled)
-      if (config?.places_photos_enabled !== undefined) setPlacesPhotosEnabled(config.places_photos_enabled)
-      if (config?.places_autocomplete_enabled !== undefined) setPlacesAutocompleteEnabled(config.places_autocomplete_enabled)
-      if (config?.places_details_enabled !== undefined) setPlacesDetailsEnabled(config.places_details_enabled)
-      if (config?.permissions) usePermissionsStore.getState().setPermissions(config.permissions)
+    let cancelled = false
+    let retryTimer: number | undefined
+    let configFailed = false
+    const loadAppConfig = async () => {
+      try {
+        const config = await authApi.getAppConfig() as { demo_mode?: boolean; dev_mode?: boolean; is_prerelease?: boolean; has_maps_key?: boolean; version?: string; timezone?: string; require_mfa?: boolean; trip_reminders_enabled?: boolean; places_photos_enabled?: boolean; places_autocomplete_enabled?: boolean; places_details_enabled?: boolean; permissions?: Record<string, PermissionLevel> }
+        if (cancelled) return
+        setDemoMode(!!config?.demo_mode)
+        if (config?.dev_mode) setDevMode(true)
+        if (config?.is_prerelease !== undefined) setIsPrerelease(config.is_prerelease)
+        if (config?.version) setAppVersion(config.version)
+        if (config?.has_maps_key !== undefined) setHasMapsKey(config.has_maps_key)
+        if (config?.timezone) setServerTimezone(config.timezone)
+        if (config?.require_mfa !== undefined) setAppRequireMfa(!!config.require_mfa)
+        if (config?.trip_reminders_enabled !== undefined) setTripRemindersEnabled(config.trip_reminders_enabled)
+        if (config?.places_photos_enabled !== undefined) setPlacesPhotosEnabled(config.places_photos_enabled)
+        if (config?.places_autocomplete_enabled !== undefined) setPlacesAutocompleteEnabled(config.places_autocomplete_enabled)
+        if (config?.places_details_enabled !== undefined) setPlacesDetailsEnabled(config.places_details_enabled)
+        if (config?.permissions) usePermissionsStore.getState().setPermissions(config.permissions)
 
-      if (config?.version) {
-        const storedVersion = localStorage.getItem('trek_app_version')
-        if (storedVersion && storedVersion !== config.version) {
-          try {
-            if ('caches' in window) {
-              const names = await caches.keys()
-              await Promise.all(names.map(n => caches.delete(n)))
-            }
-            if ('serviceWorker' in navigator) {
-              const regs = await navigator.serviceWorker.getRegistrations()
-              await Promise.all(regs.map(r => r.unregister()))
-            }
-          } catch {}
-          localStorage.setItem('trek_app_version', config.version)
-          window.location.reload()
-          return
+        // VitePWA owns static-asset updates. Do not clear every cache or unregister
+        // the worker on a version change: that discards offline map tiles and makes
+        // an update indistinguishable from an offline reset.
+        if (config?.version) localStorage.setItem('trek_app_version', config.version)
+        setConfigUnavailable(false)
+        if (configFailed) {
+          const store = useAuthStore.getState()
+          if (store.isAuthenticated) {
+            loadSettings()
+            loadAddons()
+            loadPlugins()
+          }
+          window.dispatchEvent(new Event('trek:server-ready'))
         }
-        localStorage.setItem('trek_app_version', config.version)
+      } catch {
+        if (cancelled) return
+        configFailed = true
+        setConfigUnavailable(true)
+        retryTimer = window.setTimeout(loadAppConfig, 5000)
       }
-    }).catch(() => {})
+    }
+    void loadAppConfig()
+    return () => {
+      cancelled = true
+      window.clearTimeout(retryTimer)
+    }
   }, [])
 
   const { settings } = useSettingsStore()
@@ -223,7 +252,13 @@ export default function App() {
       <ToastContainer />
       {!isAuthPage && <BackgroundTasksWidget />}
       {!isAuthPage && <SaveToCollectionModal />}
+      {configUnavailable && (
+        <div role="status" className="fixed left-3 top-10 z-[10000] max-w-[calc(100vw-24px)] rounded-full bg-amber-700 px-2.5 py-0.5 text-[11px] font-semibold leading-4 text-white shadow-lg md:left-1/2 md:top-[var(--nav-h)] md:-translate-x-1/2">
+          Server settings unavailable; trips still work.
+        </div>
+      )}
       <OfflineBanner />
+      <React.Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={useDevAutoLogin ? <DevLoginRedirect /> : <LoginPage />} />
@@ -308,8 +343,10 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/vacay" element={<Navigate to="/calendar" replace />} />
+        <Route path="/vacay/*" element={<Navigate to="/calendar" replace />} />
         <Route
-          path="/vacay"
+          path="/calendar"
           element={
             <ProtectedRoute>
               <VacayPage />
@@ -374,6 +411,7 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </React.Suspense>
     </TranslationProvider>
   )
 }

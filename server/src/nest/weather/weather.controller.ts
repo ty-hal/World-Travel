@@ -1,8 +1,8 @@
-import { Controller, Get, HttpException, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, Post, Query, UseGuards } from '@nestjs/common';
 import type { WeatherResult } from '@trek/shared';
 import { WeatherService } from './weather.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ApiError } from '../../services/weatherService';
+import { ApiError, monthlyClimatePeriod } from '../../services/weatherService';
 
 /**
  * /api/weather — first migrated leaf module (the pilot).
@@ -54,6 +54,25 @@ export class WeatherController {
       throw toHttp(err, 'Detailed weather error:', 'Error fetching detailed weather data');
     }
   }
+
+  @Get('climate')
+  async getClimate(@Query('lat') lat?: string, @Query('lng') lng?: string) {
+    if (!lat || !lng || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) throw new HttpException({ error: 'Valid latitude and longitude are required' }, 400)
+    try { return { source: 'Open-Meteo ERA5', period: monthlyClimatePeriod(), months: await this.weather.climate(Number(lat), Number(lng)) } }
+    catch (err: unknown) { throw toHttp(err, 'Climate error:', 'Error fetching climate data') }
+  }
+
+  @Post('climate/batch')
+  async getClimateBatch(@Body() body: { locations?: Array<{ key?: string; lat?: number; lng?: number }> }) {
+    const locations = body?.locations
+    if (!Array.isArray(locations) || locations.length > 500 || locations.some(location => !location || typeof location.key !== 'string' || !Number.isFinite(location.lat) || !Number.isFinite(location.lng) || location.lat! < -90 || location.lat! > 90 || location.lng! < -180 || location.lng! > 180)) {
+      throw new HttpException({ error: 'Valid climate locations are required (maximum 500)' }, 400)
+    }
+    return (await this.weather.climateBatch(locations as Array<{ key: string; lat: number; lng: number }>)).map(result => result.months
+      ? { ...result, source: 'Open-Meteo ERA5', period: monthlyClimatePeriod() }
+      : result)
+  }
+
 }
 
 /** Maps a thrown error to the same status + `{ error }` body the Express route sent. */

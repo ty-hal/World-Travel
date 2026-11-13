@@ -9,6 +9,7 @@ import { invalidatePermissionsCache } from './permissions';
 import { pluginsCodeRoot, pluginsDataRoot } from '../nest/plugins/paths';
 import { stageExtractedPluginTrees, applyStagedRestoreNow } from '../nest/plugins/plugin-backup';
 import { snapshotAllPluginDataDbs } from '../nest/plugins/host/plugin-data.service';
+import { omitBeliFromBackup } from '../db/beliSchema';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -190,16 +191,16 @@ export async function createBackup(): Promise<BackupInfo> {
         // travel.db mid-stream would tear the archived copy — and the -wal that would make
         // it recoverable isn't in the zip. VACUUM INTO takes a consistent snapshot even
         // under concurrent writes — the same guarantee the plugin DBs get below.
-        let dbToArchive = dbPath;
         try {
           if (fs.existsSync(dbSnap)) fs.rmSync(dbSnap, { force: true });
           db.exec(`VACUUM INTO '${dbSnap.replace(/'/g, "''")}'`);
-          dbToArchive = dbSnap;
+          omitBeliFromBackup(dbSnap);
         } catch (e) {
-          // Snapshot failed (disk/lock) — fall back to the checkpointed live file rather
-          // than drop the core DB from the backup entirely.
+          // Falling back to the live DB would export the Beli session and history.
+          archive.abort();
+          throw new Error('Could not create a private database backup snapshot.');
         }
-        archive.file(dbToArchive, { name: 'travel.db' });
+        archive.file(dbSnap, { name: 'travel.db' });
       }
 
       // Bundle the at-rest encryption key so the backup is self-contained: the

@@ -16,19 +16,19 @@ const BADGE_GAP_PX = 5
 type TransportType = 'flight' | 'train' | 'cruise' | 'car' | 'bus' | 'taxi' | 'bicycle' | 'ferry' | 'transit' | 'transport_other'
 const TRANSPORT_TYPES: TransportType[] = ['flight', 'train', 'cruise', 'car', 'bus', 'taxi', 'bicycle', 'ferry', 'transit', 'transport_other']
 
-const TRANSPORT_COLOR = '#3b82f6'
-
-const TYPE_META: Record<TransportType, { color: string; icon: typeof Plane; geodesic: boolean }> = {
-  flight: { color: TRANSPORT_COLOR, icon: Plane, geodesic: true },
-  train: { color: TRANSPORT_COLOR, icon: Train, geodesic: false },
-  cruise: { color: TRANSPORT_COLOR, icon: Ship, geodesic: true },
-  car: { color: TRANSPORT_COLOR, icon: Car, geodesic: false },
-  bus: { color: TRANSPORT_COLOR, icon: Bus, geodesic: false },
-  taxi: { color: TRANSPORT_COLOR, icon: CarTaxiFront, geodesic: false },
-  bicycle: { color: TRANSPORT_COLOR, icon: Bike, geodesic: false },
-  ferry: { color: TRANSPORT_COLOR, icon: Sailboat, geodesic: true },
-  transit: { color: TRANSPORT_COLOR, icon: TramFront, geodesic: false },
-  transport_other: { color: TRANSPORT_COLOR, icon: Route, geodesic: false },
+// Distinct hues + dash patterns so overlapping booking routes stay readable
+// without relying on color alone (color-not-only / WCAG).
+const TYPE_META: Record<TransportType, { color: string; icon: typeof Plane; geodesic: boolean; dashArray?: string }> = {
+  flight: { color: '#2563eb', icon: Plane, geodesic: true },
+  train: { color: '#7c3aed', icon: Train, geodesic: false, dashArray: '10, 6' },
+  cruise: { color: '#0891b2', icon: Ship, geodesic: true, dashArray: '14, 8' },
+  car: { color: '#ea580c', icon: Car, geodesic: false },
+  bus: { color: '#ca8a04', icon: Bus, geodesic: false, dashArray: '6, 5' },
+  taxi: { color: '#d97706', icon: CarTaxiFront, geodesic: false, dashArray: '2, 6' },
+  bicycle: { color: '#16a34a', icon: Bike, geodesic: false, dashArray: '4, 4' },
+  ferry: { color: '#0d9488', icon: Sailboat, geodesic: true, dashArray: '12, 6, 2, 6' },
+  transit: { color: '#9333ea', icon: TramFront, geodesic: false, dashArray: '8, 4' },
+  transport_other: { color: '#64748b', icon: Route, geodesic: false, dashArray: '3, 5' },
 }
 
 function useEndpointPane() {
@@ -420,18 +420,35 @@ export default function ReservationOverlay({ reservations, showConnections, show
         // Prefer the real road route (car/bus/taxi/bicycle) over the straight arc.
         const road = roadRoutes?.get(item.res.id)
         const lines = road && road.length >= 2 ? [road] : item.arcs
-        return lines.map((seg, segIdx) => (
+        const meta = TYPE_META[item.type]
+        const pendingDash = item.res.status === 'confirmed' ? meta.dashArray : (meta.dashArray || '6, 6')
+        return lines.flatMap((seg, segIdx) => [
+          // Light casing so colored cores stay readable over busy basemap tiles.
+          <Polyline
+            key={`line-case-${item.res.id}-${segIdx}`}
+            positions={seg}
+            pathOptions={{
+              color: '#ffffff',
+              weight: 5,
+              opacity: 0.7,
+              lineCap: 'round',
+              lineJoin: 'round',
+              dashArray: pendingDash,
+            }}
+          />,
           <Polyline
             key={`line-${item.res.id}-${segIdx}`}
             positions={seg}
             pathOptions={{
-              color: TYPE_META[item.type].color,
-              weight: 2.5,
-              opacity: item.res.status === 'confirmed' ? 0.75 : 0.55,
-              dashArray: item.res.status === 'confirmed' ? undefined : '6, 6',
+              color: meta.color,
+              weight: 3,
+              opacity: item.res.status === 'confirmed' ? 0.92 : 0.65,
+              dashArray: pendingDash,
+              lineCap: 'round',
+              lineJoin: 'round',
             }}
-          />
-        ))
+          />,
+        ])
       })}
 
       {visibleItems.flatMap(item => item.waypoints.map((wp, wi) => (

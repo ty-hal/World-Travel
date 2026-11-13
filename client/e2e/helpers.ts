@@ -12,6 +12,8 @@ export const E2E_ADMIN = {
   password: 'E2eChanged12345!',
 } as const
 
+export const E2E_BASE_URL = `http://localhost:${process.env.CI ? 5174 : 5173}`
+
 /** Seeded trip member (see e2e/seed.ts). */
 export const E2E_MEMBER = {
   email: 'mira@example.com',

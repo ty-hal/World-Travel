@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { db } from '../../db/database';
 import { broadcast } from '../../websocket';
 import { checkPermission } from '../../services/permissions';
+import { logError } from '../../services/auditLog';
 import type { User } from '../../types';
 import * as svc from '../../services/collabService';
 
@@ -57,7 +58,8 @@ export class CollabService {
       const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
       const params: Record<string, string> = { trip: tripInfo?.title || 'Untitled', actor: actor.email, tripId: String(tripId) };
       if (preview !== undefined) params.preview = preview;
-      send({ event: 'collab_message', actorId: actor.id, scope: 'trip', targetId: Number(tripId), params }).catch(() => {});
-    });
+      send({ event: 'collab_message', actorId: actor.id, scope: 'trip', targetId: Number(tripId), params }).catch((err: unknown) =>
+        logError(`Collab notification failed trip=${tripId}: ${err instanceof Error ? err.message : err}`));
+    }).catch((err: unknown) => logError(`Collab notification module failed trip=${tripId}: ${err instanceof Error ? err.message : err}`));
   }
 }

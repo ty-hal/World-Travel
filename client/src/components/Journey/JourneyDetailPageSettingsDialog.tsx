@@ -149,7 +149,7 @@ export function JourneySettingsDialog({ journey, onClose, onSaved, onOpenInvite,
                   <div className="w-8 h-8 rounded-md flex-shrink-0" style={{ background: pickGradient(trip.trip_id) }} />
                   <div className="flex-1 min-w-0">
                     <div className="text-[12px] font-medium text-zinc-900 dark:text-white">{trip.title}</div>
-                    <div className="text-[10px] text-zinc-500">{trip.place_count || 0} {t('journey.synced.places')}</div>
+                    <div className="text-[10px] text-zinc-500">{t('journey.synced.places', { count: trip.place_count || 0 })}</div>
                   </div>
                   <button
                     onClick={() => setUnlinkTarget({ trip_id: trip.trip_id, title: trip.title })}

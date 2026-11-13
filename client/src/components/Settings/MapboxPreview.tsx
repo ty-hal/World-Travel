@@ -1,10 +1,8 @@
 import { useEffect, useRef } from 'react'
-import mapboxgl from 'mapbox-gl'
-import maplibregl from 'maplibre-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import { isStandardFamily, supportsCustom3d, addCustom3dBuildings, addTerrainAndSky } from '../Map/mapboxSetup'
-import { MAPBOX_DEFAULT_STYLE, normalizeStyleForProvider, type GlMapProvider } from '../Map/glProviders'
+import { MAPBOX_DEFAULT_STYLE, normalizeStyleForProvider, applyBasemapLabelLanguage, basemapLanguage, isOpenFreeMapLightStyle, type GlMapProvider } from '../Map/glProviders'
+import { useGlRenderer } from '../Map/useGlRenderer'
+import { useSettingsStore } from '../../store/settingsStore'
 
 interface Props {
   provider?: GlMapProvider
@@ -25,13 +23,14 @@ export default function GlMapPreview({ provider = 'mapbox-gl', token = '', style
   const onClickRef = useRef(onClick)
   onClickRef.current = onClick
   const isMapLibre = provider === 'maplibre-gl'
-  const gl = (isMapLibre ? maplibregl : mapboxgl) as any
+  const gl = useGlRenderer(provider)
   const glStyle = normalizeStyleForProvider(provider, style)
   const enableMapbox3d = !isMapLibre && enable3d
+  const mapLang = useSettingsStore(s => s.settings.language)
 
   useEffect(() => {
-    if (!containerRef.current || (!isMapLibre && !token)) return
-    if (!isMapLibre) mapboxgl.accessToken = token
+    if (!containerRef.current || !gl || (!isMapLibre && !token)) return
+    if (!isMapLibre) gl.accessToken = token
 
     const mapOptions: Record<string, unknown> = {
       container: containerRef.current,
@@ -42,7 +41,10 @@ export default function GlMapPreview({ provider = 'mapbox-gl', token = '', style
       attributionControl: true,
       antialias: quality,
     }
-    if (!isMapLibre) mapOptions.projection = quality ? 'globe' : 'mercator'
+    if (!isMapLibre) {
+      mapOptions.projection = quality ? 'globe' : 'mercator'
+      mapOptions.language = basemapLanguage(mapLang)
+    }
     // MapLibre 5's around-center mouse rotate ping-pongs near mid-screen (#1545)
     // — see MapViewGL. Keep the plain dx-based rotate everywhere.
     if (isMapLibre) mapOptions.aroundCenter = false
@@ -61,6 +63,7 @@ export default function GlMapPreview({ provider = 'mapbox-gl', token = '', style
       if (glStyle === MAPBOX_DEFAULT_STYLE) {
         try { map.setTerrain(null) } catch { /* noop */ }
       }
+      applyBasemapLabelLanguage(map, mapLang, glStyle)
     })
 
     map.on('click', (e) => {
@@ -71,7 +74,7 @@ export default function GlMapPreview({ provider = 'mapbox-gl', token = '', style
       try { map.remove() } catch { /* noop */ }
       mapRef.current = null
     }
-  }, [provider, token, glStyle, enableMapbox3d, quality])
+  }, [gl, provider, token, glStyle, enableMapbox3d, quality, mapLang])
 
   // Recenter without rebuilding the map when lat/lng/zoom change externally
   useEffect(() => {
@@ -87,5 +90,5 @@ export default function GlMapPreview({ provider = 'mapbox-gl', token = '', style
     )
   }
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%', borderRadius: '8px', overflow: 'hidden' }} />
+  return <div ref={containerRef} className="map-settings-preview" data-basemap-tone={isMapLibre && isOpenFreeMapLightStyle(glStyle) ? 'light' : undefined} style={{ width: '100%', height: '100%', borderRadius: '8px', overflow: 'hidden' }} />
 }

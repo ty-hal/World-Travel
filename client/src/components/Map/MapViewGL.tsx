@@ -1,9 +1,5 @@
 import { useEffect, useRef, useMemo, useState, createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import mapboxgl from 'mapbox-gl'
-import maplibregl from 'maplibre-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useAuthStore } from '../../store/authStore'
 import { getCached, isLoading, fetchPhoto, onThumbReady, getAllThumbs } from '../../services/photoService'
@@ -13,8 +9,9 @@ import { attachLocationMarker, type LocationMarkerHandle } from './locationMarke
 import { ReservationMapboxOverlay } from './reservationsMapbox'
 import { useTransportRoutes } from '../../hooks/useTransportRoutes'
 import { visibleRouteReservations } from '../../utils/reservationRoutes'
-import { MAPBOX_DEFAULT_STYLE, styleForActiveProvider, basemapLanguage, type GlMapProvider } from './glProviders'
+import { MAPBOX_DEFAULT_STYLE, styleForActiveProvider, applyBasemapLabelLanguage, basemapLanguage, isOpenFreeMapLightStyle, type GlMapProvider } from './glProviders'
 import LocationButton from './LocationButton'
+import { MapCompassPill } from './MapCompassPill'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import type { Place, Reservation } from '../../types'
 import { POI_CATEGORY_BY_KEY, type Poi } from './poiCategories'
@@ -22,6 +19,7 @@ import { buildPoiPopupHtml } from './placePopup'
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../constants/mapDefaults'
 import { computeMapViewport, TILE_SIZE_GL } from '../../utils/mapViewport'
 import { getPinColor } from './pinColors'
+import { useGlRenderer } from './useGlRenderer'
 
 function categoryIconSvg(iconName: string | null | undefined, size: number): string {
   const IconComponent = (iconName && CATEGORY_ICON_MAP[iconName]) || CATEGORY_ICON_MAP['MapPin']
@@ -76,6 +74,8 @@ interface Props {
   route?: [number, number][][] | null
   routeSegments?: RouteSegment[]
   selectedPlaceId?: number | null
+  /** Bump to re-run flyTo for the current selection (e.g. after revealing a filtered pin). */
+  focusKey?: number
   onMarkerClick?: (id: number) => void
   hoverDisabled?: boolean
   onMapClick?: (info: { latlng: { lat: number; lng: number } }) => void
@@ -83,6 +83,8 @@ interface Props {
   center?: [number, number]
   zoom?: number
   fitKey?: number | null
+  /** Optional [lat,lng] points to frame instead of place markers (e.g. booking-route endpoints). */
+  fitExtraCoords?: [number, number][] | null
   dayOrderMap?: Record<number, number[] | null>
   leftWidth?: number
   rightWidth?: number
@@ -196,6 +198,7 @@ export function MapViewGL({
   route = null,
   routeSegments = [],
   selectedPlaceId = null,
+  focusKey = 0,
   hoverDisabled = false,
   onMarkerClick,
   onMapClick,
@@ -203,6 +206,7 @@ export function MapViewGL({
   center = DEFAULT_MAP_CENTER,
   zoom = DEFAULT_MAP_ZOOM,
   fitKey = 0,
+  fitExtraCoords = null,
   dayOrderMap = {},
   leftWidth = 0,
   rightWidth = 0,
@@ -226,9 +230,12 @@ export function MapViewGL({
   const mapboxQuality = useSettingsStore(s => s.settings.mapbox_quality_mode === true)
   const showEndpointLabels = useSettingsStore(s => s.settings.map_booking_labels) === true
   const mapLang = useSettingsStore(s => s.settings.language)
+  const mapLangRef = useRef(mapLang)
+  mapLangRef.current = mapLang
   const isMapLibre = glProvider === 'maplibre-gl'
-  const gl = (isMapLibre ? maplibregl : mapboxgl) as any
+  const gl = useGlRenderer(glProvider)
   const glStyle = styleForActiveProvider(glProvider, rawMapboxStyle, rawMaplibreStyle)
+  const useLightBasemapTreatment = isMapLibre && isOpenFreeMapLightStyle(glStyle)
   const enableMapbox3d = !isMapLibre && mapbox3d
   const placesPhotosEnabled = useAuthStore(s => s.placesPhotosEnabled)
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>(getAllThumbs)
@@ -295,8 +302,8 @@ export function MapViewGL({
 
   // Build/rebuild the map on provider/style/token/3d change
   useEffect(() => {
-    if (!containerRef.current || (!isMapLibre && !mapboxToken)) return
-    if (!isMapLibre) mapboxgl.accessToken = mapboxToken
+    if (!containerRef.current || !gl || (!isMapLibre && !mapboxToken)) return
+    if (!isMapLibre) gl.accessToken = mapboxToken
 
     // Open framed on the places rather than on the caller's default: a trip in Japan should
     // show Japan straight away, not the world view followed by a flight across the planet.
@@ -318,7 +325,12 @@ export function MapViewGL({
       attributionControl: true,
       antialias: mapboxQuality,
     }
-    if (!isMapLibre) mapOptions.projection = mapboxQuality ? 'globe' : 'mercator'
+    if (!isMapLibre) {
+      mapOptions.projection = mapboxQuality ? 'globe' : 'mercator'
+      // Pin label language at construction — without this, Standard uses local-script
+      // labels (Chinese over China) even when the account language is English.
+      mapOptions.language = basemapLanguage(mapLangRef.current)
+    }
     // MapLibre 5's mouse-rotate inverts its sign at a mid-screen line it gets by
     // re-projecting the map center — a line that drifts with the bearing, so a
     // right-button drag near mid-screen ping-pongs instead of rotating (#1545).
@@ -425,6 +437,7 @@ export function MapViewGL({
           filter: ['has', 'point_count'],
           layout: {
             'text-field': ['get', 'point_count_abbreviated'],
+            ...(isMapLibre ? { 'text-font': ['Noto Sans Regular'] } : {}),
             'text-size': 12,
             'text-allow-overlap': true,
           },
@@ -480,6 +493,7 @@ export function MapViewGL({
         map.on('mouseenter', PLACE_CLUSTER_CIRCLE_LAYER_ID, setClusterCursor)
         map.on('mouseleave', PLACE_CLUSTER_CIRCLE_LAYER_ID, clearClusterCursor)
       }
+      applyBasemapLabelLanguage(map, mapLangRef.current, glStyle)
       // Signal that sources/layers are attached so overlay effects can
       // safely add their own sources. Style rebuilds reset this via the
       // cleanup below.
@@ -646,7 +660,7 @@ export function MapViewGL({
         if (Math.abs(curAlt - alt) > 0.25) {
           // mapbox-gl accepts a third altitude element at runtime, but its typings
           // only model the 2-tuple form, so cast to LngLatLike.
-          marker.setLngLat([ll.lng, ll.lat, alt] as unknown as mapboxgl.LngLatLike)
+          marker.setLngLat([ll.lng, ll.lat, alt] as any)
         }
       })
     }
@@ -678,17 +692,20 @@ export function MapViewGL({
       mapRef.current = null
       setMapReady(false)
     }
-  }, [glProvider, glStyle, mapboxToken, enableMapbox3d, mapboxQuality]) // rebuild on provider/style changes only
+  }, [gl, glProvider, glStyle, mapboxToken, enableMapbox3d, mapboxQuality]) // rebuild on provider/style changes only
 
-  // Pin the basemap label language to the UI language so labels don't fall back to the
-  // browser/OS locale and stack multiple scripts per place (e.g. "India/भारत/India", #1299).
-  // Mapbox Standard exposes this via a basemap config property; classic and MapLibre styles
-  // are left as-is. Runs on load (mapReady) and whenever the UI language changes.
+  // Pin basemap labels to the account language (Mapbox setLanguage + OpenFreeMap
+  // text-field rewrite). Re-apply on style.load and the first idle after ready —
+  // OpenFreeMap can finish attaching symbol layers slightly after `load`.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !mapReady || isMapLibre || !isStandardFamily(glStyle)) return
-    try { map.setConfigProperty('basemap', 'language', basemapLanguage(mapLang)) } catch { /* style/SDK may not support the basemap language property */ }
-  }, [mapLang, mapReady, isMapLibre, glStyle])
+    if (!map || !mapReady) return
+    const apply = () => applyBasemapLabelLanguage(map, mapLang, glStyle)
+    apply()
+    map.on('style.load', apply)
+    map.once('idle', apply)
+    return () => { try { map.off('style.load', apply) } catch { /* noop */ } }
+  }, [mapLang, mapReady, glStyle])
 
   // Photo loading — mirrors the Leaflet MapView. Updates via RAF to batch
   // simultaneous thumb arrivals into one re-render.
@@ -816,7 +833,7 @@ export function MapViewGL({
       })
     }
 
-    const source = map.getSource(PLACE_CLUSTER_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined
+        const source = map.getSource(PLACE_CLUSTER_SOURCE_ID) as any
     if (!source || typeof map.querySourceFeatures !== 'function') {
       // No cluster source (e.g. style without it / test env): fall back to the
       // original behaviour and draw a marker for every place.
@@ -888,7 +905,7 @@ export function MapViewGL({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const src = map.getSource('trip-route') as mapboxgl.GeoJSONSource | undefined
+    const src = map.getSource('trip-route') as any
     if (!src) return
     const features = (route || []).filter(seg => seg && seg.length > 1).map(seg => ({
       type: 'Feature' as const,
@@ -904,7 +921,7 @@ export function MapViewGL({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const src = map.getSource('trip-gpx') as mapboxgl.GeoJSONSource | undefined
+    const src = map.getSource('trip-gpx') as any
     if (!src) return
     const features = places.flatMap(place => {
       if (!place.route_geometry) return []
@@ -977,12 +994,15 @@ export function MapViewGL({
       && routeFitKey !== pendingRouteFitRef.current.routeKey
     if (!fitKeyChanged && !routeArrivedForPendingFit) return
     const map = mapRef.current
+    // Do not consume fitKey while the map handle is missing — otherwise the next
+    // day-click can be eaten by the framed-on-mount skip once the map appears.
     if (!map) return
 
-    // The map was built framed on these very places, so fitting now would only re-do that —
-    // and its maxZoom would overrule the gentler zoom a single place opens at. Adopt the
-    // current fitKey and stand down; every later fit (picking a day) still runs.
-    if (!fitRanRef.current && framedOnMountRef.current) {
+    const extras = (fitExtraCoords && fitExtraCoords.length >= 2) ? fitExtraCoords : null
+    const dayFit = dayPlaces.length > 0
+    // Skip only the one-time all-places re-fit that duplicates mount framing.
+    // Day selection / booking-route fits must always run.
+    if (!extras && !dayFit && !fitRanRef.current && framedOnMountRef.current) {
       fitRanRef.current = true
       prevFitKey.current = fitKey
       pendingRouteFitRef.current = null
@@ -996,11 +1016,13 @@ export function MapViewGL({
       // the real road geometry a moment later. With no route drawn, none is coming for
       // this fit — arming the slot anyway would let a route toggled on much later
       // (after the user has panned somewhere else) yank the camera back.
-      pendingRouteFitRef.current = routeFitKey ? { fitKey, routeKey: routeFitKey } : null
+      pendingRouteFitRef.current = (!extras && routeFitKey) ? { fitKey, routeKey: routeFitKey } : null
     }
-    const target = dayPlaces.length > 0 ? dayPlaces : places
+    const target = dayFit ? dayPlaces : places
     const markerPoints = target.filter(hasValidCoords).map(p => [p.lat, p.lng] as [number, number])
-    const fitPoints = routeCoords.length > 0 ? [...routeCoords, ...markerPoints] : markerPoints
+    const fitPoints = extras
+      ? extras
+      : (routeCoords.length > 0 ? [...routeCoords, ...markerPoints] : markerPoints)
     if (fitPoints.length === 0) return
     const bounds = new gl.LngLatBounds()
     fitPoints.forEach(([lat, lng]) => bounds.extend([lng, lat]))
@@ -1021,7 +1043,7 @@ export function MapViewGL({
     if (routeArrivedForPendingFit) pendingRouteFitRef.current = null
   }, [fitKey, routeFitKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // flyTo selected place
+  // flyTo selected place — also re-runs when focusKey bumps (reveal / re-select).
   useEffect(() => {
     const map = mapRef.current
     if (!map || !selectedPlaceId) return
@@ -1032,14 +1054,14 @@ export function MapViewGL({
         center: [target.lng, target.lat],
         zoom: Math.max(map.getZoom(), 14),
         pitch: enableMapbox3d ? 45 : 0,
-        duration: 400,
+        duration: 450,
         // Account for the side panels and the bottom inspector / day-detail panel
         // so the selected pin lands in the centre of the *visible* map area rather
         // than the geometric centre (where the bottom panel would cover it).
         padding: paddingOpts,
       })
     } catch { /* noop */ }
-  }, [selectedPlaceId, enableMapbox3d]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedPlaceId, focusKey, enableMapbox3d]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // External center/zoom prop changes — jump without animation
   const jumpedToRef = useRef<[number, number] | null>(null)
@@ -1098,29 +1120,28 @@ export function MapViewGL({
     )
   }
 
-  // Desktop browsers only get IP-based geolocation (city-level accuracy),
-  // so the button would be misleading. Mobile, where real GPS lives, keeps it.
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-  // When the day-detail panel is open it slides up over the map (bottom: navh+20,
-  // height var(--day-panel-h)) and covers the button's band, so lift the button
-  // above it; otherwise keep the plain bottom-nav offset. #1348
-  const buttonBottom = hasDayDetail
-    ? 'calc(var(--bottom-nav-h, 84px) + 20px + var(--day-panel-h, 0px) + 12px)'
-    : 'calc(var(--bottom-nav-h, 84px) + 12px)'
+  // Stay pinned above the mobile nav; the attribution control is offset above
+  // these buttons separately so its links remain unobstructed.
+  const buttonBottom = isMobile ? 'calc(var(--bottom-nav-h, 84px) + 8px)' : 8
 
   const HoverIcon = (hoverPlace?.category_icon && CATEGORY_ICON_MAP[hoverPlace.category_icon]) || CATEGORY_ICON_MAP['MapPin']
 
   return (
-    <div className="w-full h-full relative">
+    <div className="map-with-floating-controls w-full h-full relative" data-basemap-tone={useLightBasemapTreatment ? 'light' : undefined}>
       <div ref={containerRef} className="w-full h-full" />
-      {isMobile && (
-        <LocationButton
-          mode={trackingMode}
-          error={trackingError}
-          onClick={cycleTrackingMode}
-          bottomOffset={buttonBottom as unknown as number}
-        />
+      {mapReady && mapRef.current && (
+        <div style={{ position: 'absolute', bottom: buttonBottom, right: 54, zIndex: 1000, pointerEvents: 'auto' }}>
+          <MapCompassPill map={mapRef.current} />
+        </div>
       )}
+      <LocationButton
+        mode={trackingMode}
+        error={trackingError}
+        onClick={cycleTrackingMode}
+        bottomOffset={buttonBottom}
+        rightOffset={6}
+      />
       {/* Hover tooltip — cursor-following name/category/address card, identical to
           the Leaflet map's overlay (no anchored popup, no photo). */}
       {!hoverDisabled && hoverPlace && hoverPos && !isMobile && (

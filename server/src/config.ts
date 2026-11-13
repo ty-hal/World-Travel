@@ -29,7 +29,8 @@ if (_encryptionKey) {
   // container restarts even if the env var is later removed.
   try {
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(encKeyFile, _encryptionKey, { mode: 0o600 });
+    // Isolated tests/captures must never replace the personal install's encryption key.
+    if (process.env.NODE_ENV !== 'test' && !process.env.TREK_DB_FILE) fs.writeFileSync(encKeyFile, _encryptionKey, { mode: 0o600 });
   } catch {
     // Non-fatal: env var is the source of truth when set.
   }
@@ -62,8 +63,10 @@ if (_encryptionKey) {
   // Persist whatever key was resolved so subsequent starts skip the fallback chain.
   try {
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(encKeyFile, _encryptionKey, { mode: 0o600 });
-    console.log('Encryption key persisted to', encKeyFile);
+    if (process.env.NODE_ENV !== 'test' && !process.env.TREK_DB_FILE) {
+      fs.writeFileSync(encKeyFile, _encryptionKey, { mode: 0o600 });
+      console.log('Encryption key persisted to', encKeyFile);
+    }
   } catch (writeErr: unknown) {
     console.warn(
       'WARNING: Could not persist encryption key to disk:',

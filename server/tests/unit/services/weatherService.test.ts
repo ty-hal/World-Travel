@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 
+const { resolveCountryGeography } = vi.hoisted(() => ({ resolveCountryGeography: vi.fn() }));
+vi.mock('../../../src/services/crowdSeasonalityService', () => ({ resolveCountryGeography }));
+
 // Prevent the module-level setInterval from running during tests
 vi.useFakeTimers();
 
@@ -13,9 +16,20 @@ import {
   cacheKey,
   getWeather,
   getDetailedWeather,
+  getMonthlyClimate,
+  getMonthlyClimateBatch,
+  monthlyClimatePeriod,
+  scheduleMonthlyClimateWarm,
   ApiError,
   type WeatherResult,
 } from '../../../src/services/weatherService';
+import { db } from '../../../src/db/database';
+
+beforeEach(() => {
+  db.prepare("DELETE FROM seasonal_provider_state WHERE provider = 'open-meteo'").run();
+  db.prepare('DELETE FROM weather_climate_country_samples').run();
+  resolveCountryGeography.mockImplementation(async (locations: Array<{ key: string }>) => locations.map(({ key }) => ({ key, countryCode: `C-${key}` })));
+});
 
 // ── estimateCondition ────────────────────────────────────────────────────────
 
@@ -116,10 +130,11 @@ describe('cacheKey', () => {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Build a minimal mock Response for fetch. */
-function mockResponse(body: unknown, ok = true, status = 200): Response {
+function mockResponse(body: unknown, ok = true, status = 200, headers: Record<string, string> = {}): Response {
   return {
     ok,
     status,
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
     json: vi.fn().mockResolvedValue(body),
   } as unknown as Response;
 }
@@ -129,6 +144,244 @@ function dateOffset(days: number): string {
   const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   return d.toISOString().slice(0, 10);
 }
+
+function climateCacheKey(lat: string, lng: string): string {
+  const lastYear = new Date().getUTCFullYear() - 1
+  return `${Number(lat).toFixed(0)}.00_${Number(lng).toFixed(0)}.00_era5_${lastYear - 1}_${lastYear}_v3`
+}
+
+describe('getMonthlyClimate', () => {
+  beforeEach(() => vi.mocked(fetch).mockReset())
+
+  it('averages only complete observations and normalizes rainfall to a month', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ daily: {
+      time: ['1991-01-01', '1991-01-02', '1991-01-03', '1991-02-01'],
+      temperature_2m_max: [20, null, 15, 0], temperature_2m_min: [10, 5, 5, -10], precipitation_sum: [2, 4, null, 3],
+    } }))
+    const result = await getMonthlyClimate(31.11, 72.21)
+    expect(result[0]).toMatchObject({ month: 1, meanMaxC: 20, meanMinC: 10, precipitationMm: 60.9, days: 1 })
+    expect(result[1]).toMatchObject({ month: 2, meanMaxC: 0, meanMinC: -10, precipitationMm: 91.3, days: 1 })
+    expect(result).toHaveLength(12)
+    const params = new URL(String(vi.mocked(fetch).mock.calls[0][0])).searchParams
+    const lastYear = new Date().getUTCFullYear() - 1
+    expect(params.get('start_date')).toBe(`${lastYear - 1}-01-01`)
+    expect(params.get('end_date')).toBe(`${lastYear}-12-31`)
+    expect(monthlyClimatePeriod()).toBe(`${lastYear - 1}–${lastYear}`)
+  })
+
+  it('shares an in-flight request for coordinates rounded to the cache key', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ daily: { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [0] } }))
+    const [first, second] = await Promise.all([getMonthlyClimate(32.11, 73.22), getMonthlyClimate(32.114, 73.224)])
+    const cached = await getMonthlyClimate(32.11, 73.22)
+    expect(first).toEqual(second)
+    expect(cached).toEqual(first)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects invalid coordinates before making a provider request', async () => {
+    await expect(getMonthlyClimate(91, 0)).rejects.toMatchObject({ status: 400 })
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('honors Retry-After and blocks other weather requests during provider cooldown', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'slow down' }, false, 429, { 'retry-after': '120' }))
+    await expect(getMonthlyClimate(44.11, 12.21)).rejects.toMatchObject({ status: 429, message: 'slow down' })
+    await expect(getMonthlyClimate(45.11, 12.21)).rejects.toMatchObject({ status: 429, message: expect.stringContaining('retry in 120 seconds') })
+    await expect(getWeather('45.11', '12.21', dateOffset(2), 'en')).rejects.toMatchObject({ status: 429, message: expect.stringContaining('retry in 120 seconds') })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(db.prepare("SELECT next_allowed_at, request_count, retry_count FROM seasonal_provider_state WHERE provider = 'open-meteo'").get()).toMatchObject({ next_allowed_at: expect.any(Number), request_count: 53, retry_count: 1 })
+
+    await vi.advanceTimersByTimeAsync(120_000)
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ daily: { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [0] } }))
+    await expect(getMonthlyClimate(45.11, 12.21)).resolves.toHaveLength(12)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('holds an unqualified 429 until the next UTC day', async () => {
+    vi.setSystemTime(new Date('2026-11-02T12:00:00Z'))
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'quota reached' }, false, 429))
+    await expect(getMonthlyClimate(44.12, 12.22)).rejects.toMatchObject({ status: 429 })
+    const state = db.prepare("SELECT next_allowed_at FROM seasonal_provider_state WHERE provider='open-meteo'").get() as { next_allowed_at: number }
+    expect(state.next_allowed_at).toBe(Date.UTC(2026, 10, 3, 0, 0, 5))
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getMonthlyClimateBatch', () => {
+  beforeEach(() => {
+    vi.mocked(fetch).mockReset()
+    db.prepare('DELETE FROM weather_climate_cache').run()
+  })
+
+  it('spaces Open-Meteo requests using the persisted provider slot', async () => {
+    const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [2] }
+    const requestTimes: number[] = []
+    vi.mocked(fetch).mockImplementation(async () => { requestTimes.push(Date.now()); return mockResponse({ daily }) })
+    await getMonthlyClimate(10.01, 10.01)
+    const secondRequest = getMonthlyClimate(11.01, 11.01)
+    await vi.advanceTimersByTimeAsync(10_000)
+    await secondRequest
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(requestTimes[1] - requestTimes[0]).toBeGreaterThanOrEqual(5_000)
+  })
+
+  it('fetches multiple coordinates in one provider request and returns each result by key', async () => {
+    const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [2] }
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse([{ daily }, { daily }]))
+    const result = await getMonthlyClimateBatch([
+      { key: 'tokyo', lat: 35.5, lng: 139.75 }, { key: 'kyoto', lat: 35, lng: 135.75 },
+    ])
+    expect(result).toHaveLength(2)
+    expect(result[0].key).toBe('tokyo')
+    expect(result[0].months?.[0]).toMatchObject({ month: 1, meanMaxC: 20, meanMinC: 10, days: 1 })
+    expect(result[1].key).toBe('kyoto')
+    expect(result[1].months?.[0]).toMatchObject({ month: 1, meanMaxC: 20, meanMinC: 10, days: 1 })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain('latitude=36%2C35')
+    expect(db.prepare('SELECT climate_json FROM weather_climate_cache WHERE cache_key = ?').get(climateCacheKey('35.50', '139.75'))).toBeDefined()
+    vi.mocked(fetch).mockReset()
+    expect(await getMonthlyClimateBatch([
+      { key: 'tokyo', lat: 35.5, lng: 139.75 }, { key: 'kyoto', lat: 35, lng: 135.75 },
+    ])).toEqual(result)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('fetches at most two representative climate points per country and reuses them for later locations', async () => {
+    const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [2] }
+    resolveCountryGeography.mockImplementation(async (locations: Array<{ key: string }>) => locations.map(({ key }) => ({ key, countryCode: 'JP' })))
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse([{ daily }, { daily }]))
+    const result = await getMonthlyClimateBatch([
+      { key: 'north', lat: 45.1, lng: 140.1 },
+      { key: 'south', lat: 30.1, lng: 130.1 },
+      { key: 'middle', lat: 37.1, lng: 138.1 },
+    ])
+    expect(result).toHaveLength(3)
+    expect(result.every(item => item.months?.length === 12)).toBe(true)
+    expect(new URL(String(vi.mocked(fetch).mock.calls[0][0])).searchParams.get('latitude')!.split(',')).toHaveLength(2)
+    expect(db.prepare("SELECT COUNT(*) as count FROM weather_climate_country_samples WHERE country_code = 'JP'").get()).toMatchObject({ count: 2 })
+
+    const later = await getMonthlyClimateBatch([{ key: 'new-city', lat: 34.1, lng: 135.1 }])
+    expect(later[0].months).toHaveLength(12)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('limits climate-history batches to ten coordinates per provider call', async () => {
+    const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [2] }
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockResponse(Array.from({ length: 10 }, () => ({ daily }))))
+      .mockResolvedValueOnce(mockResponse([{ daily }]))
+    const request = getMonthlyClimateBatch(Array.from({ length: 11 }, (_, index) => ({ key: `location-${index}`, lat: index + 0.1, lng: index + 0.2 })))
+    await vi.advanceTimersByTimeAsync(5_000)
+    const results = await request
+    expect(results).toHaveLength(11)
+    const locationCounts = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input)).searchParams.get('latitude')!.split(',').length)
+    expect(locationCounts).toEqual([10, 1])
+    const requestCount = (db.prepare("SELECT request_count FROM seasonal_provider_state WHERE provider='open-meteo'").get() as { request_count: number }).request_count
+    expect(requestCount).toBeGreaterThanOrEqual(575)
+    expect(requestCount).toBeLessThanOrEqual(576)
+  })
+
+  it('coalesces concurrent requests for the same climate batch', async () => {
+    const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [2] }
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ daily }))
+    const locations = [{ key: 'same', lat: 19.43, lng: -99.13 }]
+    const [first, second] = await Promise.all([getMonthlyClimateBatch(locations), getMonthlyClimateBatch(locations)])
+    expect(first).toEqual(second)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes cache warming after the provider Retry-After cooldown', async () => {
+    const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [2] }
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockResponse({ reason: 'slow down' }, false, 429, { 'retry-after': '1' }))
+      .mockResolvedValueOnce(mockResponse({ daily }))
+    const locations = [{ key: 'retry', lat: 19.44, lng: -99.14 }]
+    expect((await getMonthlyClimateBatch(locations))[0].error).toContain('slow down')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(db.prepare('SELECT climate_json FROM weather_climate_cache WHERE cache_key = ?').get(climateCacheKey('19.44', '-99.14'))).toBeDefined()
+  })
+
+  it('stops the remaining batch at the first provider cooldown and queues it for later', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'slow down' }, false, 429, { 'retry-after': '3600' }))
+    const result = await getMonthlyClimateBatch(Array.from({ length: 21 }, (_, index) => ({ key: `location-${index}`, lat: index + 0.1, lng: index + 0.2 })))
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(result).toHaveLength(21)
+    expect(result.every(item => item.error?.includes('slow down'))).toBe(true)
+
+    const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [0] }
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockResponse(Array.from({ length: 10 }, () => ({ daily }))))
+      .mockResolvedValueOnce(mockResponse(Array.from({ length: 10 }, () => ({ daily }))))
+      .mockResolvedValueOnce(mockResponse([{ daily }]))
+    await vi.advanceTimersByTimeAsync(3_620_000)
+    expect(fetch).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not persist provider errors', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ error: true, reason: 'No data' }, false, 502))
+    await getMonthlyClimateBatch([{ key: 'missing', lat: -70.12, lng: 12.34 }])
+    expect(db.prepare('SELECT climate_json FROM weather_climate_cache WHERE cache_key = ?').get(climateCacheKey('-70.00', '12.25'))).toBeUndefined()
+  })
+
+  it('does not cache successful responses with no climate observations', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(mockResponse({ daily: { time: [], temperature_2m_max: [], temperature_2m_min: [], precipitation_sum: [] } }))
+      .mockResolvedValueOnce(mockResponse({ daily: { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [0] } }))
+    const locations = [{ key: 'empty-first', lat: 68.13, lng: -23.44 }]
+    expect((await getMonthlyClimateBatch(locations))[0].error).toBe('No historical climate observations returned')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect((await getMonthlyClimateBatch(locations))[0].months).toHaveLength(12)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('warms climate for new locations in the background and reuses the stored result', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ daily: { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [0] } }))
+    const location = { lat: 12.37, lng: 12.52 }
+    scheduleMonthlyClimateWarm([location])
+    await vi.advanceTimersByTimeAsync(50)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    const routeClimate = await getMonthlyClimateBatch([{ key: 'new-place', ...location }])
+    expect(routeClimate[0].months).toHaveLength(12)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    scheduleMonthlyClimateWarm([location])
+    await vi.advanceTimersByTimeAsync(50)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not warm climate during isolated browser E2E runs', async () => {
+    const previous = process.env.TREK_E2E
+    process.env.TREK_E2E = '1'
+    try {
+      scheduleMonthlyClimateWarm([{ lat: 12.37, lng: 12.52 }])
+      await vi.advanceTimersByTimeAsync(50)
+      expect(fetch).not.toHaveBeenCalled()
+    } finally {
+      if (previous == null) delete process.env.TREK_E2E
+      else process.env.TREK_E2E = previous
+    }
+  })
+
+  it('does not exceed the estimated daily API-unit budget with two-year climate batches', async () => {
+    const wasE2E = process.env.TREK_E2E
+    process.env.TREK_E2E = '1'
+    try {
+      const daily = { time: ['1991-01-01'], temperature_2m_max: [20], temperature_2m_min: [10], precipitation_sum: [2] }
+      vi.mocked(fetch).mockImplementation(async () => mockResponse(Array.from({ length: 10 }, () => ({ daily }))))
+      const request = getMonthlyClimateBatch(Array.from({ length: 58 }, (_, index) => ({ key: `budget-${index}`, lat: index + 0.1, lng: index + 0.2 })))
+      await vi.advanceTimersByTimeAsync(30_000)
+      const results = await request
+      expect(results.slice(50).every(result => result.error?.includes('daily request budget reached'))).toBe(true)
+      expect(fetch).toHaveBeenCalledTimes(5)
+      const requestCount = (db.prepare("SELECT request_count FROM seasonal_provider_state WHERE provider='open-meteo'").get() as { request_count: number }).request_count
+      expect(requestCount).toBeGreaterThanOrEqual(2610)
+      expect(requestCount).toBeLessThanOrEqual(2615)
+    } finally {
+      if (wasE2E == null) delete process.env.TREK_E2E
+      else process.env.TREK_E2E = wasE2E
+    }
+  })
+})
 
 // ── getWeather ────────────────────────────────────────────────────────────────
 
@@ -228,13 +481,13 @@ describe('getWeather', () => {
       const date = dateOffset(2);
       const body = { reason: 'rate limited' };
       vi.mocked(fetch).mockResolvedValueOnce(mockResponse(body, false, 429));
-      vi.mocked(fetch).mockResolvedValueOnce(mockResponse(body, false, 429));
 
-      await expect(getWeather('12.00', '22.00', date, 'en')).rejects.toThrow(ApiError);
+      await expect(getWeather('12.00', '22.00', date, 'en')).rejects.toMatchObject({ status: 429, message: 'rate limited' });
       await expect(getWeather('12.00', '22.00', date, 'en')).rejects.toMatchObject({
         status: 429,
-        message: 'rate limited',
+        message: expect.stringContaining('retry in '),
       });
+      expect(fetch).toHaveBeenCalledTimes(1);
     });
 
     it('throws ApiError when data.error is true', async () => {
@@ -270,8 +523,13 @@ describe('getWeather', () => {
         },
       };
 
+      const forecastResponse = mockResponse(forecastBody)
+      vi.mocked(forecastResponse.json).mockImplementationOnce(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+        return forecastBody
+      })
       vi.mocked(fetch)
-          .mockResolvedValueOnce(mockResponse(forecastBody))
+          .mockResolvedValueOnce(forecastResponse)
           .mockResolvedValueOnce(mockResponse(archiveBody));
 
       const result = await getWeather('13.00', '23.00', date, 'en');
@@ -339,10 +597,10 @@ describe('getWeather', () => {
     it('throws ApiError when archive API response.ok is false', async () => {
       const date = dateOffset(20);
       vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'server error' }, false, 500));
-      vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'server error' }, false, 500));
 
       await expect(getWeather('15.01', '25.01', date, 'en')).rejects.toThrow(ApiError);
-      await expect(getWeather('15.01', '25.01', date, 'en')).rejects.toMatchObject({ status: 500 });
+      await expect(getWeather('15.01', '25.01', date, 'en')).rejects.toMatchObject({ status: 429 });
+      expect(fetch).toHaveBeenCalledTimes(1);
     });
 
     it('returns no_forecast when archive daily data is missing', async () => {
@@ -397,6 +655,18 @@ describe('getWeather', () => {
       expect(result.description).toBe('Partly cloudy');
     });
 
+    it('reports provider network failures as 503 and suppresses further calls during cooldown', async () => {
+      vi.mocked(fetch).mockRejectedValueOnce(new TypeError('fetch failed'))
+      await expect(getWeather('16.04', '26.04', undefined, 'en')).rejects.toMatchObject({ status: 503, message: expect.stringContaining('temporarily unreachable') })
+      await expect(getWeather('16.05', '26.05', undefined, 'en')).rejects.toMatchObject({ status: 429 })
+      expect(fetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns 502 for an incomplete current weather response instead of throwing a TypeError', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(mockResponse({}))
+      await expect(getWeather('16.06', '26.06', undefined, 'en')).rejects.toMatchObject({ status: 502, message: expect.stringContaining('incomplete current weather') })
+    })
+
     it('uses German descriptions when lang is "de"', async () => {
       const body = { current: { temperature_2m: 10, weathercode: 45 } };
       vi.mocked(fetch).mockResolvedValueOnce(mockResponse(body));
@@ -423,6 +693,7 @@ describe('getWeather', () => {
       vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'bad request' }, false, 400));
 
       await expect(getWeather('16.03', '26.03', undefined, 'en')).rejects.toThrow(ApiError);
+      await vi.advanceTimersByTimeAsync(5_000)
       await expect(getWeather('16.03', '26.03', undefined, 'en')).rejects.toMatchObject({ status: 400 });
     });
 
@@ -547,6 +818,7 @@ describe('getDetailedWeather', () => {
       vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'not found' }, false, 404));
 
       await expect(getDetailedWeather('31.03', '41.03', date, 'en')).rejects.toThrow(ApiError);
+      await vi.advanceTimersByTimeAsync(5_000)
       await expect(getDetailedWeather('31.03', '41.03', date, 'en')).rejects.toMatchObject({ status: 404 });
     });
 
@@ -675,10 +947,10 @@ describe('getDetailedWeather', () => {
     it('throws ApiError when archive API returns !ok', async () => {
       const date = dateOffset(20);
       vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'upstream error' }, false, 503));
-      vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ reason: 'upstream error' }, false, 503));
 
       await expect(getDetailedWeather('32.04', '42.04', date, 'en')).rejects.toThrow(ApiError);
-      await expect(getDetailedWeather('32.04', '42.04', date, 'en')).rejects.toMatchObject({ status: 503 });
+      await expect(getDetailedWeather('32.04', '42.04', date, 'en')).rejects.toMatchObject({ status: 429 });
+      expect(fetch).toHaveBeenCalledTimes(1);
     });
 
     it('throws ApiError when archive data.error flag is set', async () => {

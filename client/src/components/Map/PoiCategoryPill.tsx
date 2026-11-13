@@ -12,24 +12,24 @@ interface Props {
   /** true when the map moved since the last search → offer "search this area" */
   moved?: boolean
   onSearchArea?: () => void
+  className?: string
 }
 
 // Nearby-map discovery control, separate from the planned-place category filter.
-export default function PoiCategoryPill({ active, onToggle, loadingKeys, errorKeys, moved, onSearchArea }: Props) {
+export default function PoiCategoryPill({ active, onToggle, loadingKeys, errorKeys, moved, onSearchArea, className }: Props) {
   const { t } = useTranslation()
   const anyError = !!errorKeys && Array.from(active).some(k => errorKeys.has(k))
 
   const frosted: React.CSSProperties = {
-    background: 'var(--sidebar-bg)',
-    backdropFilter: 'blur(20px) saturate(180%)',
-    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-    boxShadow: 'var(--sidebar-shadow, 0 4px 16px rgba(0,0,0,0.14))',
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border-primary)',
+    boxShadow: 'var(--sidebar-shadow, 0 4px 16px rgba(0,0,0,0.18))',
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 999, pointerEvents: 'auto', ...frosted }} aria-label="Explore nearby places">
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Explore nearby</span>
+    <div className={className} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 44, maxWidth: '100%', overflowX: 'auto', boxSizing: 'border-box', padding: '4px 10px', borderRadius: 14, pointerEvents: 'auto', ...frosted }} aria-label="Explore nearby places">
+        <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1, color: 'var(--text-secondary)', whiteSpace: 'nowrap', paddingLeft: 2, fontFamily: 'inherit' }}>Explore nearby</span>
         {POI_CATEGORIES.map(cat => {
           const on = active.has(cat.key)
           const loading = loadingKeys?.has(cat.key)
@@ -44,7 +44,7 @@ export default function PoiCategoryPill({ active, onToggle, loadingKeys, errorKe
                 style={{
                   position: 'relative',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 34, height: 34, borderRadius: 999, border: 'none', cursor: 'pointer',
+                  width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
                   background: on ? cat.color : 'transparent',
                   color: on ? '#fff' : undefined,
                   transition: 'background 0.14s, color 0.14s',
@@ -83,7 +83,7 @@ export default function PoiCategoryPill({ active, onToggle, loadingKeys, errorKe
           className="text-content"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '6px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+            padding: '6px 13px', borderRadius: 14, border: 'none', cursor: 'pointer',
             fontSize: 12, fontWeight: 600, fontFamily: 'inherit', pointerEvents: 'auto',
             color: anyError ? '#ef4444' : undefined,
             ...frosted,

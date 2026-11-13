@@ -74,6 +74,8 @@ export interface TripStoreState
   handleRemoteEvent: (event: WebSocketEvent) => void
   resetTrip: () => void
   loadTrip: (tripId: number | string) => Promise<void>
+  loadPackingItems: (tripId: number | string) => Promise<void>
+  loadTodoItems: (tripId: number | string) => Promise<void>
   hydrateActiveTrip: (tripId: number | string) => Promise<void>
   refreshDays: (tripId: number | string) => Promise<void>
   updateTrip: (tripId: number | string, data: Partial<Trip> & { date_shift_mode?: 'keep_bookings' | 'shift_all' }) => Promise<Trip>
@@ -130,18 +132,13 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
     get().resetTrip()
     set({ isLoading: true, error: null })
     try {
-      const [tripData, daysData, placesData, packingData, todoData, budgetData, reservationsData, filesData, tagsData, categoriesData] = await Promise.all([
+      const [tripData, daysData, placesData, reservationsData, tagsData, categoriesData] = await Promise.all([
         tripRepo.get(tripId),
         dayRepo.list(tripId),
         placeRepo.list(tripId),
-        packingRepo.list(tripId),
-        todoRepo.list(tripId),
-        // Budget / reservations / files are hydrated here too so the offline
-        // path is uniform (no separate tab-gated effects). Non-fatal: a failure
-        // in any of these must not blank the whole trip.
-        budgetRepo.list(tripId).catch(() => ({ items: [] as BudgetItem[] })),
+        // Reservations drive the Plan timeline. Budget and files are loaded by
+        // their tabs so opening Plan does not fetch unrelated payloads.
         reservationRepo.list(tripId).catch(() => ({ reservations: [] as Reservation[] })),
-        fileRepo.list(tripId).catch(() => ({ files: [] as TripFile[] })),
         isEffectivelyOnline()
           ? tagsApi.list().catch(() => offlineDb.tags.toArray().then(tags => ({ tags })))
           : offlineDb.tags.toArray().then(tags => ({ tags })),
@@ -163,11 +160,11 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
         places: placesData.places,
         assignments: assignmentsMap,
         dayNotes: dayNotesMap,
-        packingItems: packingData.items,
-        todoItems: todoData.items,
-        budgetItems: budgetData.items,
+        packingItems: [],
+        todoItems: [],
+        budgetItems: [],
         reservations: reservationsData.reservations,
-        files: filesData.files,
+        files: [],
         tags: tagsData.tags,
         categories: categoriesData.categories,
         isLoading: false,
@@ -179,6 +176,16 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
     }
   },
 
+  loadPackingItems: async (tripId) => {
+    const data = await packingRepo.list(tripId)
+    set({ packingItems: data.items })
+  },
+
+  loadTodoItems: async (tripId) => {
+    const data = await todoRepo.list(tripId)
+    set({ todoItems: data.items })
+  },
+
   // Silently re-fetch the active trip's collaborative state into the store after
   // the network comes back (WS reconnect or `online` event) so edits missed while
   // offline appear in place — no splash, no resetTrip. Each resource is
@@ -187,8 +194,8 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
     await Promise.all([
       get().refreshDays(tripId),
       placeRepo.list(tripId).then(d => set({ places: d.places })).catch(() => {}),
-      packingRepo.list(tripId).then(d => set({ packingItems: d.items })).catch(() => {}),
-      todoRepo.list(tripId).then(d => set({ todoItems: d.items })).catch(() => {}),
+      get().loadPackingItems(tripId).catch(() => {}),
+      get().loadTodoItems(tripId).catch(() => {}),
       get().loadBudgetItems(tripId),
       get().loadReservations(tripId),
       get().loadFiles(tripId),

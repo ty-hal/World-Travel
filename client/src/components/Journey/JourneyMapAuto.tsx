@@ -2,9 +2,10 @@ import { forwardRef, lazy, Suspense, useImperativeHandle, useRef } from 'react'
 import { useSettingsStore } from '../../store/settingsStore'
 import JourneyMap, { type JourneyMapHandle } from './JourneyMap'
 import type { JourneyMapGLHandle } from './JourneyMapGL'
+import { resolveInteractiveGlProvider } from '../Map/glProviders'
+import type { JourneyTrack } from '@trek/shared'
 
-// Lazy-load the GL renderer (and its ~230 KB gzip engine) so Leaflet-only
-// installs never download it — it ships only once a GL provider is picked.
+// Lazy-load the GL renderer (and its ~230 KB gzip engine).
 const JourneyMapGL = lazy(() => import('./JourneyMapGL'))
 
 // Unified handle — both providers expose the same three methods.
@@ -25,6 +26,7 @@ interface MapEntry {
 interface Props {
   checkins: unknown[]
   entries: MapEntry[]
+  tracks?: JourneyTrack[]
   trail?: { lat: number; lng: number }[]
   height?: number
   dark?: boolean
@@ -40,27 +42,22 @@ const JourneyMapAuto = forwardRef<JourneyMapAutoHandle, Props>(function JourneyM
   const leafletRef = useRef<JourneyMapHandle>(null)
   const glRef = useRef<JourneyMapGLHandle>(null)
 
-  // Fall back to Leaflet when the user selected Mapbox GL but hasn't
-  // supplied a token yet. MapLibre/OpenFreeMap is tokenless.
-  const useGL = provider === 'maplibre-gl' || (provider === 'mapbox-gl' && !!token)
-  const glProvider = provider === 'maplibre-gl' ? 'maplibre-gl' : 'mapbox-gl'
+  // Same rule as MapViewAuto: never stay on Leaflet OSM for interactive maps —
+  // raster tiles cannot honor account language (Chinese labels over China, etc.).
+  const glProvider = resolveInteractiveGlProvider(provider, token)
 
   useImperativeHandle(ref, () => ({
-    highlightMarker: (id) => (useGL ? glRef.current : leafletRef.current)?.highlightMarker(id),
-    focusMarker: (id) => (useGL ? glRef.current : leafletRef.current)?.focusMarker(id),
-    invalidateSize: () => (useGL ? glRef.current : leafletRef.current)?.invalidateSize(),
-  }), [useGL])
+    highlightMarker: (id) => glRef.current?.highlightMarker(id) ?? leafletRef.current?.highlightMarker(id),
+    focusMarker: (id) => glRef.current?.focusMarker(id) ?? leafletRef.current?.focusMarker(id),
+    invalidateSize: () => glRef.current?.invalidateSize() ?? leafletRef.current?.invalidateSize(),
+  }), [])
 
-  if (useGL) {
-    return (
-      <Suspense fallback={null}>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <JourneyMapGL ref={glRef} {...(props as any)} glProvider={glProvider} />
-      </Suspense>
-    )
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <JourneyMap ref={leafletRef} {...(props as any)} />
+  return (
+    <Suspense fallback={<JourneyMap ref={leafletRef} {...(props as any)} />}>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <JourneyMapGL ref={glRef} {...(props as any)} glProvider={glProvider} />
+    </Suspense>
+  )
 })
 
 export default JourneyMapAuto

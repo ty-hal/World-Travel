@@ -16,6 +16,7 @@ import AnimatedCompassIcon from '../shared/AnimatedCompassIcon'
 import AnimatedBookmarkIcon from '../shared/AnimatedBookmarkIcon'
 import AnimatedSunIcon from '../shared/AnimatedSunIcon'
 import AnimatedMoonIcon from '../shared/AnimatedMoonIcon'
+import { addonPath } from '../../utils/addonPaths'
 
 type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number; className?: string }>
 
@@ -152,7 +153,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
 
       {/* Centred liquid-glass tab menu (design handoff). Absolutely positioned so
           the left brand block and the right action cluster keep their layout. */}
-      {(globalAddons.length > 0 || pagePlugins.length > 0) && !tripTitle && (
+      {(globalAddons.length > 0 || pagePlugins.length > 0) && (
         <div
           className="trek-nav-pill"
           style={{
@@ -164,7 +165,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
           }}
         >
           {[{ id: '__trips', path: '/dashboard', label: t('nav.myTrips'), Icon: Briefcase },
-            ...globalAddons.map(a => ({ id: a.id, path: `/${a.id}`, label: getAddonName(a), Icon: ADDON_ICONS[a.icon] || AnimatedCalendarDaysIcon })),
+            ...globalAddons.map(a => ({ id: a.id, path: addonPath(a.id), label: getAddonName(a), Icon: ADDON_ICONS[a.icon] || AnimatedCalendarDaysIcon })),
             ...pagePlugins.map(p => ({ id: `plugin:${p.id}`, path: `/plugins/${p.id}`, label: p.name, Icon: resolvePluginIcon(p.icon) }))
           ].map(tab => {
             const isActive = location.pathname === tab.path
@@ -184,22 +185,11 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
               </Link>
             )
           })}
+          <div
+            id="trek-nav-center-slot"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, maxWidth: 'min(30vw, 360px)', overflow: 'hidden', pointerEvents: 'none' }}
+          />
         </div>
-      )}
-
-      {/* Centre slot for page-scoped notices (plugin trip warnings portal into it).
-          Only mounted on trip pages, where the tab pill above is absent, so the two
-          never fight over the centre. Zero-size while empty; pointer events stay off
-          on the wrapper so an empty slot can't swallow clicks. */}
-      {tripTitle && (
-        <div
-          id="trek-nav-center-slot"
-          style={{
-            position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-            display: 'flex', alignItems: 'center', gap: 6, maxWidth: '42%',
-            overflow: 'hidden', pointerEvents: 'none',
-          }}
-        />
       )}
 
       {/* Spacer */}
@@ -253,11 +243,11 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
             ) : (
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
                 style={{ background: dark ? '#e2e8f0' : '#111827', color: dark ? '#0f172a' : '#ffffff' }}>
-                {user.username?.charAt(0).toUpperCase()}
+                {(user.display_name || user.username)?.charAt(0).toUpperCase()}
               </div>
             )}
             <span className="text-sm hidden sm:inline max-w-24 truncate text-content-secondary">
-              {user.username}
+              {user.display_name || user.username}
             </span>
             <ChevronDown className="w-4 h-4 text-content-faint" />
           </button>
@@ -267,7 +257,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
               <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setUserMenuOpen(false)} />
               <div className="trek-menu-enter w-52 rounded-xl shadow-xl border overflow-hidden bg-surface-card border-edge" style={{ position: 'fixed', top: 'var(--nav-h)', right: 8, zIndex: 9999 }}>
                 <div className="px-4 py-3 border-b border-edge-secondary">
-                  <p className="text-sm font-medium text-content">{user.username}</p>
+                  <p className="text-sm font-medium text-content">{user.display_name || user.username}</p>
                   <p className="text-xs truncate text-content-muted">{user.email}</p>
                   {user.role === 'admin' && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium mt-1 text-content-secondary">

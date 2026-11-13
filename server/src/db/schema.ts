@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createBeliTables } from './beliSchema';
 
 function createTables(db: Database.Database): void {
   db.exec(`
@@ -89,6 +90,7 @@ function createTables(db: Database.Database): void {
       cover_image TEXT,
       is_archived INTEGER DEFAULT 0,
       reminder_days INTEGER DEFAULT 3,
+      sort_order INTEGER NOT NULL DEFAULT 0,
       feed_token TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -145,6 +147,8 @@ function createTables(db: Database.Database): void {
       website TEXT,
       phone TEXT,
       transport_mode TEXT DEFAULT 'walking',
+      source_collection_id INTEGER,
+      source_collection_place_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -550,6 +554,7 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_places_trip_id ON places(trip_id);
     CREATE INDEX IF NOT EXISTS idx_places_category_id ON places(category_id);
     CREATE INDEX IF NOT EXISTS idx_days_trip_id ON days(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_day_assignments_day_order ON day_assignments(day_id, order_index, created_at);
     CREATE INDEX IF NOT EXISTS idx_day_assignments_day_id ON day_assignments(day_id);
     CREATE INDEX IF NOT EXISTS idx_day_assignments_place_id ON day_assignments(place_id);
     CREATE INDEX IF NOT EXISTS idx_place_tags_place_id ON place_tags(place_id);
@@ -559,12 +564,15 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_packing_items_trip_id ON packing_items(trip_id);
     CREATE INDEX IF NOT EXISTS idx_budget_items_trip_id ON budget_items(trip_id);
     CREATE INDEX IF NOT EXISTS idx_reservations_trip_id ON reservations(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_reservations_trip_time ON reservations(trip_id, reservation_time);
     CREATE INDEX IF NOT EXISTS idx_trip_files_trip_id ON trip_files(trip_id);
     CREATE INDEX IF NOT EXISTS idx_trip_links_trip_id ON trip_links(trip_id);
     CREATE INDEX IF NOT EXISTS idx_day_notes_day_id ON day_notes(day_id);
     CREATE INDEX IF NOT EXISTS idx_photos_trip_id ON photos(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_photos_trip_created ON photos(trip_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_day_accommodations_trip_id ON day_accommodations(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_collab_messages_trip_created ON collab_messages(trip_id, created_at);
 
     CREATE TABLE IF NOT EXISTS assignment_participants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -620,6 +628,7 @@ function createTables(db: Database.Database): void {
 
     CREATE TABLE IF NOT EXISTS migrations (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, timestamp bigint NOT NULL, name varchar NOT NULL);
   `);
+  createBeliTables(db);
 }
 
 export { createTables };

@@ -1,13 +1,19 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// Capture runs on its own ports so it can use the isolated E2E database without
+// interrupting the developer's local app on :5173/:3001.
+const apiPort = process.env.CI ? 3002 : 3001
+const webPort = process.env.CI ? 5174 : 5173
+
 /**
  * E2E harness for TREK's critical user flows (FE7).
  *
- * Two web servers are orchestrated: the Express/Nest backend on :3001 against an
+ * Two web servers are orchestrated: the Nest backend against an
  * isolated throwaway SQLite DB (e2e/server-launch.mjs sets TREK_DB_FILE + seeds a
- * known admin), and the Vite dev server on :5173 which proxies /api, /uploads,
+ * known admin), and Vite proxies /api, /uploads,
  * /ws to the backend. Tests run serially against one worker so they share the
- * single seeded database deterministically.
+ * single seeded database deterministically. CI capture uses :3002/:5174 to avoid
+ * disrupting a developer server on :3001/:5173.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -25,7 +31,7 @@ export default defineConfig({
   },
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: `http://localhost:${webPort}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -93,11 +99,21 @@ export default defineConfig({
       },
       dependencies: ['seed'],
     },
+    {
+      name: 'screenshots-mobile',
+      testMatch: /\.mshot\.ts/,
+      use: {
+        ...devices['Pixel 7'],
+        storageState: 'e2e/.tmp/state.json',
+      },
+      dependencies: ['seed'],
+    },
   ],
   webServer: [
     {
       command: 'node e2e/server-launch.mjs',
-      port: 3001,
+      port: apiPort,
+      env: { TREK_E2E_PORT: String(apiPort), HOST: '127.0.0.1' },
       reuseExistingServer: false,
       timeout: 180_000,
       stdout: 'pipe',
@@ -105,7 +121,8 @@ export default defineConfig({
     },
     {
       command: 'VITE_E2E=1 npm run dev',
-      port: 5173,
+      port: webPort,
+      env: { VITE_PORT: String(webPort), TREK_API_PORT: String(apiPort), VITE_E2E: '1', HOST: '127.0.0.1' },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

@@ -1,6 +1,7 @@
-import React, { useEffect, useCallback, useRef } from 'react'
+import React, { useEffect, useRef, useId } from 'react'
 import ReactDOM from 'react-dom'
 import { X } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 const sizeClasses: Record<string, string> = {
   sm: 'max-w-sm',
@@ -19,6 +20,7 @@ interface ModalProps {
   size?: string
   footer?: React.ReactNode
   hideCloseButton?: boolean
+  ariaLabel?: string
 }
 
 export default function Modal({
@@ -29,21 +31,52 @@ export default function Modal({
   size = 'md',
   footer,
   hideCloseButton = false,
+  ariaLabel,
 }: ModalProps) {
-  const handleEsc = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
+  const { t } = useTranslation()
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleEsc)
-      document.body.style.overflow = 'hidden'
+    if (!isOpen) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialog = dialogRef.current
+    const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    const getFocusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])
+      .filter(element => !element.closest('[hidden], [inert], [aria-hidden="true"]'))
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = getFocusable()
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (!first || !last) {
+        event.preventDefault()
+        dialog?.focus()
+      } else if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
+        event.preventDefault()
+        ;(document.activeElement === first ? last : first).focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
+        event.preventDefault()
+        first.focus()
+      }
     }
+
+    document.addEventListener('keydown', handleKeyDown)
+    document.body.style.overflow = 'hidden'
+    const initialFocus = getFocusable().find(element => element.hasAttribute('autofocus')) ?? getFocusable()[0] ?? dialog
+    initialFocus?.focus()
     return () => {
-      document.removeEventListener('keydown', handleEsc)
+      document.removeEventListener('keydown', handleKeyDown)
       document.body.style.overflow = ''
+      if (previouslyFocused?.isConnected) previouslyFocused.focus()
     }
-  }, [isOpen, handleEsc])
+  }, [isOpen])
 
   const mouseDownTarget = useRef<EventTarget | null>(null)
 
@@ -60,6 +93,12 @@ export default function Modal({
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : ariaLabel}
+        tabIndex={-1}
         className={`
           trek-modal-enter
           rounded-2xl overflow-hidden shadow-2xl w-full ${sizeClasses[size] || sizeClasses.md}
@@ -71,11 +110,13 @@ export default function Modal({
       >
         {/* Header — stays put even while the body scrolls */}
         <div className="flex items-center justify-between p-6 flex-shrink-0 border-b border-edge-secondary">
-          <h2 className="text-lg font-semibold text-content">{title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-content">{title}</h2>
           {!hideCloseButton && (
             <button
+              type="button"
+              aria-label={t('common.close')}
               onClick={onClose}
-              className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>

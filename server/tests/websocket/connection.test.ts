@@ -61,8 +61,10 @@ import { createWsToken } from '../../src/services/authService';
 let server: http.Server;
 let wsUrl: string;
 let nestApp: INestApplication;
+const previousAllowedOrigins = process.env.ALLOWED_ORIGINS;
 
 beforeAll(async () => {
+  process.env.ALLOWED_ORIGINS = 'https://trek.example.com';
   createTables(testDb);
   runMigrations(testDb);
 
@@ -78,6 +80,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS;
+  else process.env.ALLOWED_ORIGINS = previousAllowedOrigins;
   await new Promise<void>((resolve, reject) =>
     server.close(err => err ? reject(err) : resolve())
   );
@@ -159,10 +163,10 @@ class WsClient {
   }
 }
 
-function connectWs(token?: string): Promise<WsClient> {
+function connectWs(token?: string, origin?: string): Promise<WsClient> {
   return new Promise((resolve, reject) => {
     const url = token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(url, { origin });
     const client = new WsClient(ws);
     ws.once('open', () => resolve(client));
     ws.once('error', reject);
@@ -173,6 +177,18 @@ function connectWs(token?: string): Promise<WsClient> {
 }
 
 describe('WS connection', () => {
+  it.each(['http://localhost:5173', 'http://127.0.0.1:5173', 'https://trek.example.com'])('accepts allowed development/deployment origin %s', async (origin) => {
+    const { user } = createUser(testDb);
+    const client = await connectWs(createEphemeralToken(user.id, 'ws')!, origin);
+    try { expect((await client.next()).type).toBe('welcome'); }
+    finally { client.close(); }
+  });
+
+  it('rejects an unrelated browser origin', async () => {
+    const { user } = createUser(testDb);
+    await expect(connectWs(createEphemeralToken(user.id, 'ws')!, 'https://untrusted.example')).rejects.toThrow('403');
+  });
+
   it('WS-001 — connects with valid ephemeral token and receives welcome', async () => {
     const { user } = createUser(testDb);
     const token = createEphemeralToken(user.id, 'ws')!;

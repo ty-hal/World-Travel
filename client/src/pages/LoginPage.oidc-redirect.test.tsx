@@ -101,5 +101,29 @@ describe('LoginPage — OIDC redirect preservation', () => {
         expect(sessionStorage.getItem('oidc_redirect')).toBeNull();
       });
     });
+
+    it('clears the saved redirect and announces an OIDC exchange error', async () => {
+      server.use(
+        http.get('/api/auth/oidc/exchange', () =>
+          HttpResponse.json({ error: 'Identity provider temporarily unavailable' }, { status: 503 }),
+        ),
+      );
+      sessionStorage.setItem('oidc_redirect', '/oauth/consent?client_id=old-client');
+      setSearch('?oidc_code=failed-code');
+      render(<LoginPage />);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Identity provider temporarily unavailable');
+      expect(sessionStorage.getItem('oidc_redirect')).toBeNull();
+    });
+
+    it('clears the saved redirect when the OIDC exchange request fails', async () => {
+      server.use(http.get('/api/auth/oidc/exchange', () => HttpResponse.error()));
+      sessionStorage.setItem('oidc_redirect', '/oauth/consent?client_id=old-client');
+      setSearch('?oidc_code=failed-code');
+      render(<LoginPage />);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('OIDC login failed');
+      expect(sessionStorage.getItem('oidc_redirect')).toBeNull();
+    });
   });
 });

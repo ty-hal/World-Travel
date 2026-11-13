@@ -40,6 +40,10 @@ export function isOpenFreeMapStyle(style?: string | null): boolean {
   return (style || '').trim().startsWith('https://tiles.openfreemap.org/')
 }
 
+export function isOpenFreeMapLightStyle(style?: string | null): boolean {
+  return /^https:\/\/tiles\.openfreemap\.org\/styles\/(?:liberty|bright|positron)(?:[?#]|$)/.test((style || '').trim())
+}
+
 export function normalizeStyleForProvider(provider: GlMapProvider, style?: string | null): string {
   const trimmed = (style || '').trim()
   if (!trimmed) return defaultStyleForProvider(provider)
@@ -84,4 +88,102 @@ const BASEMAP_LANG_OVERRIDES: Record<string, string> = {
 export function basemapLanguage(uiLang: string | undefined): string {
   const code = (uiLang || 'en').trim()
   return BASEMAP_LANG_OVERRIDES[code] ?? code
+}
+
+/** True when a symbol layer's text-field expression references place `name*` props. */
+export function layerUsesPlaceName(textField: unknown): boolean {
+  if (textField == null) return false
+  if (typeof textField === 'string') return /\bname(_|:|$|\b)/.test(textField) || textField.includes('{name')
+  try {
+    return /"name[_:]|"name"/.test(JSON.stringify(textField))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Single-script label expression for classic Mapbox / OpenMapTiles styles.
+ * Prefers the account language, then English, then Latin script, then local `name`.
+ *
+ * OpenFreeMap Liberty defaults to concatenating `name:latin` + `name:nonlatin`, which
+ * shows Chinese (etc.) even when the UI is English — we replace that with one script.
+ */
+export function labelTextFieldExpression(uiLang: string | undefined): unknown[] {
+  const lang = basemapLanguage(uiLang)
+  const fields: unknown[] = [
+    ['get', `name_${lang}`],
+    ['get', `name:${lang}`],
+  ]
+  // Mapbox Streets often stores Chinese under name_zh; OpenMapTiles under name:zh.
+  if (lang.startsWith('zh')) {
+    fields.push(['get', 'name_zh'], ['get', 'name:zh'])
+  }
+  if (lang !== 'en') {
+    fields.push(['get', 'name_en'], ['get', 'name:en'])
+  }
+  // Latin transliteration before raw local `name` (often Hanzi / other non-Latin script).
+  fields.push(['get', 'name:latin'], ['get', 'name_latin'], ['get', 'name'])
+  return ['coalesce', ...fields]
+}
+
+/**
+ * Interactive trip/journey maps always use a GL provider that can honor account
+ * language. Leaflet + OSM raster tiles bake in local-script labels and cannot.
+ */
+export function resolveInteractiveGlProvider(
+  provider: string | undefined,
+  mapboxToken?: string | null,
+): GlMapProvider {
+  if (provider === 'mapbox-gl' && mapboxToken) return 'mapbox-gl'
+  return 'maplibre-gl'
+}
+
+type GlMapLike = {
+  /** Mapbox GL JS v3+ — the working API for Standard label language (setConfigProperty is a no-op). */
+  setLanguage?: (language: string) => void
+  setConfigProperty?: (importId: string, property: string, value: unknown) => void
+  getStyle?: () => { layers?: Array<{ id: string; type: string; layout?: Record<string, unknown> }> } | undefined
+  setLayoutProperty?: (layerId: string, property: string, value: unknown) => void
+}
+
+/**
+ * Pin basemap place labels to the user's account language on every GL style.
+ *
+ * Mapbox Standard: use `map.setLanguage()` (and the Map `language` constructor
+ * option). `setConfigProperty('basemap', 'language')` silently does nothing in
+ * GL JS ≥3.18 — without setLanguage, Standard falls back to local-script labels
+ * (e.g. Chinese over China even when the UI is English).
+ *
+ * Classic Mapbox / OpenFreeMap: rewrite symbol `text-field` to a single script.
+ */
+export function applyBasemapLabelLanguage(
+  map: GlMapLike | null | undefined,
+  uiLang: string | undefined,
+  styleUrl?: string | null,
+): void {
+  if (!map) return
+  const lang = basemapLanguage(uiLang)
+  const style = (styleUrl || '').trim()
+  const isStandard = style === 'mapbox://styles/mapbox/standard'
+    || style === 'mapbox://styles/mapbox/standard-satellite'
+
+  if (typeof map.setLanguage === 'function') {
+    try { map.setLanguage(lang) } catch { /* MapLibre / older SDKs */ }
+  }
+  // Kept as a best-effort for docs/examples that still mention it; harmless no-op on current GL JS.
+  if (isStandard && typeof map.setConfigProperty === 'function') {
+    try { map.setConfigProperty('basemap', 'language', lang) } catch { /* ignore */ }
+  }
+  if (isStandard) return
+
+  const layers = map.getStyle?.()?.layers
+  if (!layers || typeof map.setLayoutProperty !== 'function') return
+  for (const layer of layers) {
+    if (layer.type !== 'symbol') continue
+    const textField = layer.layout?.['text-field']
+    if (!layerUsesPlaceName(textField)) continue
+    try {
+      map.setLayoutProperty(layer.id, 'text-field', labelTextFieldExpression(uiLang))
+    } catch { /* layer may be immutable or missing */ }
+  }
 }

@@ -8,7 +8,7 @@ import { useInAppNotificationStore } from '../../store/inAppNotificationStore.ts
  * the previous in-component logic.
  */
 export function useInAppNotifications() {
-  const { notifications, unreadCount, total, isLoading, hasMore, fetchNotifications, markAllRead, deleteAll } = useInAppNotificationStore()
+  const { notifications, unreadCount, total, isLoading, loadError, hasMore, fetchNotifications, markAllRead, deleteAll } = useInAppNotificationStore()
   const [unreadOnly, setUnreadOnly] = useState(false)
   const loaderRef = useRef<HTMLDivElement>(null)
 
@@ -29,18 +29,18 @@ export function useInAppNotifications() {
   useEffect(() => {
     if (!loaderRef.current) return
     const observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore && !isLoading) {
+      if (entries[0].isIntersecting && hasMore && !isLoading && !loadError) {
         fetchNotifications(false)
       }
     }, { threshold: 0.1 })
     observer.observe(loaderRef.current)
     return () => observer.disconnect()
-  }, [hasMore, isLoading])
+  }, [hasMore, isLoading, loadError])
 
   const displayed = unreadOnly ? notifications.filter(n => !n.is_read) : notifications
 
   return {
-    notifications, unreadCount, total, isLoading, hasMore,
+    notifications, unreadCount, total, isLoading, loadError, hasMore, fetchNotifications,
     unreadOnly, setUnreadOnly, loaderRef, displayed,
     markAllRead, deleteAll,
   }

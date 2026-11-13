@@ -8,13 +8,14 @@ interface Props {
   onChange: (value: string) => void
   placeholder?: string
   className?: string
+  ariaLabel?: string
 }
 
 // Free-text address input with location autocomplete, backed by the same maps
 // search as LocationSelect. Unlike LocationSelect the typed text is
 // authoritative: every keystroke reaches the parent so a hand-written address
 // is never lost, and picking a suggestion just replaces the text (#1496).
-export default function AddressInput({ value, onChange, placeholder, className }: Props) {
+export default function AddressInput({ value, onChange, placeholder, className, ariaLabel }: Props) {
   const { t, locale } = useTranslation()
   const [open, setOpen] = useState(false)
   const [results, setResults] = useState<any[]>([])
@@ -73,6 +74,7 @@ export default function AddressInput({ value, onChange, placeholder, className }
     <div ref={wrapRef} style={{ position: 'relative' }}>
       <input
         type="text"
+        aria-label={ariaLabel}
         value={value}
         placeholder={placeholder}
         onChange={e => { onChange(e.target.value); setOpen(true); search(e.target.value) }}

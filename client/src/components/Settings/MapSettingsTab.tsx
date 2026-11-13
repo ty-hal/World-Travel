@@ -226,11 +226,12 @@ export default function MapSettingsTab(): React.ReactElement {
   return (
     <Section title={t('settings.map')} icon={Map}>
       {/* Provider picker — big cards so the choice is obvious */}
-      <div>
+      <div role="group" aria-label={t('settings.mapProvider')}>
         <label className="block text-sm font-medium text-slate-700 mb-2">{t('settings.mapProvider')}</label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button
             type="button"
+            aria-pressed={provider === 'leaflet'}
             onClick={() => changeProvider('leaflet')}
             className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
               provider === 'leaflet'
@@ -246,6 +247,7 @@ export default function MapSettingsTab(): React.ReactElement {
           </button>
           <button
             type="button"
+            aria-pressed={provider === 'mapbox-gl'}
             onClick={() => changeProvider('mapbox-gl')}
             className={`relative flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
               provider === 'mapbox-gl'
@@ -268,6 +270,7 @@ export default function MapSettingsTab(): React.ReactElement {
           </button>
           <button
             type="button"
+            aria-pressed={provider === 'maplibre-gl'}
             onClick={() => changeProvider('maplibre-gl')}
             className={`relative flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
               provider === 'maplibre-gl'
@@ -336,11 +339,12 @@ export default function MapSettingsTab(): React.ReactElement {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.mapStyle')}</label>
+            <label htmlFor="map-style-url" className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.mapStyle')}</label>
             <div className="mb-2">
               <StyleDropdown value={mapboxStyle} provider={provider} onChange={setMapboxStyle} />
             </div>
             <input
+              id="map-style-url"
               type="text"
               value={mapboxStyle}
               onChange={(e) => setMapboxStyle(e.target.value)}

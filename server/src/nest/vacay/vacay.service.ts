@@ -94,6 +94,10 @@ export class VacayService {
     return svc.toggleCompanyHoliday(planId, date, note, socketId);
   }
 
+  addUsBankHolidays(planId: number, year: number, socketId: string | undefined) {
+    return svc.addUsBankHolidays(planId, year, socketId);
+  }
+
   getStats(planId: number, year: number) {
     return svc.getStats(planId, year);
   }

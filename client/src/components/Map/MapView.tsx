@@ -185,35 +185,41 @@ function ViewportController({ onViewportChange }: { onViewportChange?: (b: { sou
 interface SelectionControllerProps {
   places: Place[]
   selectedPlaceId: number | null
+  focusKey?: number
   dayPlaces: Place[]
   paddingOpts: L.FitBoundsOptions
 }
 
-function SelectionController({ places, selectedPlaceId, dayPlaces, paddingOpts }: SelectionControllerProps) {
+function SelectionController({ places, selectedPlaceId, focusKey = 0, dayPlaces, paddingOpts }: SelectionControllerProps) {
   const map = useMap()
-  const prev = useRef(null)
+  const prevId = useRef<number | null>(null)
+  const prevFocus = useRef(0)
 
   useEffect(() => {
-    if (selectedPlaceId && selectedPlaceId !== prev.current) {
-      // Pan to the selected place without changing zoom. Offset the centre by the
-      // side-panel + bottom-inspector padding so the pin lands in the middle of the
-      // *visible* map area rather than the geometric centre (where the bottom panel
-      // would cover it). Reuses the same paddingOpts the fit-bounds path uses.
-      const selected = places.find(p => p.id === selectedPlaceId)
-      if (selected?.lat != null && selected?.lng != null) {
-        const latlng: [number, number] = [selected.lat, selected.lng]
-        const tl = paddingOpts.paddingTopLeft as [number, number] | undefined
-        const br = paddingOpts.paddingBottomRight as [number, number] | undefined
-        if (tl && br && typeof map.project === 'function' && typeof map.unproject === 'function') {
-          const point = map.project(latlng).add([(br[0] - tl[0]) / 2, (br[1] - tl[1]) / 2])
-          map.panTo(map.unproject(point), { animate: true })
-        } else {
-          map.panTo(latlng, { animate: true })
-        }
+    const idChanged = selectedPlaceId != null && selectedPlaceId !== prevId.current
+    const focusChanged = focusKey !== prevFocus.current && selectedPlaceId != null
+    prevId.current = selectedPlaceId
+    prevFocus.current = focusKey
+    if (!idChanged && !focusChanged) return
+
+    // Prefer places (includes force-shown selection); fall back to dayPlaces.
+    const selected = places.find(p => p.id === selectedPlaceId) || dayPlaces.find(p => p.id === selectedPlaceId)
+    if (selected?.lat == null || selected?.lng == null) return
+
+    const latlng: [number, number] = [selected.lat, selected.lng]
+    const targetZoom = Math.max(map.getZoom(), 14)
+    const tl = paddingOpts.paddingTopLeft as [number, number] | undefined
+    const br = paddingOpts.paddingBottomRight as [number, number] | undefined
+    try {
+      if (tl && br && typeof map.project === 'function' && typeof map.unproject === 'function') {
+        // Offset centre by panel padding so the pin sits in the visible map area.
+        const point = map.project(latlng, targetZoom).add([(br[0] - tl[0]) / 2, (br[1] - tl[1]) / 2])
+        map.setView(map.unproject(point, targetZoom), targetZoom, { animate: true })
+      } else {
+        map.setView(latlng, targetZoom, { animate: true })
       }
-    }
-    prev.current = selectedPlaceId
-  }, [selectedPlaceId, places, map])
+    } catch { /* noop */ }
+  }, [selectedPlaceId, focusKey, places, dayPlaces, map, paddingOpts])
 
   return null
 }
@@ -244,14 +250,18 @@ function MapController({ center, zoom }: MapControllerProps) {
 interface BoundsControllerProps {
   hasDayDetail?: boolean
   places: Place[]
+  /** True when `places` is the selected day's stops (must always fit; never skip). */
+  isDayFit?: boolean
   routeCoords: [number, number][]
   fitKey: number
+  /** Optional [lat,lng] points to frame instead of place markers (e.g. booking-route endpoints). */
+  fitExtraCoords?: [number, number][] | null
   paddingOpts: L.FitBoundsOptions
   /** The map was built already framed on these places, so the opening fit has nothing to do. */
   framedOnMount?: boolean
 }
 
-function BoundsController({ places, routeCoords, fitKey, paddingOpts, hasDayDetail, framedOnMount = false }: BoundsControllerProps) {
+function BoundsController({ places, isDayFit = false, routeCoords, fitKey, fitExtraCoords = null, paddingOpts, hasDayDetail, framedOnMount = false }: BoundsControllerProps) {
   const map = useMap()
   const prevFitKey = useRef(-1)
   const awaitingRoute = useRef(false)
@@ -276,15 +286,19 @@ function BoundsController({ places, routeCoords, fitKey, paddingOpts, hasDayDeta
     if (fitKey === prevFitKey.current) return
     prevFitKey.current = fitKey
     awaitingRoute.current = false
-    if (places.length === 0) return
-    // The map opened framed on these very places — re-fitting would only re-do that, and its
-    // maxZoom would overrule the gentler zoom a single place opens at. Later fits (picking a
-    // day) still run.
-    if (!fitRan.current && framedOnMount) {
+    const extras = (fitExtraCoords && fitExtraCoords.length >= 2) ? fitExtraCoords : null
+    if (!extras && places.length === 0) return
+    // Skip only the one-time all-places re-fit that duplicates mount framing.
+    // Day selection / booking-route fits must always run.
+    if (!extras && !isDayFit && !fitRan.current && framedOnMount) {
       fitRan.current = true
       return
     }
     fitRan.current = true
+    if (extras) {
+      fitTo(extras)
+      return
+    }
     fitTo(places.map(p => [p.lat, p.lng] as [number, number]))
     awaitingRoute.current = true
   }, [fitKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -448,6 +462,7 @@ export const MapView = memo(function MapView({
   route = null,
   routeSegments = [],
   selectedPlaceId = null,
+  focusKey = 0,
   hoverDisabled = false,
   onMarkerClick,
   onMapClick,
@@ -456,6 +471,7 @@ export const MapView = memo(function MapView({
   zoom = DEFAULT_MAP_ZOOM,
   tileUrl = OPENSTREETMAP_TILE_URL,
   fitKey = 0,
+  fitExtraCoords = null as [number, number][] | null,
   dayOrderMap = {},
   leftWidth = 0,
   rightWidth = 0,
@@ -677,15 +693,9 @@ export const MapView = memo(function MapView({
   const CatIcon = TooltipOverlay ? getCategoryIcon(hoveredPlace.category_icon) : null
 
   const { position: userPosition, mode: trackingMode, error: trackingError, cycleMode: cycleTrackingMode } = useGeolocation()
-  // Desktop browsers only get IP-based geolocation (city-level accuracy),
-  // so the button would be misleading. Mobile, where real GPS lives, keeps it.
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-  // When the day-detail panel is open it slides up over the map (bottom: navh+20,
-  // height var(--day-panel-h)) and covers the button's band, so lift the button
-  // above it; otherwise keep the plain bottom-nav offset. #1348
-  const locationButtonBottom = hasDayDetail
-    ? 'calc(var(--bottom-nav-h, 84px) + 20px + var(--day-panel-h, 0px) + 12px)'
-    : 'calc(var(--bottom-nav-h, 84px) + 12px)'
+  // Stay pinned bottom-right — do not jump when the place inspector opens.
+  const locationButtonBottom = isMobile ? 'calc(var(--bottom-nav-h, 84px) + 8px)' : 8
 
   return (
     <>
@@ -708,8 +718,17 @@ export const MapView = memo(function MapView({
       />
 
       <MapController center={center} zoom={zoom} />
-      <BoundsController places={dayPlaces.length > 0 ? dayPlaces : places} routeCoords={dayPlaces.length > 0 ? routeCoords : []} fitKey={fitKey} paddingOpts={paddingOpts} hasDayDetail={hasDayDetail} framedOnMount={initialView.framed} />
-      <SelectionController places={places} selectedPlaceId={selectedPlaceId} dayPlaces={dayPlaces} paddingOpts={paddingOpts} />
+      <BoundsController
+        places={dayPlaces.length > 0 ? dayPlaces : places}
+        isDayFit={dayPlaces.length > 0}
+        routeCoords={dayPlaces.length > 0 ? routeCoords : []}
+        fitKey={fitKey}
+        fitExtraCoords={fitExtraCoords}
+        paddingOpts={paddingOpts}
+        hasDayDetail={hasDayDetail}
+        framedOnMount={initialView.framed}
+      />
+      <SelectionController places={places} selectedPlaceId={selectedPlaceId} focusKey={focusKey} dayPlaces={dayPlaces} paddingOpts={paddingOpts} />
       <MapClickHandler onClick={onMapClick} />
       <MapContextMenuHandler onContextMenu={onMapContextMenu} />
       <CameraHoverGuard movingRef={mapMovingRef} onMoveStart={clearHover} />
@@ -759,12 +778,13 @@ export const MapView = memo(function MapView({
       {poiMarkers}
       <PluginMapMarkers tripId={tripId} />
     </MapContainer>
-    {isMobile && <LocationButton
+    <LocationButton
       mode={trackingMode}
       error={trackingError}
       onClick={cycleTrackingMode}
-      bottomOffset={locationButtonBottom as unknown as number}
-    />}
+      bottomOffset={locationButtonBottom}
+      rightOffset={6}
+    />
     </div>
 
     {TooltipOverlay && (

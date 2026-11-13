@@ -44,6 +44,7 @@ describe('BottomNav', () => {
   it('FE-COMP-BOTTOMNAV-002: shows the dashboard nav item', () => {
     render(<BottomNav />);
     expect(screen.getByText('My Trips')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More destinations' })).not.toBeInTheDocument();
   });
 
   it('FE-COMP-BOTTOMNAV-003: centre create button creates a new trip by default', async () => {
@@ -121,6 +122,7 @@ describe('BottomNav', () => {
     });
     const { container } = render(<BottomNav />);
     expect(screen.getByText('Trip Doctor')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More destinations' })).not.toBeInTheDocument();
     expect(container.querySelector('.lucide-stethoscope')).not.toBeNull();
   });
 
@@ -130,5 +132,44 @@ describe('BottomNav', () => {
     });
     const { container } = render(<BottomNav />);
     expect(container.querySelector('.lucide-blocks')).not.toBeNull();
+  });
+
+  it('FE-COMP-BOTTOMNAV-013: overflow destinations remain reachable from More', async () => {
+    const user = userEvent.setup();
+    seedStore(useAddonStore, {
+      addons: ['vacay', 'atlas', 'journey', 'collections'].map(id => ({
+        id, name: id, type: 'global', icon: '', enabled: true,
+      })),
+    });
+    seedStore(usePluginStore, {
+      plugins: [{ id: 'trip-doctor', name: 'Trip Doctor', type: 'page', icon: 'Stethoscope' }],
+    });
+    render(<BottomNav />);
+
+    const moreButton = screen.getByRole('button', { name: 'More destinations' });
+    expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+    await user.click(moreButton);
+    expect(moreButton).toHaveAttribute('aria-expanded', 'true');
+    const destinations = screen.getByRole('group', { name: 'More destinations' });
+    expect(destinations).toHaveTextContent('Collections');
+    expect(destinations).toHaveTextContent('Trip Doctor');
+    await user.click(screen.getByRole('button', { name: 'Trip Doctor' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/plugins/trip-doctor');
+    expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('FE-COMP-BOTTOMNAV-014: Escape closes More and returns focus to its trigger', async () => {
+    const user = userEvent.setup();
+    seedStore(useAddonStore, {
+      addons: ['vacay', 'atlas', 'journey', 'collections'].map(id => ({
+        id, name: id, type: 'global', icon: '', enabled: true,
+      })),
+    });
+    render(<BottomNav />);
+    const moreButton = screen.getByRole('button', { name: 'More destinations' });
+    await user.click(moreButton);
+    await user.keyboard('{Escape}');
+    expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+    expect(moreButton).toHaveFocus();
   });
 });

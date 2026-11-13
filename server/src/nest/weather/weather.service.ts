@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { WeatherResult } from '@trek/shared';
-import { getWeather, getDetailedWeather } from '../../services/weatherService';
+import { getWeather, getDetailedWeather, getMonthlyClimate, getMonthlyClimateBatch } from '../../services/weatherService';
 
 /**
  * Thin Nest wrapper around the existing weather service. It delegates to the
@@ -18,4 +18,7 @@ export class WeatherService {
   getDetailed(lat: string, lng: string, date: string, lang: string): Promise<WeatherResult> {
     return getDetailedWeather(lat, lng, date, lang) as Promise<WeatherResult>;
   }
+
+  climate(lat: number, lng: number) { return getMonthlyClimate(lat, lng) }
+  climateBatch(locations: Array<{ key: string; lat: number; lng: number }>) { return getMonthlyClimateBatch(locations) }
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
+import userEvent from '@testing-library/user-event';
 import { render, screen, waitFor, fireEvent } from '../../tests/helpers/render';
 import { resetAllStores, seedStore } from '../../tests/helpers/store';
 import { buildUser } from '../../tests/helpers/factories';
@@ -282,6 +283,22 @@ describe('VacayPage', () => {
     });
     // Click the 2024 year tile (first one in grid)
     fireEvent.click(screen.getAllByText('2024')[0]);
+    expect(mockSetSelectedYear).toHaveBeenCalledWith(2024);
+  });
+
+  it('exposes year choices as keyboard-operable pressed buttons', async () => {
+    const user = userEvent.setup();
+    const mockSetSelectedYear = vi.fn();
+    seedStore(
+      useVacayStore,
+      makeVacayState({ years: [2024, 2025], selectedYear: 2025, setSelectedYear: mockSetSelectedYear }) as any
+    );
+    render(<VacayPage />);
+    const previousYear = screen.getByRole('button', { name: /^2024$/ });
+    expect(previousYear).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /^2025$/ })).toHaveAttribute('aria-pressed', 'true');
+    previousYear.focus();
+    await user.keyboard('{Enter}');
     expect(mockSetSelectedYear).toHaveBeenCalledWith(2024);
   });
 

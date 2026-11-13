@@ -39,6 +39,16 @@ function makeDb(overrides: Partial<DatabaseService> = {}): DatabaseService {
 }
 
 describe('IdempotencyInterceptor (parity with the legacy applyIdempotency middleware)', () => {
+  it('does not persist or replay private Beli responses', async () => {
+    const db = makeDb();
+    const res = makeRes();
+    const original = res.json;
+    const h = handler({ suggestions: [] });
+    await lastValueFrom(new IdempotencyInterceptor(db).intercept(ctx({ method: 'POST', path: '/api/integrations/beli/recommendations', user: { id: 1 }, headers: { 'x-idempotency-key': 'private' } }, res), h));
+    expect(db.get).not.toHaveBeenCalled();
+    expect(db.run).not.toHaveBeenCalled();
+    expect(res.json).toBe(original);
+  });
   it('passes a GET through without touching the store', async () => {
     const db = makeDb();
     const h = handler('weather');

@@ -39,6 +39,7 @@ beforeEach(() => {
     loadAddons: vi.fn(),
   });
   server.use(
+    http.get('/api/integrations/beli', () => HttpResponse.json({ connected: false, state: 'disconnected', syncedAt: null, ratedCount: 0, predictionCount: 0 })),
     http.get('/api/auth/mcp-tokens', () => HttpResponse.json({ tokens: [] })),
     http.get('/api/addons', () => HttpResponse.json({ addons: [] })),
     http.get('/api/oauth/clients', () => HttpResponse.json({ clients: [] })),

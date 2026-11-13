@@ -1,15 +1,17 @@
 import { useNavigate, useLocation, useMatch } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import { useAddonStore } from '../../store/addonStore'
 import { usePluginStore } from '../../store/pluginStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
-import { LayoutGrid, Plus } from 'lucide-react'
+import { LayoutGrid, MoreHorizontal, Plus } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 import { resolvePluginIcon } from '../shared/PluginIcon'
 import AnimatedCalendarDaysIcon from '../shared/AnimatedCalendarDaysIcon'
 import AnimatedGlobeIcon from '../shared/AnimatedGlobeIcon'
 import AnimatedBookmarkIcon from '../shared/AnimatedBookmarkIcon'
 import AnimatedCompassIcon from '../shared/AnimatedCompassIcon'
+import { addonPath } from '../../utils/addonPaths'
 
 type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number }>
 
@@ -56,22 +58,45 @@ export default function BottomNav() {
   const pagePlugins = usePluginStore(s => s.plugins).filter(p => p.type === 'page')
   const location = useLocation()
   const create = useCreateAction()
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef<HTMLDivElement>(null)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
 
   const items: NavItem[] = [
     { to: '/dashboard', label: t('nav.myTrips'), icon: LayoutGrid },
     ...globalAddons.flatMap(addon => {
       const nav = ADDON_NAV[addon.id]
-      return nav ? [{ to: `/${addon.id}`, label: t(nav.labelKey), icon: nav.icon }] : []
+      return nav ? [{ to: addonPath(addon.id), label: t(nav.labelKey), icon: nav.icon }] : []
     }),
     ...pagePlugins.map(p => ({ to: `/plugins/${p.id}`, label: p.name, icon: resolvePluginIcon(p.icon) })),
   ]
+  const overflowItems = items.length > 5 ? items.slice(4) : []
+  const visibleItems = overflowItems.length ? items.slice(0, 4) : items
   // Split the items so the raised "+" sits dead centre.
-  const splitAt = Math.ceil(items.length / 2)
-  const left = items.slice(0, splitAt)
-  const right = items.slice(splitAt)
+  const splitAt = Math.ceil(visibleItems.length / 2)
+  const left = visibleItems.slice(0, splitAt)
+  const right = visibleItems.slice(splitAt)
 
   const isActive = (to: string) =>
     to === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(to)
+
+  useEffect(() => {
+    if (!moreOpen) return
+    const closeOutside = (event: PointerEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setMoreOpen(false)
+      moreButtonRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [moreOpen])
 
   const renderItem = ({ to, label, icon: Icon }: NavItem) => {
     const active = isActive(to)
@@ -96,7 +121,7 @@ export default function BottomNav() {
         bottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
         padding: '8px 8px',
         borderRadius: 24,
-        background: dark ? 'oklch(0.2 0 0 / 0.72)' : 'rgba(255,255,255,0.78)',
+        background: dark ? 'oklch(0.2 0 0 / 0.96)' : 'rgba(255,255,255,0.96)',
         backdropFilter: 'saturate(1.7) blur(22px)',
         WebkitBackdropFilter: 'saturate(1.7) blur(22px)',
         border: dark ? '1px solid oklch(1 0 0 / .1)' : '1px solid oklch(0.92 0.008 70 / .6)',
@@ -122,7 +147,53 @@ export default function BottomNav() {
         <Plus size={24} strokeWidth={2.6} />
       </button>
 
-      <div className="flex flex-1 items-center justify-around min-w-0">{right.map(renderItem)}</div>
+      <div className="flex flex-1 items-center justify-around min-w-0">
+        {right.map(renderItem)}
+        {overflowItems.length > 0 && (
+          <div ref={moreRef} style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+            <button
+              ref={moreButtonRef}
+              type="button"
+              onClick={() => setMoreOpen(open => !open)}
+              aria-label={t('nav.moreDestinations')}
+              aria-expanded={moreOpen}
+              aria-controls="bottom-nav-more-items"
+              aria-current={overflowItems.some(item => isActive(item.to)) ? 'page' : undefined}
+              className="flex flex-col items-center gap-1 py-1 px-1 min-w-0"
+              style={{ color: overflowItems.some(item => isActive(item.to)) ? (dark ? '#fff' : 'oklch(0.22 0 0)') : (dark ? 'oklch(0.6 0 0)' : 'oklch(0.62 0.01 65)') }}
+            >
+              <MoreHorizontal size={21} strokeWidth={2} />
+              <span className="text-[10px] font-semibold tracking-tight">{t('nav.bottomMore')}</span>
+            </button>
+            <div
+              id="bottom-nav-more-items"
+              role="group"
+              aria-label={t('nav.moreDestinations')}
+              hidden={!moreOpen}
+              style={{
+                position: 'absolute', right: 0, bottom: 'calc(100% + 14px)',
+                minWidth: 208, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(55dvh, 420px)',
+                overflowY: 'auto', padding: 6, borderRadius: 16, background: 'var(--bg-card)',
+                border: '1px solid var(--border-primary)', boxShadow: '0 12px 32px rgba(0,0,0,.22)',
+              }}
+            >
+              {overflowItems.map(({ to, label, icon: Icon }) => (
+                <button
+                  key={to}
+                  type="button"
+                  onClick={() => { navigate(to); setMoreOpen(false) }}
+                  aria-current={isActive(to) ? 'page' : undefined}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-content transition-colors hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]"
+                  style={{ minHeight: 44 }}
+                >
+                  <Icon size={18} strokeWidth={1.9} />
+                  <span className="min-w-0 break-words">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </nav>
   )
 }

@@ -782,7 +782,7 @@ export default function JourneyPublicPage() {
               readOnly
               onEntryClick={(entry) => setViewingEntry(entry as any)}
               publicPhotoUrl={(photoId) => `/api/public/journey/${token}/photos/${photoId}/original`}
-              carouselBottom="calc(env(safe-area-inset-bottom, 16px) + 8px)"
+              carouselBottom="calc(env(safe-area-inset-bottom, 16px) + 144px)"
             />
           )}
 

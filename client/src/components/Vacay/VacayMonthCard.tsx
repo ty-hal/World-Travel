@@ -17,10 +17,10 @@ interface VacayMonthCardProps {
   month: number
   holidays: HolidaysMap
   companyHolidaySet: Set<string>
+  companyHolidayLabels?: Map<string, string>
   companyHolidaysEnabled?: boolean
   entryMap: Record<string, VacayEntry[]>
   onCellClick: (date: string) => void
-  companyMode: boolean
   blockWeekends: boolean
   weekendDays?: number[]
   tripDates?: Set<string>
@@ -28,8 +28,8 @@ interface VacayMonthCardProps {
 }
 
 export default function VacayMonthCard({
-  year, month, holidays, companyHolidaySet, companyHolidaysEnabled = true, entryMap,
-  onCellClick, companyMode, blockWeekends, weekendDays = [0, 6], tripDates, weekStart = 1
+  year, month, holidays, companyHolidaySet, companyHolidayLabels, companyHolidaysEnabled = true, entryMap,
+  onCellClick, blockWeekends, weekendDays = [0, 6], tripDates, weekStart = 1
 }: VacayMonthCardProps) {
   const { t, locale } = useTranslation()
 
@@ -90,51 +90,72 @@ export default function VacayMonthCard({
               const holiday = holidays[dateStr]
               const isCompany = companyHolidaysEnabled && companyHolidaySet.has(dateStr)
               const dayEntries = entryMap[dateStr] || []
-              const isBlocked = (weekend && blockWeekends) || (isCompany && !companyMode)
+              const isBlocked = dayEntries.length === 0 && ((weekend && blockWeekends) || isCompany)
               const isToday = dateStr === todayStr
+              const dateLabel = new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(new Date(year, month, day))
+              const statusLabel = dayEntries.length > 0
+                ? t('vacay.plannedDays')
+                : isCompany
+                  ? companyHolidayLabels?.get(dateStr) || t('vacay.companyHoliday')
+                  : holiday?.localName
 
               return (
-                <div
+                <button
+                  type="button"
                   key={di}
-                  title={holiday ? (holiday.label ? `${holiday.label}: ${holiday.localName}` : holiday.localName) : undefined}
-                  className="relative flex items-center justify-center cursor-pointer transition-colors"
+                  data-date={dateStr}
+                  data-planned-vacation={dayEntries.length > 0 ? 'true' : 'false'}
+                  aria-label={statusLabel ? `${dateLabel}, ${statusLabel}` : dateLabel}
+                  aria-disabled={isBlocked}
+                  tabIndex={day === 1 ? 0 : -1}
+                  title={isCompany ? companyHolidayLabels?.get(dateStr) || 'Company holiday' : holiday ? (holiday.label ? `${holiday.label}: ${holiday.localName}` : holiday.localName) : undefined}
+                  className="relative flex h-11 items-center justify-center border-0 p-0 text-inherit transition-colors focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 md:h-7"
                   style={{
-                    height: 28,
                     background: weekend ? 'var(--bg-secondary)' : 'transparent',
                     borderTop: '1px solid var(--border-secondary)',
                     borderRight: '1px solid var(--border-secondary)',
                     cursor: isBlocked ? 'default' : 'pointer',
                   }}
-                  onClick={() => onCellClick(dateStr)}
+                  onClick={() => { if (!isBlocked) onCellClick(dateStr) }}
+                  onKeyDown={e => {
+                    const offsets: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
+                    const offset = offsets[e.key]
+                    if (offset === undefined) return
+                    e.preventDefault()
+                    const nextDate = new Date(year, month, day + offset)
+                    const key = `${nextDate.getFullYear()}-${pad(nextDate.getMonth() + 1)}-${pad(nextDate.getDate())}`
+                    document.querySelector<HTMLButtonElement>(`[data-date="${key}"]`)?.focus()
+                  }}
                   onMouseEnter={e => { if (!isBlocked) e.currentTarget.style.background = 'var(--bg-hover)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = weekend ? 'var(--bg-secondary)' : 'transparent' }}
                 >
-                  {holiday && <div className="absolute inset-0.5 rounded" style={{ background: hexToRgba(holiday.color, 0.12) }} />}
-                  {isCompany && <div className="absolute inset-0.5 rounded bg-[rgba(245,158,11,0.15)]" />}
+                  {holiday && <span className="absolute inset-0.5 rounded" style={{ background: hexToRgba(holiday.color, 0.12) }} />}
+                  {isCompany && <span className="absolute inset-0.5 rounded" style={{ background: 'rgba(245,158,11,0.28)', boxShadow: 'inset 0 0 0 1px rgba(245,158,11,0.85)' }} />}
+                  {isCompany && <span className="absolute bottom-[3px] right-[3px] z-[2] h-[5px] w-[5px] rounded-full bg-amber-500" />}
 
                   {dayEntries.length === 1 && (
-                    <div className="absolute inset-0.5 rounded" style={{ backgroundColor: dayEntries[0].person_color, opacity: 0.4 }} />
+                    <span className="absolute inset-0.5 rounded" style={{ backgroundColor: dayEntries[0].person_color, opacity: 0.4 }} />
                   )}
                   {dayEntries.length === 2 && (
-                    <div className="absolute inset-0.5 rounded" style={{
+                    <span className="absolute inset-0.5 rounded" style={{
                       background: `linear-gradient(135deg, ${dayEntries[0].person_color} 50%, ${dayEntries[1].person_color} 50%)`,
                       opacity: 0.4,
                     }} />
                   )}
                   {dayEntries.length === 3 && (
-                    <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
-                      <div className="absolute top-0 left-0 w-1/2 h-full" style={{ backgroundColor: dayEntries[0].person_color }} />
-                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
-                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
-                    </div>
+                    <span className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
+                      <span className="absolute top-0 left-0 w-1/2 h-full" style={{ backgroundColor: dayEntries[0].person_color }} />
+                      <span className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
+                      <span className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
+                    </span>
                   )}
                   {dayEntries.length >= 4 && (
-                    <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
-                      <div className="absolute top-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[0].person_color }} />
-                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
-                      <div className="absolute bottom-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
-                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[3].person_color }} />
-                    </div>
+                    <span className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
+                      <span className="absolute top-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[0].person_color }} />
+                      <span className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
+                      <span className="absolute bottom-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
+                      <span className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[3].person_color }} />
+                    </span>
                   )}
 
                   {tripDates?.has(dateStr) && (
@@ -142,11 +163,12 @@ export default function VacayMonthCard({
                   )}
 
                   <span className="relative z-[1] text-[11px]" style={{
-                    fontWeight: dayEntries.length > 0 ? 700 : 500,
+                    fontWeight: dayEntries.length > 0 || isCompany ? 700 : 500,
                     color: isToday
                       ? '#fff'
                       : dayEntries.length > 0
                         ? 'var(--text-primary)'
+                        : isCompany ? 'var(--text-primary)'
                         : holiday ? holiday.color
                         : weekend ? 'var(--text-faint)'
                         : 'var(--text-primary)',
@@ -162,7 +184,7 @@ export default function VacayMonthCard({
                   }}>
                     {day}
                   </span>
-                </div>
+                </button>
               )
             })}
           </div>

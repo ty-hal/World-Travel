@@ -89,12 +89,13 @@ const ForgotPasswordPage: React.FC = () => {
             )}
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 'calc(12.5px * var(--fs-scale-body, 1))', fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                <label htmlFor="forgot-password-email" style={{ display: 'block', fontSize: 'calc(12.5px * var(--fs-scale-body, 1))', fontWeight: 600, color: '#374151', marginBottom: 6 }}>
                   {t('common.email')}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <Mail size={15} className="text-[#9ca3af]" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   <input
+                    id="forgot-password-email"
                     type="email" value={email}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                     required placeholder={t('login.emailPlaceholder')} style={inputBase}
@@ -109,8 +110,9 @@ const ForgotPasswordPage: React.FC = () => {
                 cursor: isLoading ? 'default' : 'pointer', fontFamily: 'inherit',
                 opacity: isLoading ? 0.7 : 1, transition: 'opacity 0.15s',
               }}>
-                {isLoading ? t('login.signingIn') : t('login.forgotPasswordSubmit')}
+                {isLoading ? t('login.forgotPasswordSending') : t('login.forgotPasswordSubmit')}
               </button>
+              <span role="status" className="sr-only">{isLoading ? t('login.forgotPasswordSending') : ''}</span>
             </form>
           </>
         )}

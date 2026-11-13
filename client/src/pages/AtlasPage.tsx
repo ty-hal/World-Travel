@@ -3,7 +3,7 @@ import { useTranslation } from '../i18n'
 import Navbar from '../components/Layout/Navbar'
 import apiClient from '../api/client'
 import CustomSelect from '../components/shared/CustomSelect'
-import { MapPin, Briefcase, Calendar, Flag, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Landmark } from 'lucide-react'
+import { MapPin, Briefcase, Calendar, Flag, X, Star, Plus, Trash2, Landmark, ChevronDown, ChevronUp } from 'lucide-react'
 import AnimatedGlobeIcon from '../components/shared/AnimatedGlobeIcon'
 import AnimatedSearchIcon from '../components/shared/AnimatedSearchIcon'
 import type { TranslationFn } from '../types'
@@ -12,6 +12,7 @@ import { continentForCountry } from '@trek/shared'
 import { useAtlas } from './atlas/useAtlas'
 import { atlasMapBackground } from '../components/Map/leafletTiles'
 import WonderDetailDrawer from './atlas/WonderDetailDrawer'
+import { bucketPhotoTarget, warmAtlasPhotos, wonderPhotoTarget } from './atlas/atlasPhotos'
 import { useToast } from '../components/shared/Toast'
 import { getApiErrorMessage } from '../types'
 
@@ -69,18 +70,16 @@ export default function AtlasPage(): React.ReactElement {
   // bucket data, mark/unmark flows, country search) lives in useAtlas. The page
   // only wires that state into JSX and its presentational SidebarContent helper.
   const {
-    t, language, navigate, resolveName, dark, loading,
+    t, language, navigate, resolveName, dark, loading, loadError, retryLoad,
     mapRef, regionTooltipRef, panelRef,
     data, setData, stats, countries, selectedCountry, countryDetail,
-    loadCountryDetail, handleUnmarkCountry, select_country_from_search,
+    loadCountryDetail, handleUnmarkCountry,
     visitedRegions, setVisitedRegions,
-    atlas_country_search, set_atlas_country_search,
-    atlas_country_results, set_atlas_country_results,
-    atlas_country_open, set_atlas_country_open, atlas_country_options,
     confirmAction, setConfirmAction, executeConfirmAction,
     bucketMonth, setBucketMonth, bucketYear, setBucketYear,
-    bucketList, setBucketList, bucketTab, setBucketTab, wonders, visitHeatmap,
-    focusWonder,
+    bucketList, setBucketList, bucketTab, setBucketTab, wonders, wonderSearch, setWonderSearch,
+    wonderFilter, setWonderFilter, matchingWonders, visitHeatmap,
+    focusWonder, focusBucket, detailPlace, setDetailPlace,
     showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm,
     handleAddBucketItem, handleDeleteBucketItem, handleBucketPoiSearch, handleSelectBucketPoi,
     bucketSearchResults, setBucketSearchResults,
@@ -88,10 +87,13 @@ export default function AtlasPage(): React.ReactElement {
     bucketSearching, bucketSearch, setBucketSearch,
   } = useAtlas()
   const toast = useToast()
-  const [detailWonder, setDetailWonder] = useState<any | null>(null)
   const handleWonderClick = (wonder: any) => {
     focusWonder(wonder)
-    setDetailWonder(wonder)
+    setDetailPlace({ type: 'wonder', item: wonder })
+  }
+  const handleBucketClick = (item: any) => {
+    focusBucket(item)
+    setDetailPlace({ type: 'bucket', item })
   }
   if (loading) {
     return (
@@ -100,6 +102,22 @@ export default function AtlasPage(): React.ReactElement {
         <div className="flex items-center justify-center" style={{ paddingTop: 'var(--nav-h)', minHeight: 'calc(100vh - var(--nav-h))' }}>
           <div className="w-8 h-8 border-2 rounded-full animate-spin border-edge border-t-content" />
         </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-surface">
+        <Navbar />
+        <main className="mx-auto max-w-md px-4" style={{ paddingTop: 'calc(var(--nav-h) + 16px)' }}>
+          <div role="alert" className="rounded-xl border border-edge bg-surface-card p-4 text-sm text-content-muted">
+            <p>{t('atlas.loadError')}</p>
+            <button type="button" onClick={retryLoad} className="mt-3 rounded-lg border border-edge px-3 py-2 font-semibold text-content hover:bg-surface-hover">
+              {t('atlas.retry')}
+            </button>
+          </div>
+        </main>
       </div>
     )
   }
@@ -119,54 +137,10 @@ export default function AtlasPage(): React.ReactElement {
           fontSize: 'calc(12px * var(--fs-scale-body, 1))', minWidth: 120,
         }} />
 
-        {/* Map legend — visited countries and wonder pins */}
-        <div className="atlas-chrome hidden md:block absolute z-10 rounded-xl px-3 py-2.5" style={{ top: 12, left: 12, fontSize: 11 }}>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-content-faint mb-1.5">{t('atlas.mapLegend')}</div>
-          <div className="flex flex-col gap-1.5 text-content-muted">
-            <span className="inline-flex items-center gap-2"><span style={{ width: 12, height: 12, borderRadius: 3, background: '#6366f1', opacity: 0.85 }} />{t('atlas.legendVisited')}</span>
-            <span className="inline-flex items-center gap-2"><span style={{ width: 12, height: 12, borderRadius: 3, background: dark ? '#ffffff' : '#f8fafc', border: `1px solid ${dark ? '#d4d4d8' : '#cbd5e1'}` }} />{t('atlas.legendUnvisited')}</span>
-            {bucketTab === 'wonders' && (
-              <>
-                <span className="inline-flex items-center gap-2"><span style={{ width: 10, height: 10, borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)', background: '#22c55e', border: '1.5px solid white' }} />{t('atlas.legendWonderVisited')}</span>
-                <span className="inline-flex items-center gap-2"><span style={{ width: 10, height: 10, borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)', background: '#818cf8', border: '1.5px solid white' }} />{t('atlas.legendWonderUnvisited')}</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        <AtlasCountrySearch
-          dark={dark}
-          t={t}
-          search={atlas_country_search}
-          setSearch={set_atlas_country_search}
-          results={atlas_country_results}
-          setResults={set_atlas_country_results}
-          open={atlas_country_open}
-          setOpen={set_atlas_country_open}
-          options={atlas_country_options}
-          onSelect={select_country_from_search}
-        />
-
-        {/* Mobile: Bottom bar — solid surface so map never bleeds through labels */}
-        <div className="md:hidden absolute left-0 right-0 z-10 flex justify-center" style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px) + 8px)', touchAction: 'manipulation' }}>
-          <div className="atlas-chrome flex items-center gap-3 px-4 py-3 rounded-2xl">
-            <div className="atlas-stat-hero text-center px-3 py-1.5 rounded-xl">
-              <p className="text-3xl font-black tabular-nums leading-none text-content">{stats.totalCountries}</p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide mt-1 text-content-muted">{t('atlas.countries')}</p>
-            </div>
-            {[[stats.totalTrips, t('atlas.trips')], [stats.totalPlaces, t('atlas.places')], [stats.totalCities || 0, t('atlas.cities')], [stats.totalDays, t('atlas.days')]].map(([v, l], i) => (
-              <div key={i} className="text-center px-1">
-                <p className="text-xl font-black tabular-nums leading-none text-content">{v}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide mt-1 text-content-muted">{l}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Desktop Panel — solid elevated card (not glass) for readable stats over the map */}
+        {/* Atlas views stay available on small screens above the fixed bottom navigation. */}
         <div
           ref={panelRef}
-          className="atlas-chrome atlas-bottom-panel hidden md:flex flex-col absolute z-10 overflow-hidden transition-[width,height,transform,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
+          className="atlas-chrome atlas-bottom-panel flex flex-col absolute z-10 overflow-hidden transition-[width,height,transform,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
           style={{
             bottom: 16,
             left: '50%',
@@ -179,7 +153,9 @@ export default function AtlasPage(): React.ReactElement {
             data={data} stats={stats} countries={countries} selectedCountry={selectedCountry}
             countryDetail={countryDetail} resolveName={resolveName}
             onCountryClick={loadCountryDetail} onTripClick={(id) => navigate(`/trips/${id}`)} onUnmarkCountry={handleUnmarkCountry}
-            bucketList={bucketList} bucketTab={bucketTab} setBucketTab={setBucketTab} wonders={wonders} visitHeatmap={visitHeatmap} onWonderClick={handleWonderClick}
+            bucketList={bucketList} bucketTab={bucketTab} setBucketTab={setBucketTab} wonders={wonders}
+            wonderSearch={wonderSearch} setWonderSearch={setWonderSearch} wonderFilter={wonderFilter} setWonderFilter={setWonderFilter} matchingWonders={matchingWonders}
+            visitHeatmap={visitHeatmap} onWonderClick={handleWonderClick} onBucketClick={handleBucketClick}
             showBucketAdd={showBucketAdd} setShowBucketAdd={setShowBucketAdd}
             bucketForm={bucketForm} setBucketForm={setBucketForm}
             onAddBucket={handleAddBucketItem} onDeleteBucket={handleDeleteBucketItem}
@@ -194,9 +170,9 @@ export default function AtlasPage(): React.ReactElement {
       </div>
 
       <WonderDetailDrawer
-        wonder={detailWonder}
-        onClose={() => setDetailWonder(null)}
-        onFocusMap={w => { focusWonder(w); setDetailWonder(w) }}
+        place={detailPlace}
+        onClose={() => setDetailPlace(null)}
+        onFocusMap={place => place.type === 'wonder' ? focusWonder(place.item) : focusBucket(place.item)}
         t={t}
         dark={dark}
       />
@@ -469,8 +445,14 @@ interface SidebarContentProps {
   bucketTab: 'stats' | 'bucket' | 'wonders'
   setBucketTab: (tab: 'stats' | 'bucket' | 'wonders') => void
   wonders: any[]
+  wonderSearch: string
+  setWonderSearch: (value: string) => void
+  wonderFilter: 'all' | 'visited' | 'unvisited'
+  setWonderFilter: (value: 'all' | 'visited' | 'unvisited') => void
+  matchingWonders: any[]
   visitHeatmap?: Array<{ year: string; trips: number }>
   onWonderClick: (wonder: any) => void
+  onBucketClick: (item: any) => void
   showBucketAdd: boolean
   setShowBucketAdd: (v: boolean) => void
   bucketForm: { name: string; notes: string; lat: string; lng: string; target_date: string }
@@ -492,12 +474,11 @@ interface SidebarContentProps {
   dark: boolean
 }
 
-function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, wonders, visitHeatmap = [], onWonderClick, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, setBucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
+function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, wonders, wonderSearch, setWonderSearch, wonderFilter, setWonderFilter, matchingWonders, visitHeatmap = [], onWonderClick, onBucketClick, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, setBucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
   const { language } = useTranslation()
   const statsContentRef = useRef<HTMLDivElement>(null)
   const [statsWidth, setStatsWidth] = useState<number | undefined>(undefined)
-  const [wonderSearch, setWonderSearch] = useState('')
-  const [wonderFilter, setWonderFilter] = useState<'all' | 'visited' | 'unvisited'>('all')
+  const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [selectedWonderId, setSelectedWonderId] = useState<string | null>(null)
   useEffect(() => {
     const el = statsContentRef.current
@@ -506,6 +487,12 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  useEffect(() => {
+    const targets = bucketTab === 'wonders'
+      ? matchingWonders.slice(0, 12).map(wonderPhotoTarget)
+      : bucketTab === 'bucket' ? bucketList.slice(0, 12).map(bucketPhotoTarget) : []
+    void warmAtlasPhotos(targets)
+  }, [bucketTab, bucketList, matchingWonders])
   const tp = dark ? '#f8fafc' : '#0f172a'
   const tm = dark ? '#cbd5e1' : '#475569'
   const tf = dark ? '#94a3b8' : '#64748b'
@@ -517,17 +504,28 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
   // Tab switcher — solid segmented control (readable inactive labels)
   const tabBar = (
     <div className="atlas-tabbar">
-      {[{ id: 'stats', label: t('atlas.statsTab'), icon: AnimatedGlobeIcon }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }, { id: 'wonders', label: t('atlas.wondersTab'), icon: Landmark }].map(tab => (
-        <button key={tab.id} onClick={() => setBucketTab(tab.id as any)}
-          className={`atlas-tab${bucketTab === tab.id ? ' on' : ''}`}
-          type="button"
-        >
-          <tab.icon size={13} />
-          {tab.label}
-        </button>
-      ))}
+      <div className="atlas-tabbar-tabs">
+        {[{ id: 'stats', label: t('atlas.statsTab'), icon: AnimatedGlobeIcon }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }, { id: 'wonders', label: t('atlas.wondersTab'), icon: Landmark }].map(tab => (
+          <button key={tab.id} onClick={() => setBucketTab(tab.id as any)}
+            className={`atlas-tab${bucketTab === tab.id ? ' on' : ''}`}
+            type="button"
+          >
+            <tab.icon size={13} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="atlas-panel-toggle" aria-label={t('atlas.collapsePanel')}
+        aria-expanded="true" onClick={() => setPanelCollapsed(true)}>
+        <ChevronDown size={17} />
+      </button>
     </div>
   )
+
+  if (panelCollapsed) {
+    return <button type="button" className="atlas-chrome atlas-panel-expand" aria-label={t('atlas.expandPanel')}
+      aria-expanded="false" onClick={() => setPanelCollapsed(false)}><ChevronUp size={19} /></button>
+  }
 
   if (countries.length === 0 && !lastTrip && wonders.length === 0 && bucketTab === 'stats') {
     return (
@@ -556,7 +554,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
               <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={code} style={{ width: 28, height: 20, borderRadius: 4, objectFit: 'cover', marginBottom: 4 }} />
             ) : <Star size={16} className="text-[#fbbf24]" style={{ marginBottom: 4 }} fill="#fbbf24" />
           })()}
-          <span className="text-xs font-semibold text-center leading-tight" style={{ color: tp, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+          <button type="button" onClick={() => onBucketClick(item)} aria-label={`Show ${item.name} on map`} className="text-xs font-semibold text-center leading-tight" style={{ color: tp, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: 0, background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{item.name}</button>
           {item.target_date && (() => {
             const [y, m] = item.target_date.split('-')
             const label = m ? new Date(Number(y), Number(m) - 1).toLocaleString(language, { month: 'short', year: 'numeric' }) : y
@@ -625,11 +623,11 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
         <div style={{ display: 'flex', gap: 6 }}>
           <div style={{ flex: 1 }}>
             <CustomSelect value={String(bucketPoiMonth)} onChange={v => setBucketPoiMonth(Number(v))} placeholder={t('atlas.month')} size="sm"
-              options={[{ value: '0', label: '—' }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: new Date(2000, i).toLocaleString(language, { month: 'short' }) }))]} />
+              options={[{ value: '0', label: t('atlas.month') }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: new Date(2000, i).toLocaleString(language, { month: 'short' }) }))]} />
           </div>
           <div style={{ flex: 1 }}>
             <CustomSelect value={String(bucketPoiYear)} onChange={v => setBucketPoiYear(Number(v))} placeholder={t('atlas.year')} size="sm"
-              options={[{ value: '0', label: '—' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(new Date().getFullYear() + i), label: String(new Date().getFullYear() + i) }))]} />
+              options={[{ value: '0', label: t('atlas.year') }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(new Date().getFullYear() + i), label: String(new Date().getFullYear() + i) }))]} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -658,8 +656,8 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
   )
 
   const wondersContent = (
-    <div style={{ padding: '10px 14px 14px', minWidth: 760, maxWidth: 860 }}>
-      <div className="atlas-stat-hero" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '8px 10px', borderRadius: 10 }}>
+    <div className="atlas-wonders-content" style={{ padding: '10px 14px 14px' }}>
+      <div className="atlas-stat-hero atlas-wonders-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '8px 10px', borderRadius: 10 }}>
         <AnimatedSearchIcon size={13} style={{ color: tf, flexShrink: 0 }} />
         <input
           value={wonderSearch}
@@ -668,19 +666,21 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
           aria-label={t('atlas.searchWonders')}
           style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: tp, font: 'inherit', fontSize: 12 }}
         />
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <div className="atlas-wonders-filters" style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           {(['all', 'visited', 'unvisited'] as const).map(filter => (
-            <button key={filter} onClick={() => setWonderFilter(filter)} className={`atlas-tab${wonderFilter === filter ? ' on' : ''}`} style={{ flex: 'none', padding: '4px 8px', fontSize: 10 }} type="button">
+            <button key={filter} onClick={() => setWonderFilter(filter)} className={`atlas-tab${wonderFilter === filter ? ' on' : ''}`} aria-pressed={wonderFilter === filter} style={{ flex: 'none', padding: '4px 8px', fontSize: 10 }} type="button">
               {filter === 'all' ? t('atlas.wondersFilterAll') : filter === 'visited' ? t('atlas.wondersFilterVisited') : t('atlas.wondersFilterUnvisited')}
             </button>
           ))}
         </div>
       </div>
       <div style={{ color: tf, fontSize: 11, marginBottom: 6, fontWeight: 500 }}>
-        {wonders.filter(w => `${w.label} ${w.country} ${w.region}`.toLowerCase().includes(wonderSearch.toLowerCase()) && (wonderFilter === 'all' || Boolean(w.visited) === (wonderFilter === 'visited'))).length} / {wonders.length}
+        {matchingWonders.length} / {wonders.length}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 18, maxHeight: 280, overflowY: 'auto', paddingRight: 4 }}>
-        {wonders.filter(w => `${w.label} ${w.country} ${w.region}`.toLowerCase().includes(wonderSearch.toLowerCase()) && (wonderFilter === 'all' || Boolean(w.visited) === (wonderFilter === 'visited'))).map(wonder => (
+      <div className="atlas-wonders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 18, maxHeight: 280, overflowY: 'auto', paddingRight: 4 }}>
+        {matchingWonders.length === 0 ? (
+          <p className="atlas-wonders-empty" role="status">{t('atlas.noWonderMatches')}</p>
+        ) : matchingWonders.map(wonder => (
           <button key={String(wonder.source_id)} onClick={() => { setSelectedWonderId(String(wonder.source_id)); onWonderClick(wonder) }} aria-label={`Show ${wonder.label} on map`} style={{ display: 'flex', gap: 9, alignItems: 'center', width: '100%', color: tp, fontSize: 12, padding: '7px 0', border: 'none', borderBottom: `1px solid ${dark ? '#2e3a4d' : '#e2e8f0'}`, background: selectedWonderId === String(wonder.source_id) ? (dark ? 'rgba(255,255,255,0.06)' : '#f1f5f9') : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
             <Landmark size={15} style={{ color: wonder.visited ? '#22c55e' : accent, flexShrink: 0 }} />
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -705,9 +705,9 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
     {tabBar}
     {/* Keep Stats and Bucket mounted for shared sizing; collapse the inactive
         Wonders layer so its 300px scroll area cannot inflate this panel. */}
-    <div style={{ display: 'grid' }}>
+    <div className="atlas-sidebar-content" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)' }}>
     <div style={bucketTab === 'stats' ? { gridArea: '1/1' } : { visibility: 'hidden' as const, gridArea: '1/1', maxHeight: 0, overflow: 'hidden' }}>
-    <div ref={statsContentRef} className="flex items-stretch justify-center">
+    <div ref={statsContentRef} className="atlas-stats-scroll flex items-stretch justify-start overflow-x-auto" role="region" aria-label={t('atlas.statsTab')} tabIndex={0}>
 
       {/* Countries hero */}
       <div className="atlas-stat-hero flex items-baseline gap-1.5 px-4 py-3 mx-2 my-2 rounded-xl">

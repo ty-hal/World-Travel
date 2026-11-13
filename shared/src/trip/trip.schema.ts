@@ -33,6 +33,8 @@ export const tripSchema = z.object({
   cover_image: z.string().nullable().optional(),
   is_archived: z.number(),
   reminder_days: z.number(),
+  /** Manual priority order for planned/archived My Trips lists (lower = earlier). */
+  sort_order: z.number().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
   // computed in TRIP_SELECT (list/get)
@@ -43,6 +45,12 @@ export const tripSchema = z.object({
   shared_count: z.number().optional(),
 });
 export type Trip = z.infer<typeof tripSchema>;
+
+/** Reorder My Trips cards: desired sequence of accessible trip ids for one bucket. */
+export const tripReorderRequestSchema = z.object({
+  orderedIds: z.array(z.number().int().positive()).min(1),
+});
+export type TripReorderRequest = z.infer<typeof tripReorderRequestSchema>;
 
 /**
  * Trip member as returned by the members endpoint

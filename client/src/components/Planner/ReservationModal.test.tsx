@@ -26,9 +26,10 @@ vi.mock('react-router-dom', async (importActual) => {
 
 // Mock CustomDatePicker as a simple text input
 vi.mock('../shared/CustomDateTimePicker', () => ({
-  CustomDatePicker: ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) => (
+  CustomDatePicker: ({ value, onChange, placeholder, ariaLabel }: { value: string; onChange: (v: string) => void; placeholder?: string; ariaLabel?: string }) => (
     <input
       data-testid="date-picker"
+      aria-label={ariaLabel}
       type="text"
       value={value}
       onChange={e => onChange(e.target.value)}
@@ -39,9 +40,10 @@ vi.mock('../shared/CustomDateTimePicker', () => ({
 
 // Mock CustomTimePicker as a simple text input
 vi.mock('../shared/CustomTimePicker', () => ({
-  default: ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) => (
+  default: ({ value, onChange, placeholder, ariaLabel }: { value: string; onChange: (v: string) => void; placeholder?: string; ariaLabel?: string }) => (
     <input
       data-testid="time-picker"
+      aria-label={ariaLabel}
       type="text"
       value={value}
       onChange={e => onChange(e.target.value)}
@@ -84,6 +86,18 @@ describe('ReservationModal', () => {
   it('FE-PLANNER-RESMODAL-002: shows "New Reservation" title for new reservation', () => {
     render(<ReservationModal {...defaultProps} reservation={null} />);
     expect(screen.getByText(/New Reservation/i)).toBeInTheDocument();
+  });
+
+  it('names the booking fields for assistive technology', () => {
+    render(<ReservationModal {...defaultProps} />);
+    expect(screen.getByRole('textbox', { name: 'Title' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Date' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'End date' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Location / Address' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Booking Code' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Link' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument();
   });
 
   it('FE-PLANNER-RESMODAL-003: shows "Edit Reservation" title when editing', () => {

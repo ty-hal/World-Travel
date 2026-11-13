@@ -10,6 +10,7 @@ import { listDays, listAccommodations, addDays, resyncAccommodationDays, restamp
 import { listBudgetItems, removeUserFromBudgetItems } from './budgetService';
 import { listItems as listPackingItems } from './packingService';
 import { listReservations, loadEndpointsByTrip, resyncReservationDays } from './reservationService';
+import { scheduleMonthlyClimateWarm } from './weatherService';
 import { listNotes as listCollabNotes } from './collabService';
 import { shiftOwnerEntriesForTripWindow } from './vacayService';
 import { resolveTimeZone } from './timezoneService';
@@ -163,15 +164,40 @@ export function listTrips(userId: number, archived: number | null) {
       ${TRIP_SELECT}
       LEFT JOIN trip_members m ON m.trip_id = t.id AND m.user_id = :userId
       WHERE (t.user_id = :userId OR m.user_id IS NOT NULL)
-      ORDER BY t.created_at DESC
+      ORDER BY COALESCE(t.sort_order, 0) ASC, t.created_at DESC, t.id DESC
     `).all({ userId });
   }
   return db.prepare(`
     ${TRIP_SELECT}
     LEFT JOIN trip_members m ON m.trip_id = t.id AND m.user_id = :userId
     WHERE (t.user_id = :userId OR m.user_id IS NOT NULL) AND t.is_archived = :archived
-    ORDER BY t.created_at DESC
+    ORDER BY COALESCE(t.sort_order, 0) ASC, t.created_at DESC, t.id DESC
   `).all({ userId, archived });
+}
+
+/** Persist My Trips card order for trips the user can access. */
+export function reorderTrips(userId: number, orderedIds: number[]): void {
+  const accessible = new Set(
+    (db.prepare(`
+      SELECT t.id FROM trips t
+      LEFT JOIN trip_members m ON m.trip_id = t.id AND m.user_id = ?
+      WHERE t.user_id = ? OR m.user_id IS NOT NULL
+    `).all(userId, userId) as Array<{ id: number }>).map((row) => row.id),
+  );
+  const stmt = db.prepare('UPDATE trips SET sort_order = ? WHERE id = ?');
+  const apply = db.transaction(() => {
+    orderedIds.forEach((id, index) => {
+      if (accessible.has(id)) stmt.run(index, id);
+    });
+  });
+  apply();
+}
+
+function nextSortOrder(userId: number, archived = 0): number {
+  const row = db.prepare(
+    'SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM trips WHERE user_id = ? AND COALESCE(is_archived, 0) = ?',
+  ).get(userId, archived) as { max_order: number };
+  return (row?.max_order ?? -1) + 1;
 }
 
 interface CreateTripData {
@@ -189,10 +215,11 @@ export function createTrip(userId: number, data: CreateTripData, maxDays?: numbe
     ? (Number(data.reminder_days) >= 0 && Number(data.reminder_days) <= 30 ? Number(data.reminder_days) : 3)
     : 3;
 
+  const sortOrder = nextSortOrder(userId, 0);
   const result = db.prepare(`
-    INSERT INTO trips (user_id, title, description, start_date, end_date, currency, reminder_days)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, data.title, data.description || null, data.start_date || null, data.end_date || null, data.currency || 'EUR', rd);
+    INSERT INTO trips (user_id, title, description, start_date, end_date, currency, reminder_days, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, data.title, data.description || null, data.start_date || null, data.end_date || null, data.currency || 'EUR', rd, sortOrder);
 
   const tripId = result.lastInsertRowid;
   generateDays(tripId, data.start_date || null, data.end_date || null, maxDays, data.day_count);
@@ -253,11 +280,15 @@ export function updateTrip(tripId: string | number, userId: number, data: Update
     ? (Number(reminder_days) >= 0 && Number(reminder_days) <= 30 ? Number(reminder_days) : oldReminder)
     : oldReminder;
 
+  // Moving between planned ↔ archived: place the trip at the end of the destination list.
+  const archiveChanged = is_archived !== undefined && newArchived !== trip.is_archived;
+  const sortOrder = archiveChanged ? nextSortOrder(trip.user_id, newArchived) : (trip.sort_order ?? 0);
+
   db.prepare(`
     UPDATE trips SET title=?, description=?, start_date=?, end_date=?,
-      currency=?, is_archived=?, cover_image=?, reminder_days=?, updated_at=CURRENT_TIMESTAMP
+      currency=?, is_archived=?, cover_image=?, reminder_days=?, sort_order=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=?
-  `).run(newTitle, newDesc, newStart || null, newEnd || null, newCurrency, newArchived, newCover, newReminder, tripId);
+  `).run(newTitle, newDesc, newStart || null, newEnd || null, newCurrency, newArchived, newCover, newReminder, sortOrder, tripId);
 
   if (trip.start_date && trip.end_date && newStart && newStart !== trip.start_date)
     shiftOwnerEntriesForTripWindow(trip.user_id, trip.start_date, trip.end_date, newStart);
@@ -899,10 +930,11 @@ export function copyTripById(sourceTripId: string | number, newOwnerId: number, 
   const newTitle = title || src.title;
 
   const fn = db.transaction(() => {
+    const sortOrder = nextSortOrder(newOwnerId, 0);
     const tripResult = db.prepare(`
-      INSERT INTO trips (user_id, title, description, start_date, end_date, currency, cover_image, is_archived, reminder_days)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
-    `).run(newOwnerId, newTitle, src.description, src.start_date, src.end_date, src.currency, src.cover_image, src.reminder_days ?? 3);
+      INSERT INTO trips (user_id, title, description, start_date, end_date, currency, cover_image, is_archived, reminder_days, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(newOwnerId, newTitle, src.description, src.start_date, src.end_date, src.currency, src.cover_image, src.reminder_days ?? 3, sortOrder);
     const newTripId = tripResult.lastInsertRowid;
 
     const oldDays = db.prepare('SELECT * FROM days WHERE trip_id = ? ORDER BY day_number').all(sourceTripId) as any[];
@@ -1054,7 +1086,9 @@ export function copyTripById(sourceTripId: string | number, newOwnerId: number, 
     return Number(newTripId);
   });
 
-  return fn();
+  const newTripId = fn();
+  scheduleMonthlyClimateWarm(db.prepare('SELECT lat, lng FROM places WHERE trip_id = ?').all(newTripId) as Array<{ lat: number | null; lng: number | null }>);
+  return newTripId;
 }
 
 // ── Trip summary (used by MCP get_trip_summary tool) ──────────────────────

@@ -34,7 +34,7 @@ import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
 import { resetTestDb } from '../../helpers/test-db';
 import { createUser, createTrip, createReservation, createPlace, createDay, createDayAssignment, createDayNote, addTripMember } from '../../helpers/factories';
-import { exportICS, generateDays, deleteOldCover, updateTrip, transferOwnership, createGuest, renameGuest, deleteGuest, listMembers, addMember } from '../../../src/services/tripService';
+import { exportICS, generateDays, deleteOldCover, updateTrip, transferOwnership, createGuest, renameGuest, deleteGuest, listMembers, addMember, reorderTrips, listTrips } from '../../../src/services/tripService';
 import { createAccommodation } from '../../../src/services/dayService';
 import fs from 'fs';
 
@@ -800,5 +800,22 @@ describe('guest members (#1362)', () => {
     expect(() => addMember(trip.id, 'Dora', owner.id, owner.id)).toThrow('User not found');
     // Ownership can never be handed to a guest.
     expect(() => transferOwnership(trip.id, member.id, owner.id)).toThrow('Cannot transfer ownership to a guest');
+  });
+
+  it('TRIP-SVC-035: reorderTrips persists sort_order for accessible trips only', () => {
+    const { user: owner } = createUser(testDb);
+    const { user: other } = createUser(testDb);
+    const a = createTrip(testDb, owner.id, { title: 'A' });
+    const b = createTrip(testDb, owner.id, { title: 'B' });
+    const c = createTrip(testDb, owner.id, { title: 'C' });
+    const foreign = createTrip(testDb, other.id, { title: 'Foreign' });
+
+    reorderTrips(owner.id, [c.id, a.id, b.id, foreign.id]);
+
+    const listed = listTrips(owner.id, 0) as Array<{ id: number; sort_order: number }>;
+    expect(listed.map((t) => t.id)).toEqual([c.id, a.id, b.id]);
+    expect(listed.map((t) => t.sort_order)).toEqual([0, 1, 2]);
+    const foreignRow = testDb.prepare('SELECT sort_order FROM trips WHERE id = ?').get(foreign.id) as { sort_order: number };
+    expect(foreignRow.sort_order).toBe(0);
   });
 });

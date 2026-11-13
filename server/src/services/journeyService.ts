@@ -8,6 +8,7 @@ import {
   setTrekPhotoProvider,
   deleteTrekPhotoIfOrphan,
 } from './memories/photoResolverService';
+import type { JourneyTrack } from '@trek/shared';
 
 function ts(): number {
   return Date.now();
@@ -255,6 +256,40 @@ export function getJourneyFull(journeyId: number, userId: number) {
     hide_skeletons: !!userPrefs?.hide_skeletons,
     my_role: myRole,
   };
+}
+
+export function listJourneyTracks(journeyId: number, userId: number): JourneyTrack[] | null {
+  if (!canAccessJourney(journeyId, userId)) return null;
+
+  const rows = db.prepare(`
+    SELECT p.id AS place_id, p.trip_id, p.name, p.route_geometry, c.color
+    FROM journey_trips jt
+    JOIN trips t ON t.id = jt.trip_id
+    JOIN places p ON p.trip_id = t.id
+    LEFT JOIN categories c ON c.id = p.category_id
+    WHERE jt.journey_id = ? AND p.route_geometry IS NOT NULL AND p.route_geometry != ''
+    ORDER BY t.start_date ASC, p.id ASC
+  `).all(journeyId) as { place_id: number; trip_id: number; name: string; route_geometry: string; color: string | null }[];
+
+  return rows.flatMap((row) => {
+    try {
+      const parsed: unknown = JSON.parse(row.route_geometry);
+      if (!Array.isArray(parsed)) return [];
+      const points = parsed.flatMap((point: unknown) => {
+        if (!Array.isArray(point) || point.length < 2) return [];
+        const [lat, lng] = point;
+        return typeof lat === 'number' && Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+          typeof lng === 'number' && Number.isFinite(lng) && lng >= -180 && lng <= 180
+          ? [[lat, lng] as [number, number]]
+          : [];
+      });
+      if (points.length < 2) return [];
+      const color = row.color && /^#[0-9a-f]{6}$/i.test(row.color) ? row.color : null;
+      return [{ place_id: row.place_id, trip_id: row.trip_id, name: row.name, color, points }];
+    } catch {
+      return [];
+    }
+  });
 }
 
 export function updateJourney(

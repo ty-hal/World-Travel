@@ -337,6 +337,15 @@ export class JourneyController {
     return data;
   }
 
+  @Get(':id/tracks')
+  listTracks(@CurrentUser() user: User, @Param('id') id: string) {
+    const tracks = this.journey.listJourneyTracks(Number(id), user.id);
+    if (!tracks) {
+      throw new HttpException({ error: 'Journey not found' }, 404);
+    }
+    return { tracks };
+  }
+
   @Patch(':id')
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     const result = this.journey.updateJourney(Number(id), user.id, body);

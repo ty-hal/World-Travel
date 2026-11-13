@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { logDebug, logWarn, logError } from '../services/auditLog';
 import { enforceGlobalMfaPolicy } from './mfaPolicy';
+import { isLocalDevOrigin } from '../utils/origin';
 
 /**
  * The global request pipeline shared by the legacy Express app and the NestJS
@@ -51,7 +52,7 @@ export function applyGlobalMiddleware(
   let corsOrigin: cors.CorsOptions['origin'];
   if (allowedOrigins) {
     corsOrigin = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+      if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin(origin)) callback(null, true);
       else callback(new Error('Not allowed by CORS'));
     };
   } else if (process.env.NODE_ENV?.toLowerCase() === 'production') {
@@ -190,8 +191,9 @@ export function applyGlobalMiddleware(
       } else if (res.statusCode >= 400) {
         logWarn(`${req.method} ${req.path} ${res.statusCode} ${ms}ms ip=${req.ip}`);
       }
-      const q = Object.keys(req.query).length ? ` query=${JSON.stringify(redact(req.query))}` : '';
-      const b = req.body && Object.keys(req.body).length ? ` body=${JSON.stringify(redact(req.body))}` : '';
+      const privateBeli = req.path === '/api/integrations/beli' || req.path.startsWith('/api/integrations/beli/');
+      const q = !privateBeli && Object.keys(req.query).length ? ` query=${JSON.stringify(redact(req.query))}` : '';
+      const b = !privateBeli && req.body && Object.keys(req.body).length ? ` body=${JSON.stringify(redact(req.body))}` : '';
       logDebug(`${req.method} ${req.path} ${res.statusCode} ${ms}ms ip=${req.ip}${q}${b}`);
     });
     next();

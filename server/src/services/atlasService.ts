@@ -830,6 +830,11 @@ function getUserTrips(userId: number): Trip[] {
     .all(userId, userId, userId) as Trip[];
 }
 
+function getCompletedTrips(trips: Trip[]): Trip[] {
+  const today = new Date().toISOString().slice(0, 10);
+  return trips.filter((trip) => trip.end_date && trip.end_date < today);
+}
+
 function getPlacesForTrips(tripIds: number[]): Place[] {
   if (tripIds.length === 0) return [];
   const placeholders = tripIds.map(() => '?').join(',');
@@ -913,11 +918,15 @@ export async function getStats(userId: number) {
     return {
       countries,
       trips: [],
-      stats: { totalTrips: 0, totalPlaces: 0, totalCountries: countries.length, totalDays: 0 },
+      stats: { totalTrips: 0, totalPlaces: 0, totalCountries: 0, totalDays: 0 },
     };
   }
 
   const places = getPlacesForTrips(tripIds);
+  const completedTrips = getCompletedTrips(trips);
+  const completedTripIds = new Set(completedTrips.map((trip) => trip.id));
+  const completedPlaces = places.filter((place) => completedTripIds.has(place.trip_id));
+  const visitedTripIds = [...completedTripIds];
 
   interface CountryEntry {
     code: string;
@@ -927,6 +936,7 @@ export async function getStats(userId: number) {
   const placeCountries = resolvePlaceCountries(places);
   const countrySet = new Map<string, CountryEntry>();
   for (const place of places) {
+    if (!completedTripIds.has(place.trip_id)) continue;
     const code = placeCountries.get(place.id);
     if (code) {
       if (!countrySet.has(code)) {
@@ -938,9 +948,10 @@ export async function getStats(userId: number) {
       countrySet.get(code)!.tripIds.add(place.trip_id);
     }
   }
+  const tripCountryCodes = new Set(countrySet.keys());
 
   let totalDays = 0;
-  for (const trip of trips) {
+  for (const trip of completedTrips) {
     if (trip.start_date && trip.end_date) {
       const start = new Date(trip.start_date);
       const end = new Date(trip.end_date);
@@ -950,7 +961,7 @@ export async function getStats(userId: number) {
   }
 
   const countries = [...countrySet.values()].map((c) => {
-    const countryTrips = trips.filter((t) => c.tripIds.has(t.id));
+    const countryTrips = completedTrips.filter((t) => c.tripIds.has(t.id));
     const dates = countryTrips
       .map((t) => t.start_date)
       .filter(Boolean)
@@ -965,7 +976,7 @@ export async function getStats(userId: number) {
   });
 
   const citySet = new Set<string>();
-  for (const place of places) {
+  for (const place of completedPlaces) {
     if (place.address) {
       const parts = place.address
         .split(',')
@@ -989,9 +1000,7 @@ export async function getStats(userId: number) {
   }
   const totalCities = citySet.size;
 
-  // Countries the user explicitly removed. Only the zero-count passes below are
-  // suppressed — a country with real places isn't removable in the UI anyway, and once
-  // the user adds a place there the tombstone should stop mattering (#1490).
+  // Hidden countries still suppress zero-count derived entries (#1490).
   const hidden = getHiddenCountries(userId);
 
   // Merge manually marked countries
@@ -1010,33 +1019,35 @@ export async function getStats(userId: number) {
   // via resolvePlaceCountries above and would otherwise be missed (#1366).
   // Only 'from'/'to' legs count as actually reached — a 'stop' is an intermediate
   // connection/layover (e.g. a plane change) the traveler never really visited.
-  const endpoints = db
-    .prepare(
+  const endpoints = visitedTripIds.length
+    ? (db.prepare(
       `
     SELECT DISTINCT e.lat, e.lng
     FROM reservation_endpoints e
     JOIN reservations r ON e.reservation_id = r.id
-    WHERE r.trip_id IN (${tripIds.map(() => '?').join(',')}) AND e.role IN ('from', 'to')
+    WHERE r.trip_id IN (${visitedTripIds.map(() => '?').join(',')}) AND e.role IN ('from', 'to')
   `,
-    )
-    .all(...tripIds) as { lat: number; lng: number }[];
+    ).all(...visitedTripIds) as { lat: number; lng: number }[])
+    : [];
   for (const e of endpoints) {
     const code = getCountryFromCoords(e.lat, e.lng);
+    if (code && !hidden.has(code)) tripCountryCodes.add(code);
     if (code && !hidden.has(code) && !countries.find((c) => c.code === code)) {
       countries.push({ code, placeCount: 0, tripCount: 0, firstVisit: null, lastVisit: null });
     }
   }
 
-  const mostVisited = countries.length > 0 ? countries.reduce((a, b) => (a.placeCount > b.placeCount ? a : b)) : null;
+  const tripCountries = countries.filter((country) => countrySet.has(country.code));
+  const mostVisited = tripCountries.length > 0 ? tripCountries.reduce((a, b) => (a.placeCount > b.placeCount ? a : b)) : null;
 
   const continents: Record<string, number> = {};
-  countries.forEach((c) => {
-    const cont = CONTINENT_MAP[c.code] || 'Other';
+  tripCountryCodes.forEach((code) => {
+    const cont = CONTINENT_MAP[code] || 'Other';
     continents[cont] = (continents[cont] || 0) + 1;
   });
 
   const now = new Date().toISOString().split('T')[0];
-  const pastTrips = trips
+  const pastTrips = completedTrips
     .filter((t) => t.end_date && t.end_date <= now)
     .sort((a, b) => b.end_date!.localeCompare(a.end_date!));
   const lastTrip: {
@@ -1054,14 +1065,13 @@ export async function getStats(userId: number) {
       }
     : null;
   if (lastTrip) {
-    const lastTripPlaces = places.filter((p) => p.trip_id === lastTrip.id);
+    const lastTripPlaces = completedPlaces.filter((p) => p.trip_id === lastTrip.id);
+    const countryCounts = new Map<string, number>();
     for (const p of lastTripPlaces) {
       const code = resolveCountryCodeSync(p);
-      if (code) {
-        lastTrip.countryCode = code;
-        break;
-      }
+      if (code) countryCounts.set(code, (countryCounts.get(code) || 0) + 1);
     }
+    lastTrip.countryCode = [...countryCounts].sort((a, b) => b[1] - a[1])[0]?.[0];
   }
 
   const futureTrips = trips
@@ -1075,7 +1085,7 @@ export async function getStats(userId: number) {
     nextTrip.daysUntil = Math.max(0, diff);
   }
 
-  const tripYears = new Set(trips.filter((t) => t.start_date).map((t) => parseInt(t.start_date!.split('-')[0])));
+  const tripYears = new Set(completedTrips.filter((t) => t.start_date).map((t) => parseInt(t.start_date!.split('-')[0])));
   let streak = 0;
   const currentYear = new Date().getFullYear();
   for (let y = currentYear; y >= 2000; y--) {
@@ -1087,9 +1097,9 @@ export async function getStats(userId: number) {
   return {
     countries,
     stats: {
-      totalTrips: trips.length,
-      totalPlaces: places.length,
-      totalCountries: countries.length,
+      totalTrips: completedTrips.length,
+      totalPlaces: completedPlaces.length,
+      totalCountries: tripCountryCodes.size,
       totalDays,
       totalCities,
     },
@@ -1099,17 +1109,15 @@ export async function getStats(userId: number) {
     nextTrip,
     streak,
     firstYear,
-    tripsThisYear: trips.filter((t) => t.start_date && t.start_date.startsWith(String(currentYear))).length,
+    tripsThisYear: completedTrips.filter((t) => t.start_date && t.start_date.startsWith(String(currentYear))).length,
   };
 }
 
 // ── getCountryPlaces ────────────────────────────────────────────────────────
 
 export function getCountryPlaces(userId: number, code: string) {
-  const trips = getUserTrips(userId);
+  const trips = getCompletedTrips(getUserTrips(userId));
   const tripIds = trips.map((t) => t.id);
-  if (tripIds.length === 0) return { places: [], trips: [], manually_marked: false };
-
   const places = getPlacesForTrips(tripIds);
 
   const matchingPlaces: {
@@ -1219,7 +1227,7 @@ export function markRegionVisited(userId: number, regionCode: string, regionName
 // derived from place_regions or manually marked — after excluding the given user's hidden
 // regions. Used to decide whether removing a region should cascade into hiding the country.
 function hasVisibleRegionForCountry(userId: number, countryCode: string, hidden: Set<string>): boolean {
-  const tripIds = getUserTrips(userId).map(t => t.id);
+  const tripIds = getCompletedTrips(getUserTrips(userId)).map(t => t.id);
   const placeIds = getPlacesForTrips(tripIds).filter(p => p.lat && p.lng).map(p => p.id);
   const placeRegionCodes = placeIds.length > 0
     ? (db.prepare(
@@ -1448,7 +1456,7 @@ async function reverseGeocodeRegion(lat: number, lng: number, placeAddress?: str
 export async function getVisitedRegions(
   userId: number,
 ): Promise<{ regions: Record<string, { code: string; name: string; placeCount: number }[]> }> {
-  const trips = getUserTrips(userId);
+  const trips = getCompletedTrips(getUserTrips(userId));
   const tripIds = trips.map((t) => t.id);
   const places = getPlacesForTrips(tripIds);
 
@@ -1566,6 +1574,7 @@ export function getAtlasWonders(userId: number) {
         WHERE (t.user_id = ? OR EXISTS (
           SELECT 1 FROM trip_members tm WHERE tm.trip_id = t.id AND tm.user_id = ?
         ))
+          AND t.end_date IS NOT NULL AND t.end_date < date('now')
           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
           AND ABS(p.lat - w.lat) < 0.02 AND ABS(p.lng - w.lng) < 0.02
       ) AS visited
@@ -1595,6 +1604,7 @@ export function getAtlasWondersNearBBox(
         WHERE (t.user_id = ? OR EXISTS (
           SELECT 1 FROM trip_members tm WHERE tm.trip_id = t.id AND tm.user_id = ?
         ))
+          AND t.end_date IS NOT NULL AND t.end_date < date('now')
           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
           AND ABS(p.lat - w.lat) < 0.02 AND ABS(p.lng - w.lng) < 0.02
       ) AS visited

@@ -122,6 +122,8 @@ function makeDefaultProps(overrides = {}) {
     reservations: [],
     onAddReservation: vi.fn(),
     onNavigateToFiles: vi.fn(),
+    // Most suite cases exercise the expanded day body; production defaults to collapsed.
+    initialExpandedDayIds: 'all' as const,
     ...overrides,
   }
 }
@@ -212,41 +214,55 @@ describe('DayPlanSidebar', () => {
 
   // ── Day expansion/collapse ──────────────────────────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-006: days are expanded by default', () => {
+  it('FE-PLANNER-DAYPLAN-006: days are collapsed by default on trip open', () => {
+    const place = buildPlace({ name: 'Eiffel Tower' })
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    const assignment = buildAssignment({ id: 99, day_id: 10, order_index: 0, place })
+    const assignments = { '10': [assignment] }
+    render(<DayPlanSidebar {...makeDefaultProps({
+      days: [day], places: [place], assignments, initialExpandedDayIds: undefined,
+    })} />)
+    expect(screen.queryByText('Eiffel Tower')).not.toBeInTheDocument()
+  })
+
+  it('FE-PLANNER-DAYPLAN-006b: clicking a collapsed day header expands it', async () => {
+    const user = userEvent.setup()
+    const onSelectDay = vi.fn()
+    const place = buildPlace({ name: 'Eiffel Tower' })
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    const assignment = buildAssignment({ id: 99, day_id: 10, order_index: 0, place })
+    const assignments = { '10': [assignment] }
+    render(<DayPlanSidebar {...makeDefaultProps({
+      days: [day], places: [place], assignments, onSelectDay, initialExpandedDayIds: undefined,
+    })} />)
+    expect(screen.queryByText('Eiffel Tower')).not.toBeInTheDocument()
+    await user.click(screen.getByText('Day 1'))
+    expect(onSelectDay).toHaveBeenCalledWith(10)
+    expect(screen.getByText('Eiffel Tower')).toBeInTheDocument()
+  })
+
+  it('FE-PLANNER-DAYPLAN-007: collapse-all hides day activities', async () => {
+    const user = userEvent.setup()
     const place = buildPlace({ name: 'Eiffel Tower' })
     const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
     const assignment = buildAssignment({ id: 99, day_id: 10, order_index: 0, place })
     const assignments = { '10': [assignment] }
     render(<DayPlanSidebar {...makeDefaultProps({ days: [day], places: [place], assignments })} />)
     expect(screen.getByText('Eiffel Tower')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Collapse all days'))
+    expect(screen.queryByText('Eiffel Tower')).not.toBeInTheDocument()
   })
 
-  it('FE-PLANNER-DAYPLAN-007: clicking chevron collapses that day', async () => {
+  it('FE-PLANNER-DAYPLAN-008: expand-all restores day activities after collapse', async () => {
     const user = userEvent.setup()
     const place = buildPlace({ name: 'Eiffel Tower' })
     const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
     const assignment = buildAssignment({ id: 99, day_id: 10, order_index: 0, place })
     const assignments = { '10': [assignment] }
     render(<DayPlanSidebar {...makeDefaultProps({ days: [day], places: [place], assignments })} />)
-    // The chevron button immediately follows the "Add Note" button (which has a title attribute)
-    const addNoteBtn = screen.getByLabelText('Add Note')
-    const chevron = addNoteBtn.nextElementSibling as HTMLButtonElement
-    expect(chevron).toBeTruthy()
-    await user.click(chevron)
+    await user.click(screen.getByLabelText('Collapse all days'))
     expect(screen.queryByText('Eiffel Tower')).not.toBeInTheDocument()
-  })
-
-  it('FE-PLANNER-DAYPLAN-008: clicking chevron again re-expands', async () => {
-    const user = userEvent.setup()
-    const place = buildPlace({ name: 'Eiffel Tower' })
-    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
-    const assignment = buildAssignment({ id: 99, day_id: 10, order_index: 0, place })
-    const assignments = { '10': [assignment] }
-    render(<DayPlanSidebar {...makeDefaultProps({ days: [day], places: [place], assignments })} />)
-    const getChevron = () => screen.getByLabelText('Add Note').nextElementSibling as HTMLButtonElement
-    await user.click(getChevron()) // collapse
-    expect(screen.queryByText('Eiffel Tower')).not.toBeInTheDocument()
-    await user.click(getChevron()) // re-expand
+    await user.click(screen.getByLabelText('Expand all days'))
     expect(screen.getByText('Eiffel Tower')).toBeInTheDocument()
   })
 
@@ -478,13 +494,10 @@ describe('DayPlanSidebar', () => {
 
   // ── Undo bar ────────────────────────────────────────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-022: undo bar shown when canUndo=true', () => {
+  it('FE-PLANNER-DAYPLAN-022: undo button shown only when canUndo=true', () => {
     const onUndo = vi.fn()
     render(<DayPlanSidebar {...makeDefaultProps({ canUndo: true, lastActionLabel: 'Removed place', onUndo })} />)
-    // The undo button should be present (Undo2 icon)
-    const undoButtons = screen.getAllByRole('button')
-    const undoBtn = undoButtons.find(btn => !(btn as HTMLButtonElement).disabled && btn.querySelector('svg'))
-    expect(undoBtn).toBeDefined()
+    expect(screen.getByLabelText('Undo')).toBeInTheDocument()
   })
 
   it('FE-PLANNER-DAYPLAN-023: clicking undo button calls onUndo', async () => {
@@ -496,23 +509,26 @@ describe('DayPlanSidebar', () => {
     expect(onUndo).toHaveBeenCalled()
   })
 
-  it('FE-PLANNER-DAYPLAN-024: undo button not present when onUndo not provided', () => {
-    render(<DayPlanSidebar {...makeDefaultProps({ canUndo: false })} />)
+  it('FE-PLANNER-DAYPLAN-024: undo button hidden when there is nothing to undo', () => {
+    render(<DayPlanSidebar {...makeDefaultProps({ canUndo: false, onUndo: vi.fn() })} />)
     expect(screen.queryByLabelText('Undo')).toBeNull()
   })
 
   // ── PDF export ──────────────────────────────────────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-025: PDF export button is present', () => {
+  it('FE-PLANNER-DAYPLAN-025: Export menu includes PDF', async () => {
+    const user = userEvent.setup()
     render(<DayPlanSidebar {...makeDefaultProps()} />)
-    expect(screen.getByText('PDF')).toBeInTheDocument()
+    await user.hover(screen.getByText('Export').closest('button')!)
+    expect(await screen.findByText('PDF')).toBeInTheDocument()
   })
 
-  it('FE-PLANNER-DAYPLAN-026: clicking PDF button calls downloadTripPDF', async () => {
+  it('FE-PLANNER-DAYPLAN-026: clicking PDF in Export menu calls downloadTripPDF', async () => {
     const user = userEvent.setup()
     const { downloadTripPDF } = await import('../PDF/TripPDF')
     render(<DayPlanSidebar {...makeDefaultProps()} />)
-    await user.click(screen.getByText('PDF'))
+    await user.hover(screen.getByText('Export').closest('button')!)
+    await user.click(await screen.findByText('PDF'))
     await waitFor(() => {
       expect(downloadTripPDF).toHaveBeenCalled()
     })
@@ -795,9 +811,11 @@ describe('DayPlanSidebar', () => {
 
   // ── ICS export button ────────────────────────────────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-043: ICS export button is present', () => {
+  it('FE-PLANNER-DAYPLAN-043: Export menu includes ICS download', async () => {
+    const user = userEvent.setup()
     render(<DayPlanSidebar {...makeDefaultProps()} />)
-    expect(screen.getByText('ICS')).toBeInTheDocument()
+    await user.hover(screen.getByText('Export').closest('button')!)
+    expect(await screen.findByText('Download ICS')).toBeInTheDocument()
   })
 
   // ── getMergedItems: transport merged with assignments ──────────────────
@@ -988,15 +1006,14 @@ describe('DayPlanSidebar', () => {
 
   // ── PDF hover tooltip ─────────────────────────────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-054: hovering PDF button shows tooltip', async () => {
+  it('FE-PLANNER-DAYPLAN-054: hovering Export shows Brief / PDF / ICS menu', async () => {
     const user = userEvent.setup()
     render(<DayPlanSidebar {...makeDefaultProps()} />)
-    const pdfBtn = screen.getByText('PDF').closest('button')!
-    await user.hover(pdfBtn)
+    await user.hover(screen.getByText('Export').closest('button')!)
     await waitFor(() => {
-      // Tooltip text appears (from t('dayplan.pdfTooltip'))
-      const tooltips = document.querySelectorAll('[style*="pointer-events: none"]')
-      expect(tooltips.length).toBeGreaterThan(0)
+      expect(screen.getByText('Daily brief')).toBeInTheDocument()
+      expect(screen.getByText('PDF')).toBeInTheDocument()
+      expect(screen.getByText('Download ICS')).toBeInTheDocument()
     })
   })
 
@@ -1062,9 +1079,7 @@ describe('DayPlanSidebar', () => {
     const createObjURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
     const revokeObjURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     render(<DayPlanSidebar {...makeDefaultProps()} />)
-    // The ICS button now opens a hover menu (Download / Subscribe) instead of
-    // downloading on direct click.
-    await user.hover(screen.getByText('ICS').closest('button')!)
+    await user.hover(screen.getByText('Export').closest('button')!)
     await user.click(await screen.findByText('Download ICS'))
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('/api/trips/1/export.ics', expect.any(Object)))
     fetchSpy.mockRestore()
@@ -1609,8 +1624,8 @@ describe('DayPlanSidebar', () => {
     render(<DayPlanSidebar {...makeDefaultProps({
       days: [day], places: [place], assignments: { '10': [assignment] },
     })} />)
-    const pdfBtn = screen.getByRole('button', { name: /pdf/i })
-    await user.click(pdfBtn)
+    await user.hover(screen.getByText('Export').closest('button')!)
+    await user.click(await screen.findByText('PDF'))
     await waitFor(() => expect(downloadTripPDF).toHaveBeenCalledWith(
       expect.objectContaining({ dayNotes: expect.arrayContaining([expect.objectContaining({ text: 'PDF Note' })]) })
     ))
@@ -1696,11 +1711,10 @@ describe('DayPlanSidebar', () => {
 
   // ── ICS hover tooltip ─────────────────────────────────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-090: hovering ICS button shows the download/subscribe menu', async () => {
+  it('FE-PLANNER-DAYPLAN-090: hovering Export shows ICS download/subscribe options', async () => {
     const user = userEvent.setup()
     render(<DayPlanSidebar {...makeDefaultProps()} />)
-    const icsBtn = screen.getByText('ICS').closest('button')!
-    await user.hover(icsBtn)
+    await user.hover(screen.getByText('Export').closest('button')!)
     await waitFor(() => {
       expect(screen.getByText('Download ICS')).toBeInTheDocument()
       expect(screen.getByText('Subscribe to calendar')).toBeInTheDocument()

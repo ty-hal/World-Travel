@@ -32,10 +32,9 @@ export function resolveLeafletTileUrl(userTileUrl?: string | null): string {
   return OPENSTREETMAP_TILE_URL
 }
 
-/** Letterbox / ocean fill for Atlas (no raster basemap). Light mode is locked. */
-export const OPENSTREETMAP_OCEAN_LIGHT = '#aad3df'
-/** Soft mid-teal — lighter than the old #2d4f5c so white land doesn't float on black water. */
-export const OPENSTREETMAP_OCEAN_DARK = '#5a8494'
+/** Atlas ocean fill matches the trip-map basemap in both app themes. */
+export const OPENSTREETMAP_OCEAN_LIGHT = '#9fb4f5'
+export const OPENSTREETMAP_OCEAN_DARK = OPENSTREETMAP_OCEAN_LIGHT
 
 export function atlasMapBackground(dark: boolean): string {
   return dark ? OPENSTREETMAP_OCEAN_DARK : OPENSTREETMAP_OCEAN_LIGHT
@@ -66,7 +65,7 @@ export function atlasMaxBounds(zoom: number, worldZoom: number = ATLAS_WORLD_ZOO
 /** Unvisited land on the ocean-only Atlas basemap (no city raster tiles). */
 export function atlasUnvisitedLandFill(dark: boolean): { fillColor: string; fillOpacity: number; color: string; weight: number } {
   return dark
-    ? { fillColor: '#ffffff', fillOpacity: 0.96, color: '#d4d4d8', weight: 0.5 }
+    ? { fillColor: '#d4d4d8', fillOpacity: 0.86, color: '#94a3b8', weight: 0.5 }
     : { fillColor: '#f8fafc', fillOpacity: 0.96, color: '#cbd5e1', weight: 0.5 }
 }
 

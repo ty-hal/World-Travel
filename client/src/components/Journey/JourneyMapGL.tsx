@@ -1,11 +1,9 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react'
-import mapboxgl from 'mapbox-gl'
-import maplibregl from 'maplibre-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import { useSettingsStore } from '../../store/settingsStore'
+import type { JourneyTrack } from '@trek/shared'
 import { isStandardFamily, supportsCustom3d, wantsTerrain, addCustom3dBuildings, addTerrainAndSky } from '../Map/mapboxSetup'
-import { MAPBOX_DEFAULT_STYLE, styleForActiveProvider, basemapLanguage, type GlMapProvider } from '../Map/glProviders'
+import { MAPBOX_DEFAULT_STYLE, styleForActiveProvider, applyBasemapLabelLanguage, basemapLanguage, isOpenFreeMapLightStyle, type GlMapProvider } from '../Map/glProviders'
+import { useGlRenderer } from '../Map/useGlRenderer'
 
 export interface JourneyMapGLHandle {
   highlightMarker: (id: string | null) => void
@@ -28,6 +26,7 @@ interface MapEntry {
 interface Props {
   checkins: unknown[]
   entries: MapEntry[]
+  tracks?: JourneyTrack[]
   trail?: { lat: number; lng: number }[]
   height?: number
   dark?: boolean
@@ -206,7 +205,7 @@ function markerHtml(dayColor: string, dayLabel: number, highlighted: boolean): H
 const EMPTY_TRAIL: { lat: number; lng: number }[] = []
 
 const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL(
-  { entries, trail, height = 220, dark, activeMarkerId, onMarkerClick, fullScreen, paddingBottom, glProvider = 'mapbox-gl' },
+  { entries, tracks = [], trail, height = 220, dark, activeMarkerId, onMarkerClick, fullScreen, paddingBottom, glProvider = 'mapbox-gl' },
   ref
 ) {
   const stableTrail = trail || EMPTY_TRAIL
@@ -216,8 +215,10 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
   const mapbox3d = useSettingsStore(s => s.settings.mapbox_3d_enabled !== false)
   const mapboxQuality = useSettingsStore(s => s.settings.mapbox_quality_mode === true)
   const mapLang = useSettingsStore(s => s.settings.language)
+  const mapLangRef = useRef(mapLang)
+  mapLangRef.current = mapLang
   const isMapLibre = glProvider === 'maplibre-gl'
-  const gl = (isMapLibre ? maplibregl : mapboxgl) as any
+  const gl = useGlRenderer(glProvider)
   const glStyle = styleForActiveProvider(glProvider, rawMapboxStyle, rawMaplibreStyle)
   const enableMapbox3d = !isMapLibre && mapbox3d
   const containerRef = useRef<HTMLDivElement>(null)
@@ -272,7 +273,6 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
         closeButton: false,
         closeOnClick: false,
         closeOnMove: false,
-        anchor: 'bottom',
         offset,
         className: `trek-journey-popup${darkRef.current ? ' trek-dark' : ''}`,
         maxWidth: '280px',
@@ -341,8 +341,8 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
   // Build map once per style/token change. Markers and layers are rebuilt
   // inside the same effect so they stay in sync with the active style.
   useEffect(() => {
-    if (!containerRef.current || (!isMapLibre && !mapboxToken)) return
-    if (!isMapLibre) mapboxgl.accessToken = mapboxToken
+    if (!containerRef.current || !gl || (!isMapLibre && !mapboxToken)) return
+    if (!isMapLibre) gl.accessToken = mapboxToken
 
     const items = buildItems(entries)
     itemsRef.current = items
@@ -350,7 +350,8 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
     const bounds = new gl.LngLatBounds()
     items.forEach(i => bounds.extend([i.lng, i.lat]))
     stableTrail.forEach(p => bounds.extend([p.lng, p.lat]))
-    const hasPoints = items.length > 0 || stableTrail.length > 0
+    tracks.forEach(track => track.points.forEach(([lat, lng]) => bounds.extend([lng, lat])))
+    const hasPoints = items.length > 0 || stableTrail.length > 0 || tracks.some(track => track.points.length > 0)
 
     const mapOptions: Record<string, unknown> = {
       container: containerRef.current,
@@ -361,7 +362,10 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
       attributionControl: true,
       antialias: mapboxQuality,
     }
-    if (!isMapLibre) mapOptions.projection = mapboxQuality ? 'globe' : 'mercator'
+    if (!isMapLibre) {
+      mapOptions.projection = mapboxQuality ? 'globe' : 'mercator'
+      mapOptions.language = basemapLanguage(mapLangRef.current)
+    }
     // MapLibre 5's around-center mouse rotate ping-pongs near mid-screen (#1545)
     // — see MapViewGL. Keep the plain dx-based rotate everywhere.
     if (isMapLibre) mapOptions.aroundCenter = false
@@ -370,6 +374,7 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
     mapRef.current = map
 
     map.on('load', () => {
+      if (mapRef.current !== map) return
       if (enableMapbox3d) {
         if (!isStandardFamily(glStyle) && wantsTerrain(glStyle)) addTerrainAndSky(map)
         if (supportsCustom3d(glStyle)) addCustom3dBuildings(map, !!darkRef.current)
@@ -379,11 +384,8 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
       if (glStyle === MAPBOX_DEFAULT_STYLE) {
         try { map.setTerrain(null) } catch { /* noop */ }
       }
-      // Pin the basemap label language to the UI language so labels don't fall back to the
-      // browser/OS locale and stack multiple scripts per place (#1299).
-      if (!isMapLibre && isStandardFamily(glStyle)) {
-        try { map.setConfigProperty('basemap', 'language', basemapLanguage(mapLang)) } catch { /* style/SDK may not support it */ }
-      }
+      applyBasemapLabelLanguage(map, mapLangRef.current, glStyle)
+      map.once('idle', () => applyBasemapLabelLanguage(map, mapLangRef.current, glStyle))
 
       // route trail — dashed line connecting entries in time order
       if (items.length > 1) {
@@ -411,6 +413,25 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
         }
       }
 
+      const trackFeatures = tracks.flatMap(track => track.points.length < 2 ? [] : [{
+        type: 'Feature' as const,
+        properties: { color: track.color || '#6366f1' },
+        geometry: { type: 'LineString' as const, coordinates: track.points.map(([lat, lng]) => [lng, lat]) },
+      }])
+      if (trackFeatures.length) {
+        map.addSource('journey-gpx-tracks', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: trackFeatures } as GeoJSON.FeatureCollection,
+        })
+        map.addLayer({
+          id: 'journey-gpx-tracks-line',
+          type: 'line',
+          source: 'journey-gpx-tracks',
+          paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-opacity': 0.8 },
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+        })
+      }
+
       // markers
       items.forEach((item) => {
         const el = markerHtml(item.dayColor, item.dayLabel, false)
@@ -436,6 +457,7 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
           })
         } catch { /* empty bounds */ }
       }
+
     })
 
     return () => {
@@ -449,7 +471,14 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
       try { map.remove() } catch { /* noop */ }
       mapRef.current = null
     }
-  }, [entries, stableTrail, glProvider, glStyle, mapboxToken, enableMapbox3d, mapboxQuality, fullScreen, paddingBottom])
+  }, [entries, tracks, stableTrail, gl, glProvider, glStyle, mapboxToken, enableMapbox3d, mapboxQuality, fullScreen, paddingBottom])
+
+  // Re-pin labels when the account language changes without rebuilding the map.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    applyBasemapLabelLanguage(map, mapLang, glStyle)
+  }, [mapLang, glStyle])
 
   // external activeMarkerId → highlight + flyTo
   useEffect(() => {
@@ -485,7 +514,7 @@ const JourneyMapGL = forwardRef<JourneyMapGLHandle, Props>(function JourneyMapGL
   }
 
   return (
-    <div style={{ position: 'relative', height: height === 9999 ? '100%' : height, width: '100%', borderRadius: 'inherit', overflow: 'hidden' }}>
+    <div data-basemap-tone={isMapLibre && isOpenFreeMapLightStyle(glStyle) ? 'light' : undefined} style={{ position: 'relative', height: height === 9999 ? '100%' : height, width: '100%', borderRadius: 'inherit', overflow: 'hidden' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>
   )

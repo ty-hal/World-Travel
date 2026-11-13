@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus } from 'lucide-react'
-import JourneyMap from './JourneyMap'
+import { useTranslation } from '../../i18n'
+import JourneyMap from './JourneyMapAuto'
 import MobileEntryCard from './MobileEntryCard'
-import type { JourneyMapHandle } from './JourneyMap'
+import type { JourneyMapAutoHandle } from './JourneyMapAuto'
 import type { JourneyEntry } from '../../store/journeyStore'
 import { DAY_COLORS } from './dayColors'
 
@@ -36,9 +37,10 @@ export default function MobileMapTimeline({
   onEntryClick,
   onAddEntry,
   publicPhotoUrl,
-  carouselBottom = 'calc(var(--bottom-nav-h, 84px) + 8px)',
+  carouselBottom = 'calc(var(--bottom-nav-h, 84px) + 60px)',
 }: Props) {
-  const mapRef = useRef<JourneyMapHandle>(null)
+  const { t } = useTranslation()
+  const mapRef = useRef<JourneyMapAutoHandle>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -161,6 +163,7 @@ export default function MobileMapTimeline({
           <div className="fixed right-4 z-30" style={{ bottom: 'calc(var(--bottom-nav-h, 84px) + 16px)' }}>
             <button
               onClick={onAddEntry}
+              aria-label={t('journey.detail.addEntry')}
               className="w-12 h-12 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
             >
               <Plus size={20} />
@@ -229,10 +232,11 @@ export default function MobileMapTimeline({
       {!readOnly && onAddEntry && (
         <div
           className="fixed right-4 z-30"
-          style={{ bottom: 'calc(var(--bottom-nav-h, 84px) + 168px)' }}
+          style={{ bottom: 'calc(var(--bottom-nav-h, 84px) + 230px)' }}
         >
           <button
             onClick={onAddEntry}
+            aria-label={t('journey.detail.addEntry')}
             className="w-12 h-12 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
           >
             <Plus size={20} />

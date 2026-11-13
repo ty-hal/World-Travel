@@ -9,6 +9,7 @@ export function useHelp() {
   const [page, setPage] = useState<HelpPageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [pageError, setPageError] = useState(false)
+  const [pageAttempt, setPageAttempt] = useState(0)
   const [query, setQuery] = useState('')
   const [navOpen, setNavOpen] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -42,7 +43,7 @@ export function useHelp() {
     return () => {
       alive = false
     }
-  }, [activeSlug])
+  }, [activeSlug, pageAttempt])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -52,5 +53,5 @@ export function useHelp() {
       .filter((s) => s.pages.length > 0)
   }, [sections, query])
 
-  return { page, loading, pageError, query, setQuery, navOpen, setNavOpen, contentRef, activeSlug, filtered }
+  return { page, loading, pageError, retryPage: () => setPageAttempt(attempt => attempt + 1), query, setQuery, navOpen, setNavOpen, contentRef, activeSlug, filtered }
 }

@@ -41,6 +41,24 @@ describe('MapSettingsTab', () => {
     expect(screen.getByText('Map Template')).toBeInTheDocument();
   });
 
+  it('gives the GL map style URL field its visible label', () => {
+    seedStore(useSettingsStore, {
+      settings: buildSettings({ map_provider: 'maplibre-gl', maplibre_style: 'https://tiles.openfreemap.org/styles/liberty' }),
+    });
+    render(<MapSettingsTab />);
+    expect(screen.getByRole('textbox', { name: 'Map Style' })).toHaveValue('https://tiles.openfreemap.org/styles/liberty');
+  });
+
+  it('announces the selected map provider', () => {
+    seedStore(useSettingsStore, {
+      settings: buildSettings({ map_provider: 'maplibre-gl' }),
+    });
+    render(<MapSettingsTab />);
+    expect(screen.getByRole('group', { name: 'Map Provider' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /MapLibre/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Leaflet/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('FE-COMP-MAP-004: no longer offers a default map centre — each map frames its own places', () => {
     render(<MapSettingsTab />);
     expect(screen.queryByText('Latitude')).not.toBeInTheDocument();

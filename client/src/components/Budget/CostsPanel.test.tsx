@@ -21,6 +21,16 @@ beforeEach(() => {
 })
 
 describe('CostsPanel — settlements in the ledger', () => {
+  it('associates expense name and amount labels with their inputs', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    render(<CostsPanel tripId={1} tripMembers={tripMembers} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Add expense' }))
+    expect(screen.getByRole('textbox', { name: 'What was it for?' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Total amount' })).toBeInTheDocument()
+  })
+
   it('renders a settle-up payment as a ledger row with an undo action', async () => {
     const item = { ...buildBudgetItem({ trip_id: 1, category: 'food', name: 'Dinner' }), total_price: 90, expense_date: '2025-06-15' }
     server.use(
@@ -86,7 +96,7 @@ describe('CostsPanel — settlements in the ledger', () => {
     render(<CostsPanel tripId={1} tripMembers={tripMembers} />)
 
     await screen.findByText('Payment')
-    await user.type(screen.getByPlaceholderText('Search expenses…'), 'Dinner')
+    await user.type(screen.getByRole('textbox', { name: 'Search expenses…' }), 'Dinner')
     // Payment rows have no name, so a search hides them while the matching expense stays.
     expect(screen.queryByText('Payment')).not.toBeInTheDocument()
     expect(screen.getByText('Dinner')).toBeInTheDocument()

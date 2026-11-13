@@ -126,7 +126,17 @@ export default function CollectionsPage(): React.ReactElement {
       {filterBar}
       {c.visiblePlaces.length > 0
         ? listEl
-        : <EmptyState icon={<AnimatedSearchIcon size={26} animate="always" />} title={t('collections.empty.noMatchTitle')} text={t('collections.empty.noMatchText')} />}
+        : <EmptyState
+            icon={<AnimatedSearchIcon size={26} animate="always" />}
+            title={t('collections.empty.noMatchTitle')}
+            text={t('collections.empty.noMatchText')}
+            action={<button type="button" className="col-empty-clear" onClick={() => {
+              c.setSearch('')
+              c.setStatusFilter('all')
+              c.setCategoryFilter('all')
+              c.setLabelFilter([])
+            }}>{t('collections.clearFilters')}</button>}
+          />}
     </>
   )
 
@@ -230,6 +240,7 @@ export default function CollectionsPage(): React.ReactElement {
                           value={c.search}
                           onChange={e => c.setSearch(e.target.value)}
                           placeholder={t('collections.search')}
+                          aria-label={t('collections.search')}
                         />
                       </div>
                     )}

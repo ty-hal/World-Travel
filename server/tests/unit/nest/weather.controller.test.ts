@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { HttpException } from '@nestjs/common';
 import { WeatherController } from '../../../src/nest/weather/weather.controller';
-import { ApiError } from '../../../src/services/weatherService';
+import { ApiError, monthlyClimatePeriod } from '../../../src/services/weatherService';
 import type { WeatherService } from '../../../src/nest/weather/weather.service';
 
 function makeController(svc: Partial<WeatherService>) {
@@ -88,6 +88,43 @@ describe('WeatherController (parity with the legacy /api/weather route)', () => 
         status: 500,
         body: { error: 'Error fetching detailed weather data' },
       });
+    });
+  });
+
+  describe('GET /api/weather/climate', () => {
+    it('rejects invalid coordinates', async () => {
+      const c = makeController({ climate: vi.fn() });
+      expect(await thrown(() => c.getClimate('bad', '2'))).toEqual({ status: 400, body: { error: 'Valid latitude and longitude are required' } });
+    });
+
+    it('returns ERA5 normals with provenance', async () => {
+      const months = [{ month: 1, meanMaxC: 5, meanMinC: 0, precipitationMm: 30, days: 930 }];
+      const climate = vi.fn().mockResolvedValue(months);
+      const c = makeController({ climate });
+      await expect(c.getClimate('41.9', '12.5')).resolves.toEqual({ source: 'Open-Meteo ERA5', period: monthlyClimatePeriod(), months });
+      expect(climate).toHaveBeenCalledWith(41.9, 12.5);
+    });
+  });
+
+  describe('POST /api/weather/climate/batch', () => {
+    it('validates the coordinate batch and returns partial results per location', async () => {
+      const climateBatch = vi.fn().mockResolvedValue([
+        { key: 'one', months: [{ month: 1 }] }, { key: 'two', error: 'Rate limited' },
+      ]);
+      const c = makeController({ climateBatch });
+      await expect(c.getClimateBatch({ locations: [
+        { key: 'one', lat: 1, lng: 2 }, { key: 'two', lat: 3, lng: 4 },
+      ] })).resolves.toEqual([
+        { key: 'one', source: 'Open-Meteo ERA5', period: monthlyClimatePeriod(), months: [{ month: 1 }] },
+        { key: 'two', error: 'Rate limited' },
+      ]);
+      expect(climateBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects invalid or oversized batches', async () => {
+      const c = makeController({ climate: vi.fn() });
+      expect(await thrown(() => c.getClimateBatch({ locations: [{ lat: 91, lng: 0 }] }))).toMatchObject({ status: 400 });
+      expect(await thrown(() => c.getClimateBatch({ locations: Array.from({ length: 501 }, () => ({ lat: 0, lng: 0 })) }))).toMatchObject({ status: 400 });
     });
   });
 });

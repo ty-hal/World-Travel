@@ -12,13 +12,8 @@ import { useAddonStore } from '../../store/addonStore'
  */
 export function useSettings() {
   const [searchParams] = useSearchParams()
-  const { isEnabled: addonEnabled, loadAddons } = useAddonStore()
-
-  const memoriesEnabled = addonEnabled('memories')
-  const mcpEnabled = addonEnabled('mcp')
-  const airtrailEnabled = addonEnabled('airtrail')
-  const llmEnabled = addonEnabled('llm_parsing')
-  const hasIntegrations = memoriesEnabled || mcpEnabled || airtrailEnabled || llmEnabled
+  const { loadAddons } = useAddonStore()
+  const hasIntegrations = true
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('display')

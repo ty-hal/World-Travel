@@ -819,9 +819,10 @@ export default function ReservationsPanel({ tripId, reservations, days, assignme
                   <span className="hidden sm:inline">{t('reservations.airtrail.cta')}</span>
                 </button>
               )}
-              <button onClick={onAdd} className="bg-accent text-accent-text" style={{
+              <button onClick={onAdd} aria-label={t(addManualKey)} className="bg-accent text-accent-text" style={{
                 appearance: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
+                minWidth: 44, minHeight: 44,
                 padding: '9px 14px', borderRadius: 10, fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 500,
                 transition: 'opacity 0.15s ease',
               }}

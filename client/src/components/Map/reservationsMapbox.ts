@@ -20,19 +20,21 @@ export const RESERVATION_LINE_LAYER_ID = 'trek-reservations-lines'
 
 type TransportType = 'flight' | 'train' | 'cruise' | 'car' | 'bus' | 'taxi' | 'bicycle' | 'ferry' | 'transit' | 'transport_other'
 const TRANSPORT_TYPES: TransportType[] = ['flight', 'train', 'cruise', 'car', 'bus', 'taxi', 'bicycle', 'ferry', 'transit', 'transport_other']
-const TRANSPORT_COLOR = '#3b82f6'
+const FALLBACK_COLOR = '#2563eb'
 
-const TYPE_META: Record<TransportType, { icon: typeof Plane; geodesic: boolean }> = {
-  flight: { icon: Plane, geodesic: true },
-  train: { icon: Train, geodesic: false },
-  cruise: { icon: Ship, geodesic: true },
-  car: { icon: Car, geodesic: false },
-  bus: { icon: Bus, geodesic: false },
-  taxi: { icon: CarTaxiFront, geodesic: false },
-  bicycle: { icon: Bike, geodesic: false },
-  ferry: { icon: Sailboat, geodesic: true },
-  transit: { icon: TramFront, geodesic: false },
-  transport_other: { icon: Route, geodesic: false },
+// Distinct hues + dash patterns so overlapping booking routes stay readable
+// without relying on color alone (color-not-only / WCAG).
+const TYPE_META: Record<TransportType, { color: string; icon: typeof Plane; geodesic: boolean; dashArray?: number[] }> = {
+  flight: { color: '#2563eb', icon: Plane, geodesic: true },
+  train: { color: '#7c3aed', icon: Train, geodesic: false, dashArray: [10, 6] },
+  cruise: { color: '#0891b2', icon: Ship, geodesic: true, dashArray: [14, 8] },
+  car: { color: '#ea580c', icon: Car, geodesic: false },
+  bus: { color: '#ca8a04', icon: Bus, geodesic: false, dashArray: [6, 5] },
+  taxi: { color: '#d97706', icon: CarTaxiFront, geodesic: false, dashArray: [2, 6] },
+  bicycle: { color: '#16a34a', icon: Bike, geodesic: false, dashArray: [4, 4] },
+  ferry: { color: '#0d9488', icon: Sailboat, geodesic: true, dashArray: [12, 6, 2, 6] },
+  transit: { color: '#9333ea', icon: TramFront, geodesic: false, dashArray: [8, 4] },
+  transport_other: { color: '#64748b', icon: Route, geodesic: false, dashArray: [3, 5] },
 }
 
 // ── geometry helpers (shared with ReservationOverlay via flightGeodesy) ──
@@ -147,20 +149,20 @@ function buildItems(reservations: Reservation[]): TransportItem[] {
 
 // ── DOM helpers for HTML markers ──────────────────────────────────────────
 function endpointMarkerHtml(type: TransportType, label: string | null): string {
-  const { icon: IconCmp } = TYPE_META[type]
+  const { icon: IconCmp, color } = TYPE_META[type]
   const svg = renderToStaticMarkup(createElement(IconCmp, { size: 13, color: 'white', strokeWidth: 2.5 }))
   const labelHtml = label ? `<span style="display:inline-flex;align-items:center;line-height:1">${escapeHtml(label)}</span>` : ''
   return `<div style="
     display:inline-flex;align-items:center;justify-content:center;gap:4px;
     padding:0 8px;border-radius:999px;
-    background:${TRANSPORT_COLOR};box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    background:${color};box-shadow:0 2px 6px rgba(0,0,0,0.25);
     border:1.5px solid #fff;color:#fff;
     font-family:var(--font-system);font-size:11px;font-weight:600;letter-spacing:0.3px;line-height:1;
     box-sizing:border-box;height:22px;white-space:nowrap;cursor:pointer;
   "><span style="display:inline-flex;align-items:center;">${svg}</span>${labelHtml}</div>`
 }
 
-function buildStatsHtml(mainLabel: string | null, subLabel: string | null): { html: string; width: number; height: number } {
+function buildStatsHtml(color: string, mainLabel: string | null, subLabel: string | null): { html: string; width: number; height: number } {
   const estWidth = Math.max(
     mainLabel ? mainLabel.length * 6.5 : 0,
     subLabel ? subLabel.length * 5.5 : 0,
@@ -175,7 +177,7 @@ function buildStatsHtml(mainLabel: string | null, subLabel: string | null): { ht
     padding:0 11px;border-radius:999px;
     background:rgba(17,24,39,0.92);color:#fff;
     box-shadow:0 2px 6px rgba(0,0,0,0.25);
-    border:1px solid ${TRANSPORT_COLOR}aa;
+    border:1px solid ${color}aa;
     font-family:var(--font-system);
     white-space:nowrap;box-sizing:border-box;pointer-events:none;
     transform-origin:center;will-change:transform;
@@ -240,6 +242,8 @@ export class ReservationMapboxOverlay {
     this.statsMarkers = []
     try {
       if (this.map.getLayer(RESERVATION_LINE_LAYER_ID)) this.map.removeLayer(RESERVATION_LINE_LAYER_ID)
+      if (this.map.getLayer(RESERVATION_LINE_LAYER_ID + '-casing')) this.map.removeLayer(RESERVATION_LINE_LAYER_ID + '-casing')
+      if (this.map.getLayer(RESERVATION_LINE_LAYER_ID + '-transit-casing')) this.map.removeLayer(RESERVATION_LINE_LAYER_ID + '-transit-casing')
       if (this.map.getSource(RESERVATION_SOURCE_ID)) this.map.removeSource(RESERVATION_SOURCE_ID)
     } catch { /* map already gone */ }
   }
@@ -248,13 +252,13 @@ export class ReservationMapboxOverlay {
     const map = this.map
     if (map.getSource(RESERVATION_SOURCE_ID)) return
     map.addSource(RESERVATION_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-    // White casing under real transit paths so the colored lines read cleanly.
+    // White casing under all booking lines so colored cores read on busy tiles.
     map.addLayer({
-      id: RESERVATION_LINE_LAYER_ID + '-transit-casing',
+      id: RESERVATION_LINE_LAYER_ID + '-casing',
       type: 'line',
       source: RESERVATION_SOURCE_ID,
-      filter: ['all', ['==', ['get', 'transitPath'], true], ['!=', ['get', 'walk'], true]] as any,
-      paint: { 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.85 },
+      filter: ['!=', ['get', 'walk'], true] as any,
+      paint: { 'line-color': '#ffffff', 'line-width': 5.5, 'line-opacity': 0.72 },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
     map.addLayer({
@@ -262,11 +266,26 @@ export class ReservationMapboxOverlay {
       type: 'line',
       source: RESERVATION_SOURCE_ID,
       paint: {
-        'line-color': ['coalesce', ['get', 'color'], TRANSPORT_COLOR] as any,
-        'line-width': ['case', ['==', ['get', 'transitPath'], true], ['case', ['==', ['get', 'walk'], true], 3, 3.5], 2.5] as any,
-        // Confirmed = solid + 0.75; pending = dashed + 0.55; walks always dotted.
-        'line-opacity': ['case', ['==', ['get', 'transitPath'], true], 0.95, ['case', ['==', ['get', 'status'], 'confirmed'], 0.75, 0.55]] as any,
-        'line-dasharray': ['case', ['==', ['get', 'walk'], true], ['literal', [0.1, 2.5]], ['case', ['==', ['get', 'status'], 'confirmed'], ['literal', [1, 0]], ['literal', [3, 3]]]] as any,
+        'line-color': ['coalesce', ['get', 'color'], FALLBACK_COLOR] as any,
+        'line-width': ['case', ['==', ['get', 'transitPath'], true], ['case', ['==', ['get', 'walk'], true], 3, 3.5], 3] as any,
+        'line-opacity': ['case', ['==', ['get', 'transitPath'], true], 0.95, ['case', ['==', ['get', 'status'], 'confirmed'], 0.92, 0.65]] as any,
+        // Walks dotted; pending dashed; mode-specific rhythm when confirmed (color-not-only).
+        'line-dasharray': [
+          'case',
+          ['==', ['get', 'walk'], true], ['literal', [0.1, 2.5]],
+          ['!=', ['get', 'status'], 'confirmed'], ['literal', [3, 3]],
+          ['match', ['get', 'type'],
+            'train', ['literal', [2.2, 1.2]],
+            'bus', ['literal', [1.4, 1]],
+            'taxi', ['literal', [0.4, 1.4]],
+            'bicycle', ['literal', [1, 1]],
+            'ferry', ['literal', [2.5, 1.2, 0.4, 1.2]],
+            'cruise', ['literal', [2.8, 1.5]],
+            'transit', ['literal', [1.8, 0.9]],
+            'transport_other', ['literal', [0.7, 1.1]],
+            ['literal', [1, 0]],
+          ],
+        ] as any,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
@@ -324,7 +343,7 @@ export class ReservationMapboxOverlay {
             status: item.res.status ?? 'pending',
             transitPath: true,
             walk: seg.walk,
-            color: seg.walk ? '#64748b' : (seg.color || '#7c3aed'),
+            color: seg.walk ? '#64748b' : (seg.color || TYPE_META.transit.color),
           },
           geometry: {
             type: 'LineString' as const,
@@ -335,6 +354,7 @@ export class ReservationMapboxOverlay {
       // Prefer the real road route (car/bus/taxi/bicycle) over the straight arc.
       const road = this.roadRoutes.get(item.res.id)
       const lines = road && road.length >= 2 ? [road] : item.arcs
+      const typeColor = TYPE_META[item.type]?.color ?? FALLBACK_COLOR
       return lines.map(seg => ({
         type: 'Feature' as const,
         properties: {
@@ -343,7 +363,7 @@ export class ReservationMapboxOverlay {
           status: item.res.status ?? 'pending',
           transitPath: false,
           walk: false,
-          color: null as string | null,
+          color: typeColor,
         },
         geometry: {
           type: 'LineString' as const,

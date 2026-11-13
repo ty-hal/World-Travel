@@ -28,7 +28,7 @@ test('atlas bucket list tab', async ({ page }) => {
 })
 
 test('vacay calendar page loads', async ({ page }) => {
-  await page.goto('/vacay')
+  await page.goto('/calendar')
   await dismissSystemNotices(page)
   await expect(page.locator('body')).not.toContainText('Something went wrong')
 })

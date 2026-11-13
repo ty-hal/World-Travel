@@ -14,11 +14,18 @@ import { http, HttpResponse } from 'msw';
 
 // Mock Leaflet-dependent components
 const capturedMapViewProps: { current: Record<string, any> } = { current: {} };
+const MockMapView = (props: Record<string, any>) => {
+  capturedMapViewProps.current = props;
+  return React.createElement('div', { 'data-testid': 'map-view' });
+};
 vi.mock('../components/Map/MapView', () => ({
-  MapView: (props: Record<string, any>) => {
-    capturedMapViewProps.current = props;
-    return React.createElement('div', { 'data-testid': 'map-view' });
-  },
+  MapView: (props: Record<string, any>) => MockMapView(props),
+}));
+vi.mock('../components/Map/MapViewAuto', () => ({
+  MapViewAuto: (props: Record<string, any>) => MockMapView(props),
+}));
+vi.mock('../components/Map/MapScopeControl', () => ({
+  MapScopeControl: () => React.createElement('div', { 'data-testid': 'map-scope-control' }),
 }));
 
 vi.mock('react-leaflet', () => ({
@@ -562,13 +569,42 @@ describe('TripPlannerPage', () => {
       });
 
       const sidebarContainer = screen.getByTestId('day-plan-sidebar').parentElement!;
-      const collapseButton = sidebarContainer.previousElementSibling as HTMLElement;
-
+      const collapseButton = screen.getByRole('button', { name: 'Collapse itinerary panel' });
+      expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
       fireEvent.click(collapseButton);
 
       await waitFor(() => {
         expect(sidebarContainer).toHaveStyle('opacity: 0');
+        expect(sidebarContainer).toHaveAttribute('inert');
+        expect(screen.getByRole('button', { name: 'Expand itinerary panel' })).toHaveAttribute('aria-expanded', 'false');
       });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Expand itinerary panel' }));
+      await waitFor(() => {
+        expect(sidebarContainer).not.toHaveAttribute('inert');
+        expect(screen.getByRole('button', { name: 'Collapse itinerary panel' })).toHaveAttribute('aria-expanded', 'true');
+      });
+    });
+  });
+
+  it('FE-PAGE-PLANNER-058: right places panel can be collapsed without leaving hidden controls active', async () => {
+    vi.useFakeTimers();
+    seedTripStore({ id: 42 });
+    renderPlannerPage(42);
+    act(() => { vi.runAllTimers(); });
+    vi.useRealTimers();
+
+    const panel = await screen.findByTestId('places-sidebar');
+    const panelContainer = panel.closest('#trip-places-panel')!;
+    const toggleButton = screen.getByRole('button', { name: /places panel$/ });
+    if (toggleButton.getAttribute('aria-expanded') === 'false') fireEvent.click(toggleButton);
+    const collapseButton = screen.getByRole('button', { name: 'Collapse places panel' });
+    expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(collapseButton);
+
+    await waitFor(() => {
+      expect(panelContainer).toHaveAttribute('inert');
+      expect(screen.getByRole('button', { name: 'Expand places panel' })).toHaveAttribute('aria-expanded', 'false');
     });
   });
 
@@ -1668,8 +1704,8 @@ describe('TripPlannerPage', () => {
     });
   });
 
-  describe('FE-PAGE-PLANNER-037: onExpandedDaysChange covers mapPlaces hidden logic', () => {
-    it('calls onExpandedDaysChange to trigger mapPlaces hidden set computation', async () => {
+  describe('FE-PAGE-PLANNER-037: collapse/expand is sidebar-only (map pins stay)', () => {
+    it('keeps map places visible when expandedDayIds excludes a day', async () => {
       vi.useFakeTimers();
 
       const { day } = seedTripStore({ id: 42 });
@@ -1690,15 +1726,36 @@ describe('TripPlannerPage', () => {
         expect(screen.getByTestId('day-plan-sidebar')).toBeInTheDocument();
       });
 
-      // Set expandedDayIds — some day not in the set → place is hidden in mapPlaces
       await act(async () => {
         capturedDayPlanSidebarProps.current.onExpandedDaysChange?.(new Set([999]));
       });
 
-      // Then include the actual day → place is un-hidden
-      await act(async () => {
-        capturedDayPlanSidebarProps.current.onExpandedDaysChange?.(new Set([day.id]));
-      });
+      // Collapse/expand must not hide pins — map scope filters own that job.
+      expect(capturedMapViewProps.current.places).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: place.id })]),
+      );
     });
+  });
+
+  it('FE-PAGE-PLANNER-057: explains and restores a selected place hidden by the map filter', async () => {
+    vi.useFakeTimers();
+    const { day } = seedTripStore({ id: 42 });
+    const place = buildPlace({ id: 1, trip_id: 42, lat: 48.8566, lng: 2.3522 });
+    mockPlaceSelectionState.selectedPlaceId = place.id;
+    seedStore(useTripStore, {
+      places: [place],
+      assignments: { [String(day.id)]: [buildAssignment({ id: 10, day_id: day.id, place, order_index: 0 })] },
+      placesFilter: 'unplanned',
+    } as any);
+    renderPlannerPage(42);
+    act(() => { vi.runAllTimers(); });
+    vi.useRealTimers();
+
+    await screen.findByText('Selected place is filtered out (unplanned only).');
+    // Pin stays visible while outside the filter so list→map never loses focus.
+    expect(capturedMapViewProps.current.places).toEqual([place]);
+    fireEvent.click(screen.getByRole('button', { name: 'Show it' }));
+    expect(useTripStore.getState().placesFilter).toBe('all');
+    expect(capturedMapViewProps.current.places).toEqual([place]);
   });
 });

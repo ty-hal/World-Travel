@@ -441,6 +441,8 @@
 .trek-dash .col-emptystate .ic { width: 60px; height: 60px; border-radius: var(--r-md); display: grid; place-items: center; margin-bottom: 18px; background: var(--surface-2); color: var(--ink-3); }
 .trek-dash .col-emptystate h3 { font-size: 17px; font-weight: 600; color: var(--ink); margin: 0; }
 .trek-dash .col-emptystate p { font-size: 13.5px; color: var(--ink-3); margin: 7px 0 0; max-width: 320px; }
+.trek-dash .col-empty-clear { min-height: 44px; padding: 0 16px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--surface); color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.trek-dash .col-empty-clear:hover { background: var(--surface-2); color: var(--ink); }
 .trek-dash .col-loading { display: grid; place-items: center; padding: 96px 0; }
 .trek-dash .col-spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--line-2); border-top-color: var(--ink-2); animation: col-spin .7s linear infinite; }
 @keyframes col-spin { to { transform: rotate(360deg); } }
@@ -467,8 +469,9 @@
   .trek-dash .col-glass-btn span.txt { display: none; }
   .trek-dash .col-glass-btn { padding: 0; width: 38px; justify-content: center; }
   .trek-dash .col-glass-btn.has-count { width: auto; padding: 0 12px; }
-  .trek-dash .col-search input { width: 100%; }
-  .trek-dash .col-search { flex: 1; }
+  .trek-dash .col-toolbar-spacer { display: none; }
+  .trek-dash .col-search { flex: 1 0 100%; min-width: 0; }
+  .trek-dash .col-search input { box-sizing: border-box; width: 100%; }
   .trek-dash .col-mapwrap { height: calc(100dvh - 260px); min-height: 320px; }
 
   /* bigger touch targets on phones (visuals unchanged on desktop) */

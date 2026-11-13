@@ -40,6 +40,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const req = context.switchToHttp().getRequest<Request & { user?: { id: number } }>();
     const res = context.switchToHttp().getResponse<Response>();
 
+    // Personal food results must not survive disconnect in the response-replay table.
+    if (req.path === '/api/integrations/beli' || req.path?.startsWith('/api/integrations/beli/')) return next.handle();
+
     if (!MUTATING_METHODS.has(req.method)) return next.handle();
 
     const key = req.headers['x-idempotency-key'] as string | undefined;

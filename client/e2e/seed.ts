@@ -1,4 +1,3 @@
-import path from 'node:path'
 import type { APIRequestContext } from '@playwright/test'
 
 /**
@@ -15,17 +14,44 @@ import type { APIRequestContext } from '@playwright/test'
  *    settle-up) — the reader would see nothing new.
  *  - Two extra members exist so splits, avatars and sharing tiers render with
  *    real names instead of a lonely single-user state.
- *  - Dates sit ~2 months out so "upcoming" surfaces (What's Next, reservations)
- *    have something to show.
+ *  - Trip dates move forward from each capture run so itinerary, PTO, and
+ *    reservation surfaces stay upcoming instead of aging into stale examples.
  */
+
+const BASE_TRIP_START = '2026-09-12'
+
+function addDays(date: string, days: number): string {
+  const result = new Date(`${date}T00:00:00Z`)
+  result.setUTCDate(result.getUTCDate() + days)
+  return result.toISOString().slice(0, 10)
+}
+
+const nextTripStart = (() => {
+  const today = new Date().toISOString().slice(0, 10)
+  const day = new Date(`${today}T00:00:00Z`).getUTCDay()
+  return addDays(today, 35 + ((6 - day + 7) % 7))
+})()
+const DATE_SHIFT_DAYS = Math.round((Date.parse(`${nextTripStart}T00:00:00Z`) - Date.parse(`${BASE_TRIP_START}T00:00:00Z`)) / 86_400_000)
+
+function shiftSeedDates<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(shiftSeedDates) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shiftSeedDates(item)])) as T
+  }
+  if (typeof value === 'string') {
+    return value.replace(/\b\d{4}-\d{2}-\d{2}/g, date => addDays(date, DATE_SHIFT_DAYS)) as T
+  }
+  return value
+}
 
 const TRIP = {
   title: 'Autumn in Japan',
-  description: 'Two weeks chasing momiji season from Tokyo down to Kyoto.',
-  start_date: '2026-09-12',
-  end_date: '2026-09-21',
+  description: 'Twelve days following autumn color from Tokyo through Kyoto to Hiroshima.',
+  start_date: BASE_TRIP_START,
+  end_date: '2026-09-23',
   currency: 'JPY',
   reminder_days: 3,
+  cover_image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1800&q=85',
 }
 
 const MEMBERS = [
@@ -35,31 +61,42 @@ const MEMBERS = [
 
 /** Real coordinates — the map surfaces are a big part of what we're capturing. */
 const PLACES = [
-  { name: 'Senso-ji Temple', lat: 35.7148, lng: 139.7967, address: '2-3-1 Asakusa, Taito City, Tokyo',
+  { name: 'Senso-ji Temple', lat: 35.7148, lng: 139.7967, address: '2-3-1 Asakusa, Taito City, Tokyo', image_url: 'https://images.unsplash.com/photo-1731160762891-2919e8cb6fed?auto=format&fit=crop&w=900&q=80',
     description: "Tokyo's oldest temple, approached through the Nakamise shopping street.",
-    notes: 'Go before 08:00 — the gate is empty and the light is better.',
-    duration_minutes: 90, price: 0, currency: 'JPY', day: 0, place_time: '08:00' },
-  { name: 'teamLab Planets', lat: 35.6486, lng: 139.7900, address: '6-1-16 Toyosu, Koto City, Tokyo',
+    notes: 'Enter through Kaminarimon and walk Nakamise before the midday crowds.',
+    duration_minutes: 90, price: 0, currency: 'JPY', day: 1, place_time: '10:00' },
+  { name: 'teamLab Planets', lat: 35.6486, lng: 139.7900, address: '6-1-16 Toyosu, Koto City, Tokyo', image_url: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=900&q=80',
     description: 'Immersive digital art museum you walk through barefoot.',
     notes: 'Timed entry — book at least a week ahead.',
-    duration_minutes: 120, price: 3800, currency: 'JPY', day: 0, place_time: '14:00', end_time: '16:00' },
-  { name: 'Shibuya Crossing', lat: 35.6595, lng: 139.7005, address: 'Shibuya City, Tokyo',
+    duration_minutes: 120, price: 3800, currency: 'JPY', day: 1, place_time: '14:00', end_time: '16:00' },
+  { name: 'Meiji Jingu', lat: 35.6764, lng: 139.6993, address: '1-1 Yoyogikamizonocho, Shibuya City, Tokyo', image_url: 'https://images.unsplash.com/photo-1478436127897-769e1b3f0f36?auto=format&fit=crop&w=900&q=80',
+    description: 'A forested shrine and quiet morning walk in central Tokyo.', duration_minutes: 75, price: 0, currency: 'JPY', day: 2, place_time: '09:00', end_time: '10:15' },
+  { name: 'Shibuya Crossing', lat: 35.6595, lng: 139.7005, address: 'Shibuya City, Tokyo', image_url: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?auto=format&fit=crop&w=900&q=80',
     description: 'The scramble. Best viewed from the Shibuya Sky observation deck.',
-    duration_minutes: 45, price: 0, currency: 'JPY', day: 1, place_time: '10:30' },
-  { name: 'Meiji Jingu', lat: 35.6764, lng: 139.6993, address: '1-1 Yoyogikamizonocho, Shibuya City, Tokyo',
-    description: 'Forest shrine in the middle of the city.',
-    duration_minutes: 75, price: 0, currency: 'JPY', day: 1, place_time: '09:00', end_time: '10:15' },
-  { name: 'Fushimi Inari Taisha', lat: 34.9671, lng: 135.7727, address: '68 Fukakusa Yabunouchicho, Fushimi Ward, Kyoto',
+    duration_minutes: 45, price: 0, currency: 'JPY', day: 2, place_time: '10:30' },
+  { name: 'Owakudani Valley', lat: 35.2431, lng: 139.0194, address: 'Hakone, Kanagawa', image_url: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=900&q=80',
+    description: 'Volcanic vents, sulphur springs, and views across Lake Ashi.', duration_minutes: 120, price: 0, currency: 'JPY', day: 3, place_time: '10:30' },
+  { name: 'Lake Ashi cruise', lat: 35.2048, lng: 139.025, address: 'Hakone, Kanagawa', image_url: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?auto=format&fit=crop&w=900&q=80',
+    description: 'Cross the lake by sightseeing boat, with views of Mount Fuji on a clear day.', duration_minutes: 60, price: 1200, currency: 'JPY', day: 3, place_time: '13:30' },
+  { name: 'Kiyomizu-dera', lat: 34.9949, lng: 135.785, address: '1-294 Kiyomizu, Higashiyama Ward, Kyoto', image_url: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=900&q=80',
+    description: 'Walk the historic lanes to the wooden stage above Kyoto.', duration_minutes: 90, price: 400, currency: 'JPY', day: 4, place_time: '16:00' },
+  { name: 'Fushimi Inari Taisha', lat: 34.9671, lng: 135.7727, address: '68 Fukakusa Yabunouchicho, Fushimi Ward, Kyoto', image_url: 'https://images.unsplash.com/photo-1670707199207-ac6d444e6e83?auto=format&fit=crop&w=900&q=80',
     description: 'Thousands of vermilion torii gates climbing Mount Inari.',
-    notes: 'The crowds thin out after the first 20 minutes of climbing.',
-    duration_minutes: 150, price: 0, currency: 'JPY', day: 4, place_time: '07:30' },
-  { name: 'Arashiyama Bamboo Grove', lat: 35.0170, lng: 135.6716, address: 'Ukyo Ward, Kyoto',
+    notes: 'Go early; the crowds thin out after the first 20 minutes of climbing.',
+    duration_minutes: 150, price: 0, currency: 'JPY', day: 5, place_time: '07:30' },
+  { name: 'Arashiyama Bamboo Grove', lat: 35.0170, lng: 135.6716, address: 'Ukyo Ward, Kyoto', image_url: 'https://images.unsplash.com/photo-1527974361724-67fd5ebfd6d2?auto=format&fit=crop&w=900&q=80',
     description: 'Bamboo path leading to the Okochi Sanso villa gardens.',
-    duration_minutes: 60, price: 0, currency: 'JPY', day: 5, place_time: '08:00' },
-  { name: 'Nishiki Market', lat: 35.0050, lng: 135.7649, address: 'Nakagyo Ward, Kyoto',
+    duration_minutes: 60, price: 0, currency: 'JPY', day: 7, place_time: '08:00' },
+  { name: 'Nishiki Market', lat: 35.0050, lng: 135.7649, address: 'Nakagyo Ward, Kyoto', image_url: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=900&q=80',
     description: "Five covered blocks of food stalls — 'Kyoto's kitchen'.",
-    notes: 'Come hungry. Try the tamagoyaki.',
-    duration_minutes: 90, price: 2500, currency: 'JPY', day: 5, place_time: '11:00', end_time: '12:30' },
+    notes: 'Come hungry. Try tamagoyaki and yuba from the family-run stalls.',
+    duration_minutes: 90, price: 2500, currency: 'JPY', day: 7, place_time: '11:00', end_time: '12:30' },
+  { name: 'Kinkaku-ji', lat: 35.0394, lng: 135.7292, address: '1 Kinkakujicho, Kita Ward, Kyoto', image_url: 'https://images.unsplash.com/photo-1705579687385-7c9c2a1961b9?auto=format&fit=crop&w=900&q=80',
+    description: 'The Golden Pavilion reflected in its garden pond.', duration_minutes: 90, price: 500, currency: 'JPY', day: 6, place_time: '09:00' },
+  { name: 'Dotonbori', lat: 34.6687, lng: 135.5013, address: 'Chuo Ward, Osaka', image_url: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?auto=format&fit=crop&w=900&q=80',
+    description: 'A relaxed evening food crawl along Osaka’s canal.', duration_minutes: 120, price: 0, currency: 'JPY', day: 8, place_time: '18:00' },
+  { name: 'Hiroshima Peace Memorial Park', lat: 34.3955, lng: 132.4536, address: '1-2 Nakajimacho, Naka Ward, Hiroshima', image_url: 'https://images.unsplash.com/photo-1706430902291-c83ba35f6106?auto=format&fit=crop&w=900&q=80',
+    description: 'A quiet visit to the memorial and museum before the return to Tokyo.', duration_minutes: 150, price: 200, currency: 'JPY', day: 10, place_time: '09:30' },
 ]
 
 const EXPENSES = [
@@ -89,16 +126,37 @@ const TODOS = [
 
 const EXTRA_TRIPS = [
   {
+    title: 'Climate sampler: tropics, desert & highlands',
+    description: 'An open-dates route used to compare tropical, arid, and high-altitude destinations.',
+    start_date: null,
+    end_date: null,
+    currency: 'USD',
+    reminder_days: 0,
+    expenses: [],
+    bookings: [],
+    transports: [],
+    places: [
+      { name: 'Iquitos riverfront', lat: -3.75, lng: -73.25, address: 'Iquitos, Peru', description: 'Humid Amazon lowland.', duration_minutes: 60, price: 0, currency: 'USD' },
+      { name: 'Cusco historic center', lat: -13.5167, lng: -71.9781, address: 'Cusco, Peru', description: 'High-altitude Andean city.', duration_minutes: 90, price: 0, currency: 'USD' },
+      { name: 'Marrakech medina', lat: 31.6295, lng: -7.9811, address: 'Marrakech, Morocco', description: 'Hot, dry inland destination.', duration_minutes: 90, price: 0, currency: 'USD' },
+      { name: 'Reykjavik old harbor', lat: 64.1466, lng: -21.9426, address: 'Reykjavik, Iceland', description: 'Cool North Atlantic coast.', duration_minutes: 60, price: 0, currency: 'USD' },
+      { name: 'Pin needed for this idea', lat: null, lng: null, address: 'Destination not chosen', description: 'Missing coordinates should remain visibly incomplete.', duration_minutes: 0, price: 0, currency: 'USD' },
+    ],
+  },
+  {
     title: 'Mediterranean Highlights',
     description: 'Ten days through Rome, Florence, and Athens — ruins, food, and ferries.',
     start_date: '2026-05-04',
     end_date: '2026-05-13',
+    cover_image: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=1800&q=85',
     currency: 'EUR',
     reminder_days: 5,
     places: [
       { name: 'Colosseum', lat: 41.8902, lng: 12.4922, address: 'Piazza del Colosseo, Rome',
+        image_url: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=900&q=80',
         description: 'Roman amphitheatre — book the underground tour.', duration_minutes: 120, price: 24, currency: 'EUR', day: 0 },
       { name: 'Vatican Museums', lat: 41.9065, lng: 12.4536, address: 'Vatican City',
+        image_url: 'https://images.unsplash.com/photo-1531572753322-ad063cecc140?auto=format&fit=crop&w=900&q=80',
         description: 'Sistine Chapel and Raphael Rooms.', duration_minutes: 180, price: 20, currency: 'EUR', day: 1 },
       { name: 'Pompeii Archaeological Park', lat: 40.7489, lng: 14.4897, address: 'Pompeii',
         description: 'Frozen Roman city under Vesuvius.', duration_minutes: 240, price: 18, currency: 'EUR', day: 3 },
@@ -133,12 +191,15 @@ const EXTRA_TRIPS = [
     description: 'National parks loop: Zion, Bryce, and the Grand Canyon.',
     start_date: '2027-03-18',
     end_date: '2027-03-25',
+    cover_image: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?auto=format&fit=crop&w=1800&q=85',
     currency: 'USD',
     reminder_days: 7,
     places: [
       { name: 'Zion Canyon Scenic Drive', lat: 37.2982, lng: -113.0263, address: 'Zion National Park, UT',
+        image_url: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?auto=format&fit=crop&w=900&q=80',
         description: 'Shuttle up the canyon to the Narrows trailhead.', duration_minutes: 180, price: 0, currency: 'USD', day: 1 },
       { name: 'Grand Canyon South Rim', lat: 36.0544, lng: -112.1401, address: 'Grand Canyon Village, AZ',
+        image_url: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?auto=format&fit=crop&w=900&q=80',
         description: 'Mather Point at golden hour.', duration_minutes: 120, price: 35, currency: 'USD', day: 4 },
       { name: 'Bryce Amphitheater', lat: 37.593, lng: -112.1871, address: 'Bryce Canyon National Park, UT',
         description: 'Sunrise over the hoodoos.', duration_minutes: 90, price: 0, currency: 'USD', day: 3 },
@@ -154,40 +215,6 @@ const EXTRA_TRIPS = [
         confirmation_number: 'GC-MULE-04', status: 'confirmed', day: 4 },
     ],
     transports: [],
-  },
-  {
-    title: 'India Temple Circuit',
-    description: 'Rock-cut marvels and Mughal architecture across Maharashtra and Uttar Pradesh.',
-    start_date: '2027-11-08',
-    end_date: '2027-11-14',
-    currency: 'INR',
-    reminder_days: 14,
-    places: [
-      { name: 'Kailasa Temple', lat: 20.024, lng: 75.1793, address: 'Ellora Caves, Maharashtra',
-        description: 'Monolithic rock-cut temple dedicated to Shiva — Cave 16 at Ellora.',
-        duration_minutes: 180, price: 600, currency: 'INR', day: 0 },
-      { name: 'Taj Mahal', lat: 27.1751, lng: 78.0421, address: 'Agra, Uttar Pradesh',
-        description: 'Mughal mausoleum at dawn before the tour buses arrive.', duration_minutes: 150, price: 1100, currency: 'INR', day: 3 },
-    ],
-    expenses: [
-      { name: 'Aurangabad guesthouse', category: 'accommodation', total_price: 18500, currency: 'INR', expense_date: '2027-11-08' },
-      { name: 'Agra hotel', category: 'accommodation', total_price: 22000, currency: 'INR', expense_date: '2027-11-11' },
-    ],
-    bookings: [
-      { title: 'Ellora guided tour', type: 'activity', reservation_time: '2027-11-09T08:30:00', location: 'Ellora',
-        confirmation_number: 'ELL-1609', status: 'confirmed', day: 0 },
-      { title: 'Taj Mahal sunrise entry', type: 'activity', reservation_time: '2027-11-12T06:00:00', location: 'Agra',
-        confirmation_number: 'TAJ-0600', status: 'confirmed', day: 3 },
-    ],
-    transports: [
-      { title: 'AI 644 BOM → IXU', type: 'flight', reservation_time: '2027-11-08T07:15:00',
-        reservation_end_time: '2027-11-08T08:20:00', confirmation_number: 'AI644', status: 'confirmed',
-        location: 'Mumbai', metadata: { airline: 'Air India', flight_number: '644' },
-        endpoints: [
-          { role: 'from', sequence: 0, name: 'Mumbai', code: 'BOM', lat: 19.0896, lng: 72.8656, timezone: 'Asia/Kolkata', local_date: '2027-11-08', local_time: '07:15' },
-          { role: 'to', sequence: 1, name: 'Aurangabad', code: 'IXU', lat: 19.8627, lng: 75.3981, timezone: 'Asia/Kolkata', local_date: '2027-11-08', local_time: '08:20' },
-        ] },
-    ],
   },
 ]
 
@@ -209,41 +236,72 @@ const BUCKET_LIST = [
 
 /** Places pinned on wonder coordinates so Atlas marks them visited (within ~2 km). */
 const WONDER_TOUCHPOINTS = [
-  { name: 'Horyu-ji Temple', lat: 34.6147, lng: 135.7358, address: 'Nara, Japan', day: 6 },
-  { name: 'Itsukushima Shrine', lat: 34.2958, lng: 132.3199, address: 'Miyajima, Japan', day: 8 },
-  { name: 'Todai-ji Great Buddha', lat: 34.689, lng: 135.8398, address: 'Nara, Japan', day: 6 },
+  { name: 'Horyu-ji Temple', lat: 34.6147, lng: 135.7358, address: 'Nara, Japan', day: 8, place_time: '08:30', image_url: 'https://images.unsplash.com/photo-1478436127897-769e1b3f0f36?auto=format&fit=crop&w=900&q=80' },
+  { name: 'Itsukushima Shrine', lat: 34.2958, lng: 132.3199, address: 'Miyajima, Japan', day: 9, place_time: '09:00', image_url: 'https://images.unsplash.com/photo-1504109586057-7a2ae83d1338?auto=format&fit=crop&w=900&q=80' },
+  { name: 'Todai-ji Great Buddha', lat: 34.689, lng: 135.8398, address: 'Nara, Japan', day: 8, place_time: '11:00', image_url: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=900&q=80' },
 ]
 
 const JAPAN_BOOKINGS = [
-  { title: 'Hotel Granvia Kyoto', type: 'hotel', reservation_time: '2026-09-15T15:00:00', location: 'Kyoto Station',
-    confirmation_number: 'GRV-90214', status: 'confirmed', day: 3 },
-  { title: 'Gion kaiseki dinner', type: 'restaurant', reservation_time: '2026-09-16T18:30:00', location: 'Kyoto',
+  { title: 'Hotel Granvia Kyoto', type: 'hotel', reservation_time: '2026-09-16T15:00:00', location: 'Kyoto Station',
+    confirmation_number: 'GRV-90214', status: 'confirmed', day: 4 },
+  { title: 'Gion kaiseki dinner', type: 'restaurant', reservation_time: '2026-09-17T18:30:00', location: 'Kyoto',
     confirmation_number: 'GION-551', status: 'confirmed', day: 5 },
   { title: 'teamLab Planets entry', type: 'activity', reservation_time: '2026-09-13T14:00:00', location: 'Toyosu, Tokyo',
-    confirmation_number: 'TLP-1400', status: 'confirmed', day: 0 },
-  { title: 'Hakone ryokan stay', type: 'hotel', reservation_time: '2026-09-14T16:00:00', location: 'Hakone',
-    confirmation_number: 'HAK-7781', status: 'confirmed', day: 2 },
+    confirmation_number: 'TLP-1400', status: 'confirmed', day: 1 },
+  { title: 'Hakone ryokan stay', type: 'hotel', reservation_time: '2026-09-15T16:00:00', location: 'Hakone',
+    confirmation_number: 'HAK-7781', status: 'confirmed', day: 3 },
 ]
 
 const JAPAN_TRANSPORTS = [
   {
     title: 'Nozomi 204 Tokyo → Kyoto',
     type: 'train',
-    reservation_time: '2026-09-15T09:33:00',
-    reservation_end_time: '2026-09-15T11:44:00',
+    reservation_time: '2026-09-16T09:33:00',
+    reservation_end_time: '2026-09-16T11:44:00',
     confirmation_number: 'JR-N204',
     status: 'confirmed',
     location: 'Tokyo Station',
     metadata: { operator: 'JR Central', train_number: '204' },
     endpoints: [
-      { role: 'from', sequence: 0, name: 'Tokyo Station', code: 'TYO', lat: 35.6812, lng: 139.7671, timezone: 'Asia/Tokyo', local_date: '2026-09-15', local_time: '09:33' },
-      { role: 'to', sequence: 1, name: 'Kyoto Station', code: 'KYO', lat: 34.9858, lng: 135.7588, timezone: 'Asia/Tokyo', local_date: '2026-09-15', local_time: '11:44' },
+      { role: 'from', sequence: 0, name: 'Tokyo Station', code: 'TYO', lat: 35.6812, lng: 139.7671, timezone: 'Asia/Tokyo', local_date: '2026-09-16', local_time: '09:33' },
+      { role: 'to', sequence: 1, name: 'Kyoto Station', code: 'KYO', lat: 34.9858, lng: 135.7588, timezone: 'Asia/Tokyo', local_date: '2026-09-16', local_time: '11:44' },
+    ],
+  },
+  {
+    title: 'Nozomi 64 Hiroshima → Tokyo',
+    type: 'train',
+    reservation_time: '2026-09-22T16:30:00',
+    reservation_end_time: '2026-09-22T20:30:00',
+    confirmation_number: 'JR-N064',
+    status: 'confirmed',
+    location: 'Hiroshima Station',
+    metadata: { operator: 'JR Central', train_number: '64' },
+    endpoints: [
+      { role: 'from', sequence: 0, name: 'Hiroshima Station', code: 'HIJ', lat: 34.3977, lng: 132.4753, timezone: 'Asia/Tokyo', local_date: '2026-09-22', local_time: '16:30' },
+      { role: 'to', sequence: 1, name: 'Tokyo Station', code: 'TYO', lat: 35.6812, lng: 139.7671, timezone: 'Asia/Tokyo', local_date: '2026-09-22', local_time: '20:30' },
+    ],
+  },
+  {
+    title: 'LH717 HND → FRA',
+    type: 'flight',
+    reservation_time: '2026-09-23T10:50:00',
+    reservation_end_time: '2026-09-23T18:30:00',
+    confirmation_number: 'X7K2QP',
+    status: 'confirmed',
+    location: 'Tokyo Haneda',
+    metadata: { airline: 'Lufthansa', flight_number: 'LH717', departure_airport: 'HND', arrival_airport: 'FRA' },
+    endpoints: [
+      { role: 'from', sequence: 0, name: 'Tokyo Haneda', code: 'HND', lat: 35.5494, lng: 139.7798, timezone: 'Asia/Tokyo', local_date: '2026-09-23', local_time: '10:50' },
+      { role: 'to', sequence: 1, name: 'Frankfurt Airport', code: 'FRA', lat: 50.0379, lng: 8.5622, timezone: 'Europe/Berlin', local_date: '2026-09-23', local_time: '18:30' },
     ],
   },
 ]
 
 export interface SeedResult {
   tripId: number
+  journeyId: number
+  tripStartDate: string
+  todoDueDate: string
   tripIds: number[]
   memberIds: number[]
   dayIds: number[]
@@ -256,7 +314,7 @@ export interface SeedResult {
  *  a screenshot of an empty screen, which is worse than a loud crash. */
 async function call<T>(api: APIRequestContext, method: 'post' | 'put' | 'get' | 'patch',
                        path: string, body?: unknown): Promise<T> {
-  const res = await api[method](path, body === undefined ? {} : { data: body })
+  const res = await api[method](path, body === undefined ? {} : { data: shiftSeedDates(body) })
   if (!res.ok()) {
     throw new Error(`${method.toUpperCase()} ${path} → ${res.status()}\n${await res.text()}`)
   }
@@ -265,7 +323,7 @@ async function call<T>(api: APIRequestContext, method: 'post' | 'put' | 'get' | 
 
 export type ContextFactory = (token?: string) => Promise<APIRequestContext>
 
-type PlaceSeed = typeof PLACES[number] & { place_time?: string; end_time?: string }
+type PlaceSeed = Omit<typeof PLACES[number], 'day' | 'lat' | 'lng'> & { day?: number; lat?: number | null; lng?: number | null; place_time?: string; end_time?: string }
 type BookingSeed = typeof JAPAN_BOOKINGS[number]
 type TransportSeed = typeof JAPAN_TRANSPORTS[number]
 
@@ -281,7 +339,7 @@ async function seedPlacesOnTrip(
     const { place } = await call<{ place: { id: number } }>(
       api, 'post', `/api/trips/${tripId}/places`, payload)
     placeIds.push(place.id)
-    const dayId = dayIds[day]
+    const dayId = day == null ? undefined : dayIds[day]
     if (dayId) {
       const assigned = await call<{ assignment?: { id: number }; id?: number }>(
         api, 'post', `/api/trips/${tripId}/days/${dayId}/assignments`,
@@ -298,11 +356,31 @@ async function seedPlacesOnTrip(
   return placeIds
 }
 
+async function seedAccommodations(api: APIRequestContext, tripId: number, dayIds: number[]): Promise<void> {
+  const stays = [
+    { name: 'Hotel Gracery Shinjuku', address: '1-19-1 Kabukicho, Shinjuku City, Tokyo', lat: 35.6938, lng: 139.7034, start: 1, end: 2 },
+    { name: 'Hakone Kowakien Ten-yu', address: '1297 Ninotaira, Hakone, Kanagawa', lat: 35.2446, lng: 139.0472, start: 3, end: 3 },
+    { name: 'Hotel Granvia Kyoto', address: 'JR Kyoto Station, Kyoto', lat: 34.9858, lng: 135.7588, start: 4, end: 7 },
+    { name: 'Cross Hotel Osaka', address: '2-5-15 Shinsaibashisuji, Osaka', lat: 34.6692, lng: 135.5016, start: 8, end: 8 },
+    { name: 'Hotel Granvia Hiroshima', address: '1-5 Matsubaracho, Hiroshima', lat: 34.3974, lng: 132.4757, start: 9, end: 9 },
+    { name: 'Hotel Metropolitan Tokyo Marunouchi', address: '1-7-12 Marunouchi, Tokyo', lat: 35.6839, lng: 139.7672, start: 10, end: 11 },
+  ]
+  for (const stay of stays) {
+    const { place } = await call<{ place: { id: number } }>(api, 'post', `/api/trips/${tripId}/places`, {
+      name: stay.name, address: stay.address, lat: stay.lat, lng: stay.lng, category: 'accommodation',
+    })
+    await call(api, 'post', `/api/trips/${tripId}/accommodations`, {
+      place_id: place.id, start_day_id: dayIds[stay.start], end_day_id: dayIds[stay.end],
+      check_in: '15:00', check_out: '11:00', notes: 'Confirmed stay; check-in after 15:00.',
+    })
+  }
+}
+
 async function seedTripFiles(api: APIRequestContext, tripId: number): Promise<void> {
   const uploads: Array<{ name: string; mimeType: string; body: string; description: string }> = [
     { name: 'teamLab-tickets.pdf', mimeType: 'application/pdf', body: '%PDF-1.4 teamLab confirmation', description: 'teamLab Planets entry tickets' },
     { name: 'jr-pass-voucher.pdf', mimeType: 'application/pdf', body: '%PDF-1.4 JR Pass voucher', description: 'JR Pass exchange voucher' },
-    { name: 'travel-insurance.txt', mimeType: 'text/plain', body: 'Policy #WT-88291 — valid through 2026-10-01', description: 'Travel insurance policy summary' },
+    { name: 'travel-insurance.txt', mimeType: 'text/plain', body: 'Policy #WT-88291 — valid for the full trip', description: 'Travel insurance policy summary' },
   ]
   for (const file of uploads) {
     const res = await api.post(`/api/trips/${tripId}/files`, {
@@ -374,6 +452,21 @@ async function seedAtlasLandscape(api: APIRequestContext): Promise<void> {
   }
 }
 
+async function seedVacationDays(api: APIRequestContext): Promise<void> {
+  const dates: string[] = []
+  for (let date = BASE_TRIP_START; date <= TRIP.end_date; date = addDays(date, 1)) {
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay()
+    if (weekday > 0 && weekday < 6) dates.push(date)
+  }
+  const { years } = await call<{ years: number[] }>(api, 'get', '/api/addons/vacay/years')
+  for (const year of [...new Set(dates.map(date => Number(shiftSeedDates(date).slice(0, 4))))]) {
+    if (!years.includes(year)) await call(api, 'post', '/api/addons/vacay/years', { year })
+  }
+  for (const date of dates) {
+    await call(api, 'post', '/api/addons/vacay/entries/toggle', { date })
+  }
+}
+
 async function seedExtraTrip(
   api: APIRequestContext,
   memberIds: number[],
@@ -405,7 +498,7 @@ export async function seedDemoData(
 ): Promise<SeedResult> {
   // 1. Addons first — the Collections and Journey guards run ahead of auth, so
   //    every later call to those modules 403s until these are flipped.
-  for (const id of ['collections', 'packing', 'budget', 'atlas', 'vacay', 'mcp', 'documents', 'collab']) {
+  for (const id of ['collections', 'packing', 'budget', 'atlas', 'vacay', 'mcp', 'documents', 'collab', 'journey']) {
     await call(api, 'put', `/api/admin/addons/${id}`, { enabled: true })
   }
   await call(api, 'put', '/api/admin/bag-tracking', { enabled: true }).catch(() => {})
@@ -445,14 +538,16 @@ export async function seedDemoData(
 
   // 5. Places, then pin each onto its day.
   const placeIds = await seedPlacesOnTrip(api, tripId, dayIds, PLACES)
+  await seedAccommodations(api, tripId, dayIds)
   const wonderPlaceIds = await seedPlacesOnTrip(api, tripId, dayIds, WONDER_TOUCHPOINTS as PlaceSeed[])
   placeIds.push(...wonderPlaceIds)
+  const placeIdByName = new Map([...PLACES, ...WONDER_TOUCHPOINTS].map((place, index) => [place.name, placeIds[index]]))
 
   // 6. A day note, so the itinerary shows more than places.
-  if (dayIds[0]) {
-    await call(api, 'post', `/api/trips/${tripId}/days/${dayIds[0]}/notes`, {
-      text: 'Pick up the JR Pass at the airport counter before taking the train in.',
-      time: '08:15', icon: 'train',
+  if (dayIds[1]) {
+    await call(api, 'post', `/api/trips/${tripId}/days/${dayIds[1]}/notes`, {
+      text: 'Pick up the JR Pass at the airport counter before taking the train into the city.',
+      time: '09:15', icon: 'train',
     }).catch(() => {})
   }
 
@@ -506,17 +601,23 @@ export async function seedDemoData(
     ],
   }).catch(() => {})
 
+  // 10b. PTO overlaps the planned trip weekdays; Vacay derives the trip marker
+  //     from the trip dates, so the calendar shows both kinds of context.
+  await seedVacationDays(api)
+
   // 11. A collection, populated from the trip's own places.
   const collectionIds: number[] = []
   let collectionId: number | undefined
   try {
     const created = await call<{ id: number } | { collection: { id: number } }>(
       api, 'post', '/api/addons/collections',
-      { name: 'Kyoto shortlist', description: 'Places we want to reach on the second week.',
+      { name: 'Kyoto & Nara shortlist', description: 'Temples, gardens, and food stops for the Kansai leg.',
         color: '#ef4444', icon: 'MapPin' })
     collectionId = 'id' in created ? created.id : created.collection.id
     collectionIds.push(collectionId)
-    for (const placeId of placeIds.slice(4)) {
+    for (const name of ['Kiyomizu-dera', 'Fushimi Inari Taisha', 'Arashiyama Bamboo Grove', 'Nishiki Market', 'Kinkaku-ji', 'Horyu-ji Temple', 'Todai-ji Great Buddha']) {
+      const placeId = placeIdByName.get(name)
+      if (!placeId) continue
       await call(api, 'post', '/api/addons/collections/places/from-trip', {
         collection_id: collectionId, source_trip_id: tripId, source_place_id: placeId, force: true,
       }).catch(() => {})
@@ -528,7 +629,9 @@ export async function seedDemoData(
         color: '#2563eb', icon: 'Sparkles' })
     const tokyoId = 'id' in tokyo ? tokyo.id : tokyo.collection.id
     collectionIds.push(tokyoId)
-    for (const placeId of placeIds.slice(0, 4)) {
+    for (const name of ['Senso-ji Temple', 'teamLab Planets', 'Meiji Jingu', 'Shibuya Crossing']) {
+      const placeId = placeIdByName.get(name)
+      if (!placeId) continue
       await call(api, 'post', '/api/addons/collections/places/from-trip', {
         collection_id: tokyoId, source_trip_id: tripId, source_place_id: placeId, force: true,
       }).catch(() => {})
@@ -584,8 +687,10 @@ export async function seedDemoData(
 
   const pollRes = await api.post(`${collab}/polls`, {
     data: {
-      question: 'Which day should we keep free for Nara?',
-      options: ['Wed, Sep 16', 'Thu, Sep 17', 'Sat, Sep 19'],
+      question: 'Which day should we plan our Nara visit?',
+    options: [7, 8, 9].map(offset => new Intl.DateTimeFormat('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+      }).format(new Date(`${addDays(nextTripStart, offset)}T00:00:00Z`))),
       multiple: false,
     },
   })
@@ -600,16 +705,26 @@ export async function seedDemoData(
   }).catch(() => {})
 
   const conversation: Array<[string, string]> = [
-    ['admin', 'Flights are booked — we land at Haneda 08:25 on the 13th.'],
+    ['admin', 'Flights are booked — we land at Haneda the morning after departure.'],
     ['mira', 'Nice. Should we go straight to the hotel or drop bags and head out?'],
     ['jonas', 'Drop bags. I want to be at Senso-ji before the crowds.'],
-    ['admin', "Agreed. I've put it on day 1 with a note to go before 08:00."],
-    ['mira', 'Booked the teamLab slot for the 13th, 14:00. Tickets are in the Files tab.'],
+    ['admin', "Agreed. I've put it at 10:00 so we can drop our bags first."],
+    ['mira', 'Booked the teamLab slot for the afternoon. Tickets are in the Files tab.'],
   ]
   for (const [who, text] of conversation) {
     const ctx = who === 'admin' ? api : as(who)
     await ctx.post(`${collab}/messages`, { data: { text } }).catch(() => {})
   }
+
+  const journey = await call<{ id: number }>(api, 'post', '/api/journeys', {
+    title: 'Across Japan, Slowly', subtitle: 'A family trip from Tokyo to Hiroshima.', trip_ids: [tripId],
+  })
+  const journeyId = journey.id
+  for (const entry of [
+    { entry_date: '2026-09-13', entry_time: '10:00', title: 'First morning in Asakusa', location_name: 'Senso-ji, Tokyo', location_lat: 35.7148, location_lng: 139.7967, story: 'We left our bags at the hotel and reached the temple before the Nakamise street filled up. The lanterns were still glowing in the soft morning light.' },
+    { entry_date: '2026-09-17', entry_time: '07:30', title: 'Up through the torii gates', location_name: 'Fushimi Inari Taisha, Kyoto', location_lat: 34.9671, location_lng: 135.7727, story: 'An early start made the lower paths peaceful. We stopped at a small overlook and watched Kyoto wake up below us.' },
+    { entry_date: '2026-09-22', entry_time: '09:30', title: 'A quiet morning in Hiroshima', location_name: 'Peace Memorial Park, Hiroshima', location_lat: 34.3955, location_lng: 132.4536, story: 'We took our time at the memorial and museum, then walked beside the river before catching the train back to Tokyo.' },
+  ]) await call(api, 'post', `/api/journeys/${journeyId}/entries`, entry)
 
   for (const ctx of Object.values(members)) await ctx.dispose()
 
@@ -626,17 +741,29 @@ export async function seedDemoData(
   //
   //     Needs network. If the registry is unreachable the plugin screenshots are
   //     skipped loudly rather than silently captured in a misleading state.
+  // Cap each install — a hung registry fetch otherwise burns the whole seed timeout.
+  const pluginTimeout = 8_000
   for (const id of ['koffi', 'trip-doctor']) {
-    const res = await api.post('/api/admin/plugins/install', { data: { id } })
-    if (!res.ok()) {
-      console.log(`PLUGIN INSTALL FAILED ${id} → ${res.status()} ${await res.text()}`)
-      continue
+    try {
+      const res = await api.post('/api/admin/plugins/install', {
+        data: { id },
+        timeout: pluginTimeout,
+      })
+      if (!res.ok()) {
+        console.log(`PLUGIN INSTALL FAILED ${id} → ${res.status()} ${await res.text()}`)
+        continue
+      }
+      await api.post(`/api/admin/plugins/${id}/activate`, { data: {}, timeout: pluginTimeout })
+    } catch (err) {
+      console.log(`PLUGIN INSTALL FAILED ${id} → ${err instanceof Error ? err.message : err}`)
     }
-    await api.post(`/api/admin/plugins/${id}/activate`, { data: {} })
   }
 
   return {
     tripId,
+    journeyId,
+    tripStartDate: shiftSeedDates(BASE_TRIP_START),
+    todoDueDate: shiftSeedDates('2026-08-15'),
     tripIds: [tripId, ...extraTripIds],
     memberIds,
     dayIds,

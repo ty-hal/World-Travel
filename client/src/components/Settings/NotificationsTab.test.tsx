@@ -78,6 +78,11 @@ describe('NotificationsTab', () => {
     expect(headers.length).toBeGreaterThan(0);
   });
 
+  it('FE-COMP-NOTIFICATIONS-015: labels each preference toggle with its event and channel', async () => {
+    render(<NotificationsTab />);
+    expect(await screen.findByRole('button', { name: /Trip invitations.*In-App/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('FE-COMP-NOTIFICATIONS-004: shows "no channels" message when no channels are available', async () => {
     server.use(
       http.get('/api/notifications/preferences', () =>

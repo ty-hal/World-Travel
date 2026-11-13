@@ -63,6 +63,7 @@ const login: TranslationStrings = {
   'login.forgotPasswordBody':
     "Enter the email address you signed up with. If an account exists, we'll send a reset link.",
   'login.forgotPasswordSubmit': 'Send reset link',
+  'login.forgotPasswordSending': 'Sending reset link…',
   'login.forgotPasswordSentTitle': 'Check your email',
   'login.forgotPasswordSentBody':
     'If an account exists for that email, a reset link is on its way. It expires in 60 minutes.',

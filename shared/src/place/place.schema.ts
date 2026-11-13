@@ -64,6 +64,8 @@ export const placeSchema = z.object({
   website: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   transport_mode: z.string().nullable().optional(),
+  source_collection_id: z.number().nullable().optional(),
+  source_collection_place_id: z.number().nullable().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
   category: placeCategorySchema.optional(),

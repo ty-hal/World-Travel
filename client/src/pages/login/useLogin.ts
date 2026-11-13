@@ -33,7 +33,10 @@ interface AppConfig {
  */
 export function useLogin() {
   const { t } = useTranslation()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const location = useLocation()
+  const [mode, setMode] = useState<'login' | 'register'>(() =>
+    location.pathname === '/register' ? 'register' : 'login',
+  )
   const [username, setUsername] = useState<string>('')
   const [email, setEmail] = useState<string>('')
   const [password, setPassword] = useState<string>('')
@@ -63,8 +66,12 @@ export function useLogin() {
   const { login, register, demoLogin, completeMfaLogin, loadUser } = useAuthStore()
   const { setLanguageLocal, setLanguageTransient } = useSettingsStore()
   const navigate = useNavigate()
-  const location = useLocation()
   const noRedirect = !!(location.state as { noRedirect?: boolean } | null)?.noRedirect
+
+  useEffect(() => {
+    if (location.pathname === '/register') setMode('register')
+    else if (location.pathname === '/login') setMode('login')
+  }, [location.pathname])
 
   const redirectTarget = useMemo(() => {
     const params = new URLSearchParams(window.location.search)
@@ -114,11 +121,13 @@ export function useLogin() {
             sessionStorage.removeItem('oidc_redirect')
             navigate(savedRedirect, { replace: true })
           } else {
+            sessionStorage.removeItem('oidc_redirect')
             setError(data.error || t('login.oidcFailed'))
           }
         })
         .catch(() => {
           window.history.replaceState({}, '', '/login')
+          sessionStorage.removeItem('oidc_redirect')
           setError(t('login.oidcFailed'))
         })
         .finally(() => setIsLoading(false))

@@ -54,7 +54,7 @@ export default function CollectionMapPanel({
           <div className="col-map-group right">
             <div className="col-map-search">
               <Search size={15} />
-              <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t('collections.search')} />
+              <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t('collections.search')} aria-label={t('collections.search')} />
             </div>
           </div>
         </div>

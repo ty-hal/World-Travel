@@ -153,8 +153,9 @@ export default function AccountTab(): React.ReactElement {
     <>
       <Section title={t('settings.account')} icon={User}>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.username')}</label>
+          <label htmlFor="account-username" className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.username')}</label>
           <input
+            id="account-username"
             type="text"
             value={username}
             onChange={e => setUsername(e.target.value)}
@@ -162,8 +163,9 @@ export default function AccountTab(): React.ReactElement {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.email')}</label>
+          <label htmlFor="account-email" className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.email')}</label>
           <input
+            id="account-email"
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}

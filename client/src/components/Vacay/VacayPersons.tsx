@@ -68,7 +68,8 @@ export default function VacayPersons() {
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] font-medium uppercase tracking-wider text-content-faint">{t('vacay.persons')}</span>
         <button onClick={() => { setShowInvite(true); loadAvailable() }}
-          className="p-0.5 rounded transition-colors text-content-faint">
+          aria-label={t('vacay.inviteUser')}
+          className="min-w-11 min-h-11 flex items-center justify-center rounded transition-colors text-content-faint">
           <UserPlus size={14} />
         </button>
       </div>

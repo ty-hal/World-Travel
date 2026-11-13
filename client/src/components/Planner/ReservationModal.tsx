@@ -399,7 +399,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         {/* Title */}
         <div>
           <label className={labelClass}>{t('reservations.titleLabel')} *</label>
-          <input type="text" value={form.title} onChange={e => set('title', e.target.value)} required
+          <input type="text" aria-label={t('reservations.titleLabel')} value={form.title} onChange={e => set('title', e.target.value)} required
             placeholder={t('reservations.titlePlaceholder')} className={inputClass} />
         </div>
 
@@ -442,6 +442,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               <div style={{ flex: 1, minWidth: 0 }}>
                 <label className={labelClass}>{t('reservations.date')}</label>
                 <CustomDatePicker
+                  ariaLabel={t('reservations.date')}
                   value={(() => { const [d] = (form.reservation_time || '').split('T'); return d || '' })()}
                   onChange={d => {
                     const [, tm] = (form.reservation_time || '').split('T')
@@ -452,6 +453,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               <div style={{ flex: 1, minWidth: 0 }}>
                 <label className={labelClass}>{t('reservations.startTime')}</label>
                 <CustomTimePicker
+                  ariaLabel={t('reservations.startTime')}
                   value={(() => { const [, tm] = (form.reservation_time || '').split('T'); return tm || '' })()}
                   onChange={tm => {
                     const [d] = (form.reservation_time || '').split('T')
@@ -466,13 +468,14 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               <div style={{ flex: 1, minWidth: 0 }}>
                 <label className={labelClass}>{t('reservations.endDate')}</label>
                 <CustomDatePicker
+                  ariaLabel={t('reservations.endDate')}
                   value={form.end_date}
                   onChange={d => set('end_date', d || '')}
                 />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <label className={labelClass}>{t('reservations.endTime')}</label>
-                <CustomTimePicker value={form.reservation_end_time} onChange={v => set('reservation_end_time', v)} />
+                <CustomTimePicker ariaLabel={t('reservations.endTime')} value={form.reservation_end_time} onChange={v => set('reservation_end_time', v)} />
               </div>
             </div>
             {isEndBeforeStart && (
@@ -514,7 +517,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         {form.type !== 'hotel' && (
           <div>
             <label className={labelClass}>{t('reservations.locationAddress')}</label>
-            <AddressInput value={form.location} onChange={v => set('location', v)}
+            <AddressInput ariaLabel={t('reservations.locationAddress')} value={form.location} onChange={v => set('location', v)}
               placeholder={t('reservations.locationPlaceholder')} className={inputClass} />
           </div>
         )}
@@ -523,7 +526,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>{t('reservations.confirmationCode')}</label>
-            <input type="text" value={form.confirmation_number} onChange={e => set('confirmation_number', e.target.value)}
+            <input type="text" aria-label={t('reservations.confirmationCode')} value={form.confirmation_number} onChange={e => set('confirmation_number', e.target.value)}
               placeholder={t('reservations.confirmationPlaceholder')} className={inputClass} />
           </div>
           <div>
@@ -619,21 +622,21 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
             </div>
             <div>
               <label className={labelClass}>{t('reservations.locationAddress')}</label>
-              <AddressInput value={form.hotel_address} onChange={v => set('hotel_address', v)}
+              <AddressInput ariaLabel={t('reservations.locationAddress')} value={form.hotel_address} onChange={v => set('hotel_address', v)}
                 placeholder={t('reservations.locationPlaceholder')} className={inputClass} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={labelClass}>{t('reservations.meta.checkIn')}</label>
-                <CustomTimePicker value={form.meta_check_in_time} onChange={v => set('meta_check_in_time', v)} />
+                <CustomTimePicker ariaLabel={t('reservations.meta.checkIn')} value={form.meta_check_in_time} onChange={v => set('meta_check_in_time', v)} />
               </div>
               <div>
                 <label className={labelClass}>{t('reservations.meta.checkInUntil')}</label>
-                <CustomTimePicker value={form.meta_check_in_end_time} onChange={v => set('meta_check_in_end_time', v)} />
+                <CustomTimePicker ariaLabel={t('reservations.meta.checkInUntil')} value={form.meta_check_in_end_time} onChange={v => set('meta_check_in_end_time', v)} />
               </div>
               <div>
                 <label className={labelClass}>{t('reservations.meta.checkOut')}</label>
-                <CustomTimePicker value={form.meta_check_out_time} onChange={v => set('meta_check_out_time', v)} />
+                <CustomTimePicker ariaLabel={t('reservations.meta.checkOut')} value={form.meta_check_out_time} onChange={v => set('meta_check_out_time', v)} />
               </div>
             </div>
           </>
@@ -644,7 +647,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
           <label className={labelClass}>{t('reservations.urlLabel')}</label>
           <div className="relative">
             <Link2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted pointer-events-none" />
-            <input type="url" value={form.url} onChange={e => set('url', e.target.value)}
+            <input type="url" aria-label={t('reservations.urlLabel')} value={form.url} onChange={e => set('url', e.target.value)}
               placeholder={t('reservations.urlPlaceholder')} className={inputClass} style={{ paddingLeft: 34 }} />
           </div>
         </div>
@@ -652,7 +655,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         {/* Notes */}
         <div>
           <label className={labelClass}>{t('reservations.notes')}</label>
-          <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+          <textarea aria-label={t('reservations.notes')} value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
             placeholder={t('reservations.notesPlaceholder')}
             className={inputClass} style={{ resize: 'none', lineHeight: 1.5 }} />
         </div>

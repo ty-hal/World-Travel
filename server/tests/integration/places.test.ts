@@ -250,6 +250,22 @@ describe('Get place', () => {
       .set('Cookie', authCookie(user.id));
     expect(res.status).toBe(404);
   });
+
+  it('PLACE-AUTH-001 — a trip owner cannot use their trip path to access another trip place', async () => {
+    const { user: ownerA } = createUser(testDb);
+    const { user: ownerB } = createUser(testDb);
+    const tripA = createTrip(testDb, ownerA.id);
+    const tripB = createTrip(testDb, ownerB.id);
+    const placeB = createPlace(testDb, tripB.id, { name: 'Private place' });
+    const cookie = authCookie(ownerA.id);
+
+    const get = await request(app).get(`/api/trips/${tripA.id}/places/${placeB.id}`).set('Cookie', cookie);
+    const update = await request(app).put(`/api/trips/${tripA.id}/places/${placeB.id}`).set('Cookie', cookie).send({ name: 'Stolen' });
+    const remove = await request(app).delete(`/api/trips/${tripA.id}/places/${placeB.id}`).set('Cookie', cookie);
+
+    expect([get.status, update.status, remove.status]).toEqual([404, 404, 404]);
+    expect(testDb.prepare('SELECT name FROM places WHERE id = ?').get(placeB.id)).toEqual({ name: 'Private place' });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

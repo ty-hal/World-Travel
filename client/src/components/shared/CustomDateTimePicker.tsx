@@ -15,6 +15,7 @@ type CalendarView = 'days' | 'months' | 'years';
 interface CustomDatePickerProps {
   value: string;
   onChange: (value: string) => void;
+  ariaLabel?: string;
   placeholder?: string;
   style?: React.CSSProperties;
   compact?: boolean;
@@ -24,6 +25,7 @@ interface CustomDatePickerProps {
 export function CustomDatePicker({
   value,
   onChange,
+  ariaLabel,
   placeholder,
   style = {},
   compact = false,
@@ -266,7 +268,7 @@ export function CustomDatePicker({
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            aria-label={displayValue || placeholder || t('common.date')}
+            aria-label={ariaLabel || displayValue || placeholder || t('common.date')}
             aria-expanded={open}
             aria-haspopup="dialog"
             style={{

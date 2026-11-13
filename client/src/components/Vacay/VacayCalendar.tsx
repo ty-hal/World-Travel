@@ -1,75 +1,114 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
-import { useVacayStore } from '../../store/vacayStore'
-import { useTranslation } from '../../i18n'
-import { isWeekend } from './holidays'
-import { tripsApi } from '../../api/client'
-import VacayMonthCard from './VacayMonthCard'
-import { Building2, MousePointer2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { tripsApi } from '../../api/client';
+import { useTranslation } from '../../i18n';
+import { useVacayStore } from '../../store/vacayStore';
+import type { VacayEntry } from '../../types';
+import Modal from '../shared/Modal';
+import { isWeekend } from './holidays';
+import VacayMonthCard from './VacayMonthCard';
 
 export default function VacayCalendar() {
-  const { t } = useTranslation()
-  const { selectedYear, selectedUserId, entries, companyHolidays, toggleEntry, toggleCompanyHoliday, plan, users, holidays } = useVacayStore()
-  const [companyMode, setCompanyMode] = useState(false)
-  const [tripDates, setTripDates] = useState<Set<string>>(new Set())
+  const { t, locale } = useTranslation();
+  const {
+    selectedYear,
+    selectedUserId,
+    entries,
+    companyHolidays,
+    toggleEntry,
+    plan,
+    users,
+    holidays,
+  } = useVacayStore();
+  const [tripDates, setTripDates] = useState<Set<string>>(new Set());
+  const [selectedVacationDate, setSelectedVacationDate] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        const data = await tripsApi.list()
-        const dates = new Set<string>()
+        const data = await tripsApi.list();
+        const dates = new Set<string>();
         for (const trip of data.trips || []) {
-          if (!trip.start_date || !trip.end_date) continue
-          const start = new Date(trip.start_date + 'T00:00:00')
-          const end = new Date(trip.end_date + 'T00:00:00')
+          if (!trip.start_date || !trip.end_date) continue;
+          const start = new Date(trip.start_date + 'T00:00:00');
+          const end = new Date(trip.end_date + 'T00:00:00');
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const y = d.getFullYear()
+            const y = d.getFullYear();
             if (y === selectedYear) {
-              dates.add(`${y}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+              dates.add(`${y}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
             }
           }
         }
-        if (!cancelled) setTripDates(dates)
-      } catch { /* ignore */ }
-    })()
-    return () => { cancelled = true }
-  }, [selectedYear])
+        if (!cancelled) setTripDates(dates);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedYear]);
 
   const companyHolidaySet = useMemo(() => {
-    const s = new Set<string>()
-    companyHolidays.forEach(h => s.add(h.date))
-    return s
-  }, [companyHolidays])
+    const dates = new Set<string>();
+    companyHolidays.forEach((h) => dates.add(h.date));
+    return dates;
+  }, [companyHolidays]);
+  const companyHolidayLabels = useMemo(
+    () => new Map(companyHolidays.map((h) => [h.date, h.note || 'Company holiday'])),
+    [companyHolidays]
+  );
 
-  const entryMap = useMemo(() => {
-    const map = {}
-    entries.forEach(e => {
-      if (!map[e.date]) map[e.date] = []
-      map[e.date].push(e)
-    })
-    return map
-  }, [entries])
+  const entryMap = useMemo<Record<string, VacayEntry[]>>(() => {
+    const map: Record<string, VacayEntry[]> = {};
+    entries.forEach((e) => {
+      if (!map[e.date]) map[e.date] = [];
+      map[e.date].push(e);
+    });
+    return map;
+  }, [entries]);
 
-  const blockWeekends = plan?.block_weekends !== false
-  const weekendDays: number[] = plan?.weekend_days ? String(plan.weekend_days).split(',').map(Number) : [0, 6]
-  const companyHolidaysEnabled = plan?.company_holidays_enabled !== false
+  const blockWeekends = plan?.block_weekends !== false;
+  const weekendDays: number[] = plan?.weekend_days ? String(plan.weekend_days).split(',').map(Number) : [0, 6];
+  const companyHolidaysEnabled = plan?.company_holidays_enabled !== false;
 
-  const handleCellClick = useCallback(async (dateStr) => {
-    if (companyMode) {
-      if (!companyHolidaysEnabled) return
-      await toggleCompanyHoliday(dateStr)
-      return
-    }
-    if (blockWeekends && isWeekend(dateStr, weekendDays)) return
-    if (companyHolidaysEnabled && companyHolidaySet.has(dateStr)) return
-    await toggleEntry(dateStr, selectedUserId || undefined)
-  }, [companyMode, toggleEntry, toggleCompanyHoliday, companyHolidaySet, blockWeekends, companyHolidaysEnabled, selectedUserId])
+  const handleCellClick = useCallback(
+    async (dateStr: string) => {
+      if (entryMap[dateStr]?.length) {
+        setSelectedVacationDate(dateStr);
+        return;
+      }
+      if (blockWeekends && isWeekend(dateStr, weekendDays)) return;
+      if (companyHolidaysEnabled && companyHolidaySet.has(dateStr)) return;
+      await toggleEntry(dateStr, selectedUserId || undefined);
+    },
+    [
+      toggleEntry,
+      companyHolidaySet,
+      entryMap,
+      blockWeekends,
+      companyHolidaysEnabled,
+      selectedUserId,
+    ]
+  );
 
-  const selectedUser = users.find(u => u.id === selectedUserId)
+  const selectedVacationEntries = selectedVacationDate ? entryMap[selectedVacationDate] || [] : [];
+  const selectedUserHasVacation = selectedVacationEntries.some((entry) => entry.user_id === selectedUserId);
+  const selectedVacationDateLabel = selectedVacationDate
+    ? new Date(`${selectedVacationDate}T12:00:00`).toLocaleDateString(locale, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" style={{ paddingBottom: 'calc(var(--bottom-nav-h, 0px) + 80px)' }}>
+      <div
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        style={{ paddingBottom: 'calc(var(--bottom-nav-h, 0px) + 80px)' }}
+      >
         {Array.from({ length: 12 }, (_, i) => (
           <VacayMonthCard
             key={i}
@@ -77,10 +116,10 @@ export default function VacayCalendar() {
             month={i}
             holidays={holidays}
             companyHolidaySet={companyHolidaySet}
+            companyHolidayLabels={companyHolidayLabels}
             companyHolidaysEnabled={companyHolidaysEnabled}
             entryMap={entryMap}
             onCellClick={handleCellClick}
-            companyMode={companyMode}
             blockWeekends={blockWeekends}
             weekendDays={weekendDays}
             tripDates={tripDates}
@@ -89,26 +128,46 @@ export default function VacayCalendar() {
         ))}
       </div>
 
-      {/* Floating toolbar — lift above the mobile bottom nav (z-60). On desktop --bottom-nav-h is 0px. */}
-      <div className="sticky mt-3 sm:mt-4 flex items-center justify-center px-2" style={{ bottom: 'calc(var(--bottom-nav-h, 0px) + 12px)', zIndex: 61 }}>
-        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl border bg-surface-card border-edge" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+      <Modal
+        isOpen={selectedVacationDate !== null}
+        onClose={() => setSelectedVacationDate(null)}
+        title={selectedVacationDateLabel}
+        size="sm"
+        footer={
           <button
-            onClick={() => setCompanyMode(false)}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium transition-[background-color,color,border-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] border ${!companyMode ? 'bg-content text-surface-card border-transparent' : 'bg-transparent text-content-muted border-edge'}`}>
-            <MousePointer2 size={13} />
-            {selectedUser && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: selectedUser.color }} />}
-            {selectedUser ? selectedUser.username : t('vacay.modeVacation')}
+            type="button"
+            onClick={async () => {
+              if (!selectedVacationDate) return;
+              await toggleEntry(selectedVacationDate, selectedUserId || undefined);
+              setSelectedVacationDate(null);
+            }}
+            className="w-full rounded-lg bg-content px-4 py-2.5 text-sm font-semibold text-surface-card"
+          >
+            {t(selectedUserHasVacation ? 'vacay.remove' : 'vacay.add')} {t('vacay.modeVacation')}
           </button>
-          {companyHolidaysEnabled && (
-            <button
-              onClick={() => setCompanyMode(true)}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium transition-[background-color,color,border-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] border ${companyMode ? 'bg-[#d97706] text-[#fff] border-transparent' : 'bg-transparent text-content-muted border-edge'}`}>
-              <Building2 size={13} />
-              {t('vacay.modeCompany')}
-            </button>
-          )}
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-content-secondary">{t('vacay.plannedDays')}</p>
+          <div className="space-y-2">
+            {selectedVacationEntries.map((entry) => (
+              <div
+                key={entry.user_id}
+                className="flex items-center gap-2 rounded-lg border border-edge-secondary px-3 py-2.5"
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: entry.person_color || '#6366f1' }}
+                />
+                <span className="text-sm font-medium text-content">
+                  {entry.person_name || users.find((user) => user.id === entry.user_id)?.username || t('vacay.persons')}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      </Modal>
+
     </div>
-  )
+  );
 }

@@ -1,4 +1,6 @@
 import { db } from '../db/database';
+import { logError } from './auditLog';
+import { getSeasonalData } from './seasonalDataCache';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -12,6 +14,7 @@ export interface VacayPlan {
   holidays_region: string | null;
   company_holidays_enabled: number;
   carry_over_enabled: number;
+  weekend_days?: string;
 }
 
 export interface VacayUserYear {
@@ -54,11 +57,41 @@ export interface VacayHolidayCalendar {
 }
 
 // ---------------------------------------------------------------------------
-// Holiday cache (shared in-process)
+// Holiday payloads and provider limits are persisted so server restarts do not refetch them.
 // ---------------------------------------------------------------------------
 
-const holidayCache = new Map<string, { data: unknown; time: number }>();
-const CACHE_TTL = 24 * 60 * 60 * 1000;
+const HOLIDAY_CACHE_TTL = 180 * 24 * 60 * 60 * 1000;
+const COUNTRY_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+const TOURISM_HOLIDAY_CACHE_TTL = 365 * 24 * 60 * 60 * 1000;
+const TOURISM_HOLIDAY_COUNTRIES = ['IN', 'JO', 'KG', 'LB', 'LK', 'PK', 'PS', 'TH', 'UZ'] as const;
+type TourismHolidayRecord = { country?: string; date?: string; name?: string; local_name?: string; national?: boolean };
+
+async function tourismHolidayYear(year: string, country: string): Promise<{ data?: Holiday[]; error?: string; source: string }> {
+  const apiKey = process.env.TOURISM_API_KEY;
+  if (!apiKey) return { error: 'TourismAPI free key is not configured', source: 'TourismAPI' };
+  const countries = new Set<string>(TOURISM_HOLIDAY_COUNTRIES);
+  const cacheKey = `tourismapi:holidays:${year}:v1`;
+  const params = new URLSearchParams({ country: TOURISM_HOLIDAY_COUNTRIES.join(','), from: `${year}-01`, to: `${year}-12` });
+  const result = await getSeasonalData<Record<string, Holiday[]>>(
+    'tourismapi-holidays', cacheKey, TOURISM_HOLIDAY_CACHE_TTL,
+    `https://api.tourismapi.com/v1/holidays?${params}`,
+    value => {
+      const rows = (value as { data?: TourismHolidayRecord[] })?.data;
+      if (!Array.isArray(rows)) throw new Error('TourismAPI returned an invalid holiday table');
+      const calendars: Record<string, Holiday[]> = {};
+      for (const row of rows) {
+        if (!row.country || !countries.has(row.country) || !row.date?.startsWith(`${year}-`) || !row.national || !row.name) continue;
+        (calendars[row.country] ||= []).push({ date: row.date, name: row.name, localName: row.local_name || row.name, global: true, counties: null });
+      }
+      if (!Object.keys(calendars).length) throw new Error('TourismAPI returned no national holiday records for the requested year');
+      return calendars;
+    }, 'json', 15_000, { 'X-API-Key': apiKey },
+  );
+  const data = result.data?.[country];
+  return data?.length
+    ? { data, source: 'TourismAPI' }
+    : { error: result.error || `TourismAPI has no national holiday records for ${country} in ${year}`, source: 'TourismAPI' };
+}
 
 // ---------------------------------------------------------------------------
 // Color palette for auto-assign
@@ -127,9 +160,9 @@ export function shiftOwnerEntriesForTripWindow(
 export function getPlanUsers(planId: number): VacayUser[] {
   const plan = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan | undefined;
   if (!plan) return [];
-  const owner = db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(plan.owner_id) as VacayUser;
+  const owner = db.prepare('SELECT id, COALESCE(display_name, username) AS username, email FROM users WHERE id = ?').get(plan.owner_id) as VacayUser;
   const members = db.prepare(`
-    SELECT u.id, u.username, u.email FROM vacay_plan_members m
+    SELECT u.id, COALESCE(u.display_name, u.username) AS username, u.email FROM vacay_plan_members m
     JOIN users u ON m.user_id = u.id
     WHERE m.plan_id = ? AND m.status = 'accepted'
   `).all(planId) as VacayUser[];
@@ -167,13 +200,8 @@ export async function applyHolidayCalendars(planId: number): Promise<void> {
     const region = cal.region.includes('-') ? cal.region : null;
     for (const { year } of years) {
       try {
-        const cacheKey = `${year}-${country}`;
-        let holidays = holidayCache.get(cacheKey)?.data as Holiday[] | undefined;
-        if (!holidays) {
-          const resp = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${country}`);
-          holidays = await resp.json() as Holiday[];
-          holidayCache.set(cacheKey, { data: holidays, time: Date.now() });
-        }
+        const { data: holidays } = await getHolidays(String(year), country);
+        if (!holidays) continue;
         const hasRegions = holidays.some((h: Holiday) => h.counties && h.counties.length > 0);
         if (hasRegions && !region) continue;
         for (const h of holidays) {
@@ -368,8 +396,9 @@ export function sendInvite(planId: number, inviterId: number, inviterUsername: s
 
   // Notify invited user
   import('../services/notificationService').then(({ send }) => {
-    send({ event: 'vacay_invite', actorId: inviterId, scope: 'user', targetId: targetUserId, params: { actor: inviterEmail, planId: String(planId) } }).catch(() => {});
-  });
+    send({ event: 'vacay_invite', actorId: inviterId, scope: 'user', targetId: targetUserId, params: { actor: inviterEmail, planId: String(planId) } }).catch((err: unknown) =>
+      logError(`Vacay invite notification failed plan=${planId} recipient=${targetUserId}: ${err instanceof Error ? err.message : err}`));
+  }).catch((err: unknown) => logError(`Vacay invite notification module failed plan=${planId}: ${err instanceof Error ? err.message : err}`));
 
   return {};
 }
@@ -474,7 +503,7 @@ export function dissolvePlan(userId: number, socketId: string | undefined): void
 
 export function getAvailableUsers(userId: number, planId: number) {
   return db.prepare(`
-    SELECT u.id, u.username, u.email FROM users u
+    SELECT u.id, COALESCE(u.display_name, u.username) AS username, u.email FROM users u
     WHERE u.id != ?
     AND u.id NOT IN (SELECT user_id FROM vacay_plan_members WHERE plan_id = ?)
     AND u.id NOT IN (SELECT user_id FROM vacay_plan_members WHERE status = 'accepted')
@@ -555,7 +584,7 @@ export function deleteYear(planId: number, year: number, socketId: string | unde
 
 export function getEntries(planId: number, year: string) {
   const entries = db.prepare(`
-    SELECT e.*, u.username as person_name, COALESCE(c.color, '#6366f1') as person_color
+    SELECT e.*, COALESCE(u.display_name, u.username) as person_name, COALESCE(c.color, '#6366f1') as person_color
     FROM vacay_entries e
     JOIN users u ON e.user_id = u.id
     LEFT JOIN vacay_user_colors c ON c.user_id = e.user_id AND c.plan_id = e.plan_id
@@ -592,6 +621,55 @@ export function toggleCompanyHoliday(planId: number, date: string, note: string 
   }
 }
 
+function weekdayDate(year: number, month: number, weekday: number, occurrence: number): string {
+  if (occurrence === 5) {
+    const last = new Date(Date.UTC(year, month + 1, 0));
+    last.setUTCDate(last.getUTCDate() - (last.getUTCDay() - weekday + 7) % 7);
+    return last.toISOString().slice(0, 10);
+  }
+  const first = new Date(Date.UTC(year, month, 1));
+  const day = 1 + (weekday - first.getUTCDay() + 7) % 7 + (occurrence - 1) * 7;
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function observedDate(year: number, month: number, day: number): string {
+  const date = new Date(Date.UTC(year, month, day));
+  if (date.getUTCDay() === 6) date.setUTCDate(date.getUTCDate() - 1);
+  else if (date.getUTCDay() === 0) date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+export function addUsBankHolidays(planId: number, year: number, socketId: string | undefined): { added: number } {
+  const holidays = [
+    { date: observedDate(year, 0, 1), note: "New Year's Day" },
+    { date: weekdayDate(year, 0, 1, 3), note: 'Martin Luther King Jr. Day' },
+    { date: weekdayDate(year, 1, 1, 3), note: "Washington's Birthday" },
+    { date: weekdayDate(year, 4, 1, 5), note: 'Memorial Day' },
+    { date: observedDate(year, 5, 19), note: 'Juneteenth' },
+    { date: observedDate(year, 6, 4), note: 'Independence Day' },
+    { date: weekdayDate(year, 8, 1, 1), note: 'Labor Day' },
+    { date: weekdayDate(year, 9, 1, 2), note: 'Columbus Day' },
+    { date: observedDate(year, 10, 11), note: 'Veterans Day' },
+    { date: weekdayDate(year, 10, 4, 4), note: 'Thanksgiving Day' },
+    { date: observedDate(year, 11, 25), note: 'Christmas Day' },
+  ].filter(holiday => holiday.date.startsWith(`${year}-`));
+  const insert = db.prepare('INSERT OR IGNORE INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)');
+  const removeVacation = db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND date = ?');
+  const add = db.transaction(() => {
+    let added = 0;
+    for (const holiday of holidays) {
+      const result = insert.run(planId, holiday.date, holiday.note);
+      if (result.changes) {
+        added += result.changes;
+        removeVacation.run(planId, holiday.date);
+      }
+    }
+    return added;
+  })();
+  notifyPlanUsers(planId, socketId);
+  return { added: add };
+}
+
 // ---------------------------------------------------------------------------
 // Stats
 // ---------------------------------------------------------------------------
@@ -599,10 +677,36 @@ export function toggleCompanyHoliday(planId: number, date: string, note: string 
 export function getStats(planId: number, year: number) {
   const plan = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan | undefined;
   const carryOverEnabled = plan ? !!plan.carry_over_enabled : true;
+  const weekendDays = plan?.weekend_days
+    ? [...new Set(plan.weekend_days.split(',').map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6))]
+    : [0, 6];
   const users = getPlanUsers(planId);
 
   return users.map(u => {
-    const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(u.id, planId, `${year}-%`) as { count: number }).count;
+    const usedDates = new Set((db.prepare(
+      'SELECT date FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date BETWEEN ? AND ?'
+    ).all(u.id, planId, `${year}-01-01`, `${year}-12-31`) as { date: string }[]).map(row => row.date));
+    const trips = db.prepare(`
+      SELECT DISTINCT t.start_date, t.end_date FROM trips t
+      LEFT JOIN trip_members m ON m.trip_id = t.id AND m.user_id = ?
+      WHERE (t.user_id = ? OR m.user_id IS NOT NULL)
+        AND t.start_date IS NOT NULL AND t.end_date IS NOT NULL
+        AND t.start_date <= ? AND t.end_date >= ?
+    `).all(u.id, u.id, `${year}-12-31`, `${year}-01-01`) as { start_date: string; end_date: string }[];
+    for (const trip of trips) {
+      const start = new Date(`${trip.start_date.slice(0, 10)}T00:00:00Z`);
+      const end = new Date(`${trip.end_date.slice(0, 10)}T00:00:00Z`);
+      for (let date = start; date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+        if (date.getUTCFullYear() === year) usedDates.add(date.toISOString().slice(0, 10));
+      }
+    }
+    const companyHolidayDates = new Set((db.prepare(
+      'SELECT date FROM vacay_company_holidays WHERE plan_id = ? AND date BETWEEN ? AND ?'
+    ).all(planId, `${year}-01-01`, `${year}-12-31`) as { date: string }[]).map(row => row.date));
+    const used = [...usedDates].filter(date => {
+      const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+      return !weekendDays.includes(weekday) && !companyHolidayDates.has(date);
+    }).length;
     const config = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(u.id, planId, year) as VacayUserYear | undefined;
     const vacationDays = config ? config.vacation_days : 30;
     const carriedOver = carryOverEnabled ? (config ? config.carried_over : 0) : 0;
@@ -682,33 +786,55 @@ export function getPlanData(userId: number) {
 }
 
 // ---------------------------------------------------------------------------
-// Holidays (nager.at proxy with cache)
+// Holidays (cached provider adapters)
 // ---------------------------------------------------------------------------
 
 export async function getCountries(): Promise<{ data?: unknown; error?: string }> {
-  const cacheKey = 'countries';
-  const cached = holidayCache.get(cacheKey);
-  if (cached && Date.now() - cached.time < CACHE_TTL) return { data: cached.data };
-  try {
-    const resp = await fetch('https://date.nager.at/api/v3/AvailableCountries');
-    const data = await resp.json();
-    holidayCache.set(cacheKey, { data, time: Date.now() });
-    return { data };
-  } catch {
-    return { error: 'Failed to fetch countries' };
-  }
+  return getSeasonalData('nager-date', 'nager:countries:v3', COUNTRY_CACHE_TTL,
+    'https://date.nager.at/api/v3/AvailableCountries', value => value);
 }
 
-export async function getHolidays(year: string, country: string): Promise<{ data?: unknown; error?: string }> {
-  const cacheKey = `${year}-${country}`;
-  const cached = holidayCache.get(cacheKey);
-  if (cached && Date.now() - cached.time < CACHE_TTL) return { data: cached.data };
-  try {
-    const resp = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${country}`);
-    const data = await resp.json();
-    holidayCache.set(cacheKey, { data, time: Date.now() });
-    return { data };
-  } catch {
-    return { error: 'Failed to fetch holidays' };
+export async function getHolidays(year: string, country: string): Promise<{ data?: Holiday[]; error?: string; source?: string }> {
+  const nagerCountry = ({ EL: 'GR', UK: 'GB' } as Record<string, string>)[country] || country;
+  if (!/^\d{4}$/.test(year) || !/^[A-Z]{2}$/.test(nagerCountry)) return { error: 'Invalid holiday year or country code' };
+  if ((TOURISM_HOLIDAY_COUNTRIES as readonly string[]).includes(nagerCountry)) return tourismHolidayYear(year, nagerCountry);
+  if (nagerCountry === 'IT') {
+    const cacheKey = `openholidays:holidays:IT:${year}:v1`;
+    const result = await getSeasonalData<Holiday[]>(
+      'open-holidays', cacheKey, HOLIDAY_CACHE_TTL,
+      `https://openholidaysapi.org/PublicHolidays?countryIsoCode=IT&languageIsoCode=EN&validFrom=${year}-01-01&validTo=${year}-12-31`,
+      value => {
+        if (!Array.isArray(value)) throw new Error('Unexpected OpenHolidays response');
+        return value.map((item: Record<string, unknown>) => {
+          const names = Array.isArray(item.name) ? item.name as Array<{ language?: string; text?: string }> : [];
+          const name = names.find(entry => entry.language?.toUpperCase() === 'EN')?.text ?? names[0]?.text;
+          return {
+            date: item.startDate,
+            name,
+            localName: name,
+            global: item.nationwide === true,
+            counties: Array.isArray(item.subdivisions)
+              ? (item.subdivisions as Array<{ code?: string }>).flatMap(subdivision => subdivision.code ? [subdivision.code] : [])
+              : null,
+          };
+        }) as Holiday[];
+      },
+    );
+    return { ...result, source: 'OpenHolidays' };
   }
+  if (nagerCountry !== country) {
+    db.prepare('DELETE FROM seasonal_data_cache WHERE cache_key = ? AND payload_json LIKE ?')
+      .run(`nager:holidays:${country}:${year}:v4`, '%"__seasonalError"%');
+  }
+  return getSeasonalData<Holiday[]>('nager-date', `nager:holidays:${nagerCountry}:${year}:v4`, HOLIDAY_CACHE_TTL,
+    `https://nagerholidays.com/api/v4/Holidays/${nagerCountry}/${year}`, value => {
+      if (!Array.isArray(value)) throw new Error('Unexpected holiday response');
+      return value.map((item: Record<string, unknown>) => ({
+        date: item.date,
+        name: item.name ?? item.localName,
+        localName: item.localName ?? item.name,
+        global: item.nationalHoliday ?? item.global,
+        counties: item.subdivisionCodes !== undefined ? item.subdivisionCodes : item.counties,
+      })) as Holiday[];
+    });
 }

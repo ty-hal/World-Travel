@@ -115,7 +115,12 @@ export function getSharedTripData(token: string): Record<string, any> | null {
   if (!trip) return null;
 
   // Days with assignments
-  const days = db.prepare('SELECT * FROM days WHERE trip_id = ? ORDER BY day_number ASC').all(tripId) as any[];
+  // A share link is a deliberately small public projection, not an authenticated
+  // trip response with a few sections hidden afterwards. Keep private notes,
+  // confirmations, split data and member records out of the query entirely.
+  const days = db.prepare(
+    'SELECT id, trip_id, day_number, date, title FROM days WHERE trip_id = ? ORDER BY day_number ASC'
+  ).all(tripId) as any[];
   const dayIds = days.map(d => d.id);
 
   let assignments: Record<number, any[]> = {};
@@ -123,11 +128,12 @@ export function getSharedTripData(token: string): Record<string, any> | null {
   if (dayIds.length > 0) {
     const ph = dayIds.map(() => '?').join(',');
     const allAssignments = db.prepare(`
-      SELECT da.*, p.id as place_id, p.name as place_name, p.description as place_description,
+      SELECT da.id, da.day_id, da.place_id, da.order_index, da.created_at,
+        p.id as place_id, p.name as place_name, p.description as place_description,
         p.lat, p.lng, p.address, p.category_id, p.price, p.currency as place_currency,
         COALESCE(da.assignment_time, p.place_time) as place_time,
         COALESCE(da.assignment_end_time, p.end_time) as end_time,
-        p.duration_minutes, p.notes as place_notes, p.image_url, p.transport_mode,
+        p.duration_minutes, p.image_url, p.transport_mode,
         c.name as category_name, c.color as category_color, c.icon as category_icon
       FROM day_assignments da
       JOIN places p ON da.place_id = p.id
@@ -143,7 +149,7 @@ export function getSharedTripData(token: string): Record<string, any> | null {
     for (const a of allAssignments as any[]) {
       if (!byDay[a.day_id]) byDay[a.day_id] = [];
       byDay[a.day_id].push({
-        id: a.id, day_id: a.day_id, order_index: a.order_index, notes: a.notes,
+        id: a.id, day_id: a.day_id, order_index: a.order_index,
         place: {
           id: a.place_id, name: a.place_name, description: a.place_description,
           lat: a.lat, lng: a.lng, address: a.address, category_id: a.category_id,
@@ -156,7 +162,10 @@ export function getSharedTripData(token: string): Record<string, any> | null {
     }
     assignments = byDay;
 
-    const allNotes = db.prepare(`SELECT * FROM day_notes WHERE day_id IN (${ph}) ORDER BY sort_order ASC, created_at ASC`).all(...dayIds);
+    const allNotes = db.prepare(`
+      SELECT id, day_id, text, time, icon, sort_order, created_at
+      FROM day_notes WHERE day_id IN (${ph}) ORDER BY sort_order ASC, created_at ASC
+    `).all(...dayIds);
     const notesByDay: Record<number, any[]> = {};
     for (const n of allNotes as any[]) {
       if (!notesByDay[n.day_id]) notesByDay[n.day_id] = [];
@@ -167,13 +176,21 @@ export function getSharedTripData(token: string): Record<string, any> | null {
 
   // Places
   const places = (db.prepare(`
-    SELECT p.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+    SELECT p.id, p.trip_id, p.name, p.description, p.lat, p.lng, p.address,
+      p.category_id, p.price, p.currency, p.reservation_status, p.reservation_datetime,
+      p.place_time, p.end_time, p.duration_minutes, p.image_url, p.google_place_id,
+      p.google_ftid, p.website, p.phone, p.transport_mode, p.created_at, p.updated_at,
+      c.name as category_name, c.color as category_color, c.icon as category_icon
     FROM places p LEFT JOIN categories c ON p.category_id = c.id
     WHERE p.trip_id = ? ORDER BY p.created_at DESC
   `).all(tripId) as any[]).map((p) => ({ ...p, image_url: rewritePlacePhotoUrl(p.image_url, token) }));
 
   // Reservations — include per-day positions so the client can render the same order as the planner
-  const reservations = db.prepare('SELECT * FROM reservations WHERE trip_id = ? ORDER BY reservation_time ASC').all(tripId) as any[];
+  const reservations = db.prepare(`
+    SELECT id, trip_id, day_id, end_day_id, place_id, assignment_id, title,
+      accommodation_id, reservation_time, reservation_end_time, location, status, type, created_at
+    FROM reservations WHERE trip_id = ? ORDER BY reservation_time ASC
+  `).all(tripId) as any[];
 
   const dayPositions = db.prepare(`
     SELECT rdp.reservation_id, rdp.day_id, rdp.position
@@ -193,20 +210,28 @@ export function getSharedTripData(token: string): Record<string, any> | null {
 
   // Accommodations
   const accommodations = db.prepare(`
-    SELECT a.*, p.name as place_name, p.address as place_address, p.lat as place_lat, p.lng as place_lng
+    SELECT a.id, a.trip_id, a.place_id, a.start_day_id, a.end_day_id,
+      a.check_in, a.check_in_end, a.check_out, a.created_at,
+      p.name as place_name, p.address as place_address, p.lat as place_lat, p.lng as place_lng
     FROM day_accommodations a JOIN places p ON a.place_id = p.id
     WHERE a.trip_id = ?
   `).all(tripId);
 
   // Packing — a public viewer is neither owner nor recipient, so only Common items
   // may surface; never a co-member's private/personal packing items (#858).
-  const packing = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? AND is_private = 0 ORDER BY sort_order ASC').all(tripId);
+  const packing = db.prepare(`
+    SELECT id, trip_id, name, checked, category, sort_order, created_at
+    FROM packing_items WHERE trip_id = ? AND is_private = 0 ORDER BY sort_order ASC
+  `).all(tripId);
 
   // Budget
-  const budget = db.prepare('SELECT * FROM budget_items WHERE trip_id = ? ORDER BY category ASC').all(tripId);
+  const budget = db.prepare(`
+    SELECT id, trip_id, category, name, total_price, persons, days, sort_order, created_at
+    FROM budget_items WHERE trip_id = ? ORDER BY category ASC
+  `).all(tripId);
 
   // Categories
-  const categories = db.prepare('SELECT * FROM categories').all();
+  const categories = db.prepare('SELECT id, name, color, icon FROM categories').all();
 
   const permissions = {
     share_map: !!shareRow.share_map,
@@ -218,7 +243,11 @@ export function getSharedTripData(token: string): Record<string, any> | null {
 
   // Collab messages (only if owner chose to share)
   const collabMessages = permissions.share_collab
-    ? db.prepare('SELECT m.*, u.username, u.avatar FROM collab_messages m JOIN users u ON m.user_id = u.id WHERE m.trip_id = ? AND m.deleted = 0 ORDER BY m.created_at').all(tripId)
+    ? db.prepare(`
+      SELECT m.id, m.trip_id, m.user_id, m.text, m.reply_to, m.created_at, u.username
+      FROM collab_messages m JOIN users u ON m.user_id = u.id
+      WHERE m.trip_id = ? AND m.deleted = 0 ORDER BY m.created_at
+    `).all(tripId)
     : [];
 
   // Display currency the share owner sees in their Costs view. A public viewer has

@@ -4107,6 +4107,66 @@ function runMigrations(db: Database.Database): void {
          VALUES ('journey', 'Journey', 'Trip tracking & travel journal — check-ins, photos, daily stories', 'global', 'Compass', 0, '{}', 35)`,
       ).run();
     },
+    () => {
+      const columns = new Set((db.prepare("PRAGMA table_info('places')").all() as Array<{ name: string }>).map(({ name }) => name));
+      if (!columns.has('source_collection_id')) db.exec('ALTER TABLE places ADD COLUMN source_collection_id INTEGER');
+      if (!columns.has('source_collection_place_id')) db.exec('ALTER TABLE places ADD COLUMN source_collection_place_id INTEGER');
+    },
+    () => {
+      const columns = new Set((db.prepare("PRAGMA table_info('trips')").all() as Array<{ name: string }>).map(({ name }) => name));
+      if (!columns.has('sort_order')) {
+        db.exec('ALTER TABLE trips ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+        // Preserve a stable per-owner order (newest first) within active vs archived buckets.
+        const owners = db.prepare('SELECT DISTINCT user_id FROM trips').all() as Array<{ user_id: number }>;
+        const upd = db.prepare('UPDATE trips SET sort_order = ? WHERE id = ?');
+        for (const { user_id } of owners) {
+          for (const archived of [0, 1]) {
+            const rows = db.prepare(
+              'SELECT id FROM trips WHERE user_id = ? AND COALESCE(is_archived, 0) = ? ORDER BY created_at DESC, id DESC',
+            ).all(user_id, archived) as Array<{ id: number }>;
+            rows.forEach((row, index) => upd.run(index, row.id));
+          }
+        }
+      }
+    },
+    () => db.exec(`
+      CREATE TABLE IF NOT EXISTS weather_climate_cache (
+        cache_key TEXT PRIMARY KEY,
+        climate_json TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),
+    () => db.exec(`
+      CREATE TABLE IF NOT EXISTS seasonal_data_cache (
+        cache_key TEXT PRIMARY KEY,
+        payload_json TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS seasonal_provider_state (
+        provider TEXT PRIMARY KEY,
+        day TEXT NOT NULL,
+        request_count INTEGER NOT NULL DEFAULT 0,
+        next_allowed_at INTEGER NOT NULL DEFAULT 0,
+        last_error_at INTEGER NOT NULL DEFAULT 0,
+        retry_count INTEGER NOT NULL DEFAULT 0
+      );
+    `),
+    () => {
+      const columns = db.pragma('table_info(seasonal_provider_state)') as Array<{ name: string }>;
+      if (!columns.some(column => column.name === 'retry_count')) {
+        db.exec('ALTER TABLE seasonal_provider_state ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+    },
+    () => db.exec(`
+      CREATE TABLE IF NOT EXISTS weather_climate_country_samples (
+        country_code TEXT NOT NULL,
+        slot INTEGER NOT NULL CHECK (slot IN (0, 1)),
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        PRIMARY KEY (country_code, slot)
+      );
+    `),
   ];
 
   if (currentVersion < migrations.length) {

@@ -16,11 +16,12 @@ function formatDisplay(val: string, is12h: boolean): string {
 interface CustomTimePickerProps {
   value: string
   onChange: (value: string) => void
+  ariaLabel?: string
   placeholder?: string
   style?: React.CSSProperties
 }
 
-export default function CustomTimePicker({ value, onChange, placeholder = '00:00', style = {} }: CustomTimePickerProps) {
+export default function CustomTimePicker({ value, onChange, ariaLabel, placeholder = '00:00', style = {} }: CustomTimePickerProps) {
   const is12h = useSettingsStore(s => s.settings.time_format) === '12h'
   const [open, setOpen] = useState(false)
   const [inputFocused, setInputFocused] = useState(false)
@@ -124,6 +125,7 @@ export default function CustomTimePicker({ value, onChange, placeholder = '00:00
       }}>
         <input
           type="text"
+          aria-label={ariaLabel}
           value={inputFocused ? value : formatDisplay(value, is12h)}
           onChange={handleInput}
           onFocus={() => setInputFocused(true)}
@@ -138,6 +140,7 @@ export default function CustomTimePicker({ value, onChange, placeholder = '00:00
         />
         <button
           type="button"
+          aria-label={ariaLabel ? `${ariaLabel} picker` : undefined}
           onClick={() => setOpen(o => !o)}
           style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px',

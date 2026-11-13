@@ -5,6 +5,8 @@ declare global { interface Window { __dragData: DragDataPayload | null } }
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
 import { avatarSrc } from '../../utils/avatarSrc'
 import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLink, Clock, Pencil, GripVertical, Ticket, Plus, FileText, Trash2, Car, Lock, Hotel, Footprints, Route as RouteIcon, Bookmark, TramFront } from 'lucide-react'
+import Tooltip from '../shared/Tooltip'
+import { DayPlanDayActionsMenu } from './DayPlanDayActionsMenu'
 import { assignmentsApi, reservationsApi, tripsApi } from '../../api/client'
 import { calculateRoute, calculateRouteWithLegs, optimizeRoute, generateGoogleMapsUrl } from '../Map/RouteCalculator'
 import PlaceAvatar from '../shared/PlaceAvatar'
@@ -15,6 +17,7 @@ import remarkGfm from 'remark-gfm'
 import WeatherWidget from '../Weather/WeatherWidget'
 import { useToast } from '../shared/Toast'
 import { getCategoryIcon } from '../shared/categoryIcons'
+import { getUiCategoryColor } from '../Map/pinColors'
 import { useTripStore } from '../../store/tripStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -41,6 +44,7 @@ import { DayPlanSidebarTimeConfirmModal } from './DayPlanSidebarTimeConfirmModal
 import { DayPlanSidebarTransportDetailModal } from './DayPlanSidebarTransportDetailModal'
 import { TransitTitle, TransitLegChips, TransitItineraryInline } from './transitDisplay'
 import { DayPlanSidebarFooter } from './DayPlanSidebarFooter'
+import { ItineraryReadiness } from './ItineraryReadiness'
 import type { Trip, Day, Place, Category, Assignment, Accommodation, Reservation, AssignmentsMap, RouteResult, RouteSegment, DayNote } from '../../types'
 import { getGoogleMapsUrlForPlace } from './placeGoogleMaps'
 
@@ -83,6 +87,8 @@ interface DayPlanSidebarProps {
   onAddPlace?: () => void
   onAddPlaceToDay?: (placeId: number, dayId: number) => void
   onExpandedDaysChange?: (expandedDayIds: Set<number>) => void
+  /** Seed expand state. Production omits this (all collapsed on open). Tests may pass `'all'`. */
+  initialExpandedDayIds?: 'all' | number[]
   pushUndo?: (label: string, undoFn: () => Promise<void> | void) => void
   canUndo?: boolean
   lastActionLabel?: string | null
@@ -106,6 +112,7 @@ interface DayPlanSidebarProps {
    *  buttons take over instead. Distinct from isMobile, which is width-based — a
    *  tablet is a wide touch device and needs both. */
   isTouch?: boolean
+  onOpenSearch?: () => void
 }
 
 /**
@@ -138,6 +145,7 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
   onToggleRoute,
   onSetRouteProfile,
   onExpandedDaysChange,
+  initialExpandedDayIds,
   pushUndo,
   canUndo = false,
   lastActionLabel = null,
@@ -166,13 +174,17 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
 
   const { noteUi, setNoteUi, noteInputRef, dayNotes, openAddNote: _openAddNote, openEditNote: _openEditNote, cancelNote, saveNote, deleteNote: _deleteNote, moveNote: _moveNote } = useDayNotes(tripId)
 
-  const [expandedDays, setExpandedDays] = useState(() => {
-    try {
-      const saved = localStorage.getItem(`day-expanded-${tripId}`)
-      if (saved) return new Set<number>(JSON.parse(saved) as number[])
-    } catch {}
-    return new Set<number>(days.map(d => d.id))
+  // Fresh trip open → all days collapsed. Expand via header click or Expand all.
+  const [expandedDays, setExpandedDays] = useState<Set<number>>(() => {
+    if (initialExpandedDayIds === 'all') return new Set(days.map(d => d.id))
+    if (Array.isArray(initialExpandedDayIds)) return new Set(initialExpandedDayIds)
+    return new Set()
   })
+  useEffect(() => {
+    if (initialExpandedDayIds === 'all') setExpandedDays(new Set(days.map(d => d.id)))
+    else if (Array.isArray(initialExpandedDayIds)) setExpandedDays(new Set(initialExpandedDayIds))
+    else setExpandedDays(new Set())
+  }, [tripId]) // eslint-disable-line react-hooks/exhaustive-deps -- reset only on trip change
   useEffect(() => { onExpandedDaysChange?.(expandedDays) }, [expandedDays])
   const [editingDayId, setEditingDayId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
@@ -310,13 +322,26 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { days.forEach(day => initTransportPositions(day.id)) }, [days, reservations])
 
+  const persistExpanded = (next: Set<number>) => {
+    try { localStorage.setItem(`day-expanded-${tripId}`, JSON.stringify([...next])) } catch {}
+    return next
+  }
+
+  const expandDay = (dayId: number) => {
+    setExpandedDays(prev => {
+      if (prev.has(dayId)) return prev
+      const n = new Set(prev)
+      n.add(dayId)
+      return persistExpanded(n)
+    })
+  }
+
   const toggleDay = (dayId, e) => {
     e.stopPropagation()
     setExpandedDays(prev => {
       const n = new Set(prev)
       n.has(dayId) ? n.delete(dayId) : n.add(dayId)
-      try { localStorage.setItem(`day-expanded-${tripId}`, JSON.stringify([...n])) } catch {}
-      return n
+      return persistExpanded(n)
     })
   }
 
@@ -1139,6 +1164,7 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
     fxRates,
     getDragData,
     prevDayCount,
+    expandDay,
     toggleDay,
     getSpanLabel,
     getDayOrder,
@@ -1312,6 +1338,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
     fxRates,
     getDragData,
     prevDayCount,
+    expandDay,
     toggleDay,
     getSpanLabel,
     getDayOrder,
@@ -1349,6 +1376,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
         tripId={tripId}
         trip={trip}
         days={days}
+        selectedDayId={selectedDayId}
         places={places}
         categories={categories}
         assignments={assignments}
@@ -1373,6 +1401,19 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
         canEditDays={canEditDays}
         onReorderDays={onReorderDays}
         onAddDay={onAddDay}
+        onOpenSearch={props.onOpenSearch}
+      />
+
+      <ItineraryReadiness
+        tripId={tripId}
+        days={days}
+        places={places}
+        assignments={assignments}
+        reservations={reservations}
+        accommodations={accommodations}
+        onPlaceClick={(placeId) => onPlaceClick(placeId)}
+        onDayClick={onDayDetail}
+        onReservationClick={onEditReservation}
       />
 
       {/* Tagesliste */}
@@ -1409,13 +1450,18 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
               <div
                 className="dp-day-header"
                 data-selected={isSelected}
-                onClick={() => { onSelectDay(day.id); if (onDayDetail) onDayDetail(day) }}
+                onClick={() => {
+                  onSelectDay(day.id)
+                  expandDay(day.id)
+                  if (onDayDetail) onDayDetail(day)
+                }}
                 onDragOver={e => { e.preventDefault(); if (dragOverDayId !== day.id) setDragOverDayId(day.id) }}
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverDayId(null) }}
                 onDrop={e => handleDropOnDay(e, day.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '11px 14px 11px 16px',
+                  padding: '11px 12px 11px 16px',
+                  position: 'relative',
                   cursor: 'pointer',
                   background: isDragTarget ? 'rgba(17,24,39,0.07)' : (isSelected ? 'var(--bg-selected)' : 'transparent'),
                   transition: 'background 0.12s',
@@ -1438,20 +1484,20 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                   const hasWeather = !!(day.date && anyGeoPlace && wLat != null && wLng != null)
                   return (
                     <div style={{
-                      flexShrink: 0, alignSelf: 'flex-start',
-                      width: hasWeather ? 34 : 26,
-                      borderRadius: hasWeather ? 11 : '50%',
+                      flexShrink: 0, alignSelf: 'center',
+                      width: hasWeather ? 48 : 28,
+                      borderRadius: hasWeather ? 14 : '50%',
                       background: isSelected ? 'var(--accent)' : 'var(--bg-hover)',
-                      color: isSelected ? 'var(--accent-text)' : 'var(--text-muted)',
+                      color: isSelected ? 'var(--accent-text)' : 'var(--text-secondary)',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden',
                     }}>
-                      <div style={{ width: '100%', height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 700 }}>
+                      <div style={{ width: '100%', height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'calc(13px * var(--fs-scale-caption, 1))', fontWeight: 700 }}>
                         {index + 1}
                       </div>
                       {hasWeather && (
                         <>
                           <div style={{ width: '64%', height: 1, background: 'currentColor', opacity: 0.25 }} />
-                          <div style={{ padding: '3px 0 4px' }}>
+                          <div style={{ padding: '5px 0 6px' }}>
                             <WeatherWidget lat={wLat} lng={wLng} date={day.date} stacked />
                           </div>
                         </>
@@ -1460,7 +1506,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                   )
                 })()}
 
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="dp-day-header-content" style={{ flex: 1, minWidth: 0 }}>
                   {editingDayId === day.id ? (
                     <input
                       ref={inputRef}
@@ -1477,17 +1523,15 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                       }}
                     />
                   ) : (<>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                      <span style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1, minWidth: 0 }}>
+                    {/* Title + date share one baseline; date flush-right. ⋯ is corner-pinned separately. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, width: '100%' }}>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.25 }}>
                         {day.title || t('dayplan.dayN', { n: index + 1 })}
                       </span>
                       {formattedDate && (
-                        <>
-                          <span style={{ flexShrink: 0, width: 1, height: 11, background: 'var(--border-primary)' }} />
-                          <span style={{ flexShrink: 0, fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 400, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
-                            {formattedDate}
-                          </span>
-                        </>
+                        <span style={{ flexShrink: 0, fontSize: 'calc(12.5px * var(--fs-scale-caption, 1))', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap', lineHeight: 1.25 }}>
+                          {formattedDate}
+                        </span>
                       )}
                     </div>
                     {(() => {
@@ -1496,10 +1540,9 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                       if (!hasAccs && !hasRentals) return null
                       return <div style={{ height: 1, background: 'var(--border-faint)', margin: '5px 0 5px' }} />
                     })()}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap', minWidth: 0, marginTop: 2 }}>
                       {(() => {
                         const dayAccs = accommodations.filter(a => isDayInAccommodationRange(day, a.start_day_id, a.end_day_id, days))
-                          // Sort: check-out first, then ongoing stays, then check-in last
                           .sort((a, b) => {
                             const aIsOut = a.end_day_id === day.id && a.start_day_id !== day.id
                             const bIsOut = b.end_day_id === day.id && b.start_day_id !== day.id
@@ -1524,7 +1567,6 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                           )
                         })
                       })()}
-                      {/* Active rental car badges */}
                       {(() => {
                         const activeRentals = getActiveRentalsForDay(day.id)
                         if (activeRentals.length === 0) return null
@@ -1536,47 +1578,31 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                         ))
                       })()}
                     </div>
+                    {cost && (
+                      <div style={{ marginTop: 2 }}>
+                        <span className="text-[#059669]" style={{ fontSize: 'calc(11px * var(--fs-scale-caption, 1))' }}>{cost}</span>
+                      </div>
+                    )}
                   </>
-                  )}
-                  {cost && (
-                    <div style={{ marginTop: 2 }}>
-                      <span className="text-[#059669]" style={{ fontSize: 'calc(11px * var(--fs-scale-caption, 1))' }}>{cost}</span>
-                    </div>
                   )}
                 </div>
 
-                {canEditDays ? (
-                  (() => {
-                    const cell = { padding: 7, cursor: 'pointer', display: 'grid', placeItems: 'center' } as const
-                    const div = '1px solid var(--border-faint)'
-                    return (
-                      <div className="dp-day-actions" style={{ alignSelf: 'flex-start', flexShrink: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', border: div, borderRadius: 9, overflow: 'hidden' }}>
-                        {/* Public transit search (#1065) — replaced the rename pencil,
-                            which moved next to the day name in the day detail view. */}
-                        {onPlanTransit ? (
-                          <button onClick={e => { e.stopPropagation(); onPlanTransit(day.id) }} title={t('transit.title')} aria-label={t('transit.title')} style={{ ...cell, border: 'none', borderRight: div, borderBottom: div }}>
-                            <TramFront size={14} strokeWidth={1.8} />
-                          </button>
-                        ) : <div style={{ borderRight: div, borderBottom: div }} />}
-                        {onAddTransport ? (
-                          <button onClick={e => { e.stopPropagation(); onAddTransport(day.id) }} title={t('transport.addTransport')} style={{ ...cell, border: 'none', borderBottom: div }}>
-                            <Plus size={14} strokeWidth={1.8} />
-                          </button>
-                        ) : <div style={{ borderBottom: div }} />}
-                        <button onClick={e => openAddNote(day.id, e)} aria-label={t('dayplan.addNote')} style={{ ...cell, border: 'none', borderRight: div }}>
-                          <FileText size={14} strokeWidth={1.8} />
-                        </button>
-                        <button onClick={e => toggleDay(day.id, e)} title={isExpanded ? t('common.collapse') : t('common.expand')} style={{ ...cell, border: 'none' }}>
-                          {isExpanded ? <ChevronDown size={15} strokeWidth={1.8} /> : <ChevronRight size={15} strokeWidth={1.8} />}
-                        </button>
-                      </div>
-                    )
-                  })()
-                ) : (
-                  <button onClick={e => toggleDay(day.id, e)} className="text-content-faint" style={{ alignSelf: 'flex-start', flexShrink: 0, background: 'none', border: 'none', padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                    {isExpanded ? <ChevronDown size={16} strokeWidth={1.8} /> : <ChevronRight size={16} strokeWidth={1.8} />}
-                  </button>
-                )}
+                {/* Corner control — not in the title/date baseline. */}
+                <div
+                  style={{ position: 'absolute', top: 4, right: 8, zIndex: 2 }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <DayPlanDayActionsMenu
+                    dayId={day.id}
+                    isExpanded={isExpanded}
+                    canEdit={!!canEditDays}
+                    t={t}
+                    onPlanTransit={onPlanTransit}
+                    onAddTransport={onAddTransport}
+                    onAddNote={openAddNote}
+                    onToggleExpand={toggleDay}
+                  />
+                </div>
               </div>
 
               {/* Aufgeklappte Orte + Notizen */}
@@ -1790,7 +1816,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                               if (!isPlaceSelected && !lockedIds.has(assignment.id))
                                 e.currentTarget.style.background = 'transparent'
                               const grip = e.currentTarget.querySelector('.dp-grip') as HTMLElement | null
-                              if (grip) grip.style.opacity = '0.3'
+                              if (grip) grip.style.opacity = '0.85'
                               setHoveredAssignmentId(null)
                             }}
                             style={{
@@ -1808,8 +1834,8 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                               opacity: isDraggingThis ? 0.4 : 1,
                             }}
                           >
-                            {canEditDays && !dragDisabled && <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
-                              <GripVertical size={13} strokeWidth={1.8} />
+                            {canEditDays && !dragDisabled && <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', opacity: 0.85, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                              <GripVertical size={14} strokeWidth={2.4} />
                             </div>}
                             <div
                               onClick={e => { e.stopPropagation(); toggleLock(assignment.id) }}
@@ -1848,7 +1874,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                                 {cat && (() => {
                                   const CatIcon = getCategoryIcon(cat.icon)
-                                  return <span title={cat.name} style={{ display: 'inline-flex', flexShrink: 0 }}><CatIcon size={10} strokeWidth={2} color={cat.color || 'var(--text-muted)'} /></span>
+                                  return <span title={cat.name} style={{ display: 'inline-flex', flexShrink: 0 }}><CatIcon size={10} strokeWidth={2} color={getUiCategoryColor(cat.name, cat.color)} /></span>
                                 })()}
                                 <span style={{ fontSize: 'calc(12.5px * var(--fs-scale-body, 1))', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
                                   {place.name}
@@ -1861,7 +1887,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                                 )}
                               </div>
                               {(place.description || place.address || cat?.name) && (
-                                <div className="collab-note-md" style={{ marginTop: 2, fontSize: 'calc(10px * var(--fs-scale-caption, 1))', color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2, maxHeight: '1.2em' }}>
+                                <div className="collab-note-md" style={{ marginTop: 2, fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2, maxHeight: '1.2em' }}>
                                   <Markdown remarkPlugins={[remarkGfm]}>{place.description || place.address || cat?.name || ''}</Markdown>
                                 </div>
                               )}
@@ -2120,8 +2146,8 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             }}
                           >
                             {canEditDays && spanPhase !== 'middle' && !res.__leg && !dragDisabled && (
-                              <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
-                                <GripVertical size={13} strokeWidth={1.8} />
+                              <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', opacity: 0.85, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                                <GripVertical size={14} strokeWidth={2.2} />
                               </div>
                             )}
                             <div style={{
@@ -2290,7 +2316,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                           }}
                           onMouseLeave={e => {
                             const grip = e.currentTarget.querySelector('.dp-grip') as HTMLElement | null
-                            if (grip) grip.style.opacity = '0.3'
+                            if (grip) grip.style.opacity = '0.85'
                             const editBtns = e.currentTarget.querySelector('.note-edit-buttons') as HTMLElement | null
                             if (editBtns) editBtns.style.opacity = '0'
                           }}
@@ -2306,8 +2332,8 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             transition: 'background 0.1s', cursor: 'grab', userSelect: 'none',
                           }}
                         >
-                          {canEditDays && !dragDisabled && <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
-                            <GripVertical size={13} strokeWidth={1.8} />
+                          {canEditDays && !dragDisabled && <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', opacity: 0.85, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                            <GripVertical size={14} strokeWidth={2.2} />
                           </div>}
                           <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--bg-hover)', overflow: 'hidden' }}>
                             <NoteIcon size={13} strokeWidth={1.8} color="var(--text-muted)" />
@@ -2487,7 +2513,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                           <span>{routeInfo.duration}</span>
                         </div>
                       )}
-                      {isSelected ? <RouteWondersHint places={assignments.map(a => a.place).filter(Boolean)} /> : null}
+                      {isSelected ? <RouteWondersHint places={da.map(a => a.place).filter(Boolean)} /> : null}
                     </div>
                   )}
 
